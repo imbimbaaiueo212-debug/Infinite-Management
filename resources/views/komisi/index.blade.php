@@ -102,9 +102,9 @@
                             <th rowspan="2" class="text-center" style="min-width: 130px;">INFO</th>
                             <th colspan="2" class="table-success">JUMLAH SPP</th>
                             <th colspan="5" class="table-warning">RINCIAN KOMISI</th>
-                            <th colspan="9" class="table-purple text-white">DATA MURID biMBA AIUEO</th>
-                            <th colspan="5" class="table-pink text-white">DATA MURID ENGLISH</th>
-                            <th colspan="2" class="table-danger text-white">KOMISI MB KEPALA UNIT</th>
+                            <th colspan="9" class="table-purple">DATA MURID biMBA AIUEO</th>
+                            <th colspan="5" class="table-pink ">DATA MURID ENGLISH</th>
+                            <th colspan="2" class="table-danger">KOMISI MB KEPALA UNIT</th>
                         </tr>
                         <tr class="table-light">
                             <th>biMBA</th>

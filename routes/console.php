@@ -4,7 +4,6 @@ use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
 
-
 /*
 |--------------------------------------------------------------------------
 | Default command
@@ -20,7 +19,13 @@ Artisan::command('inspire', function () {
 | Scheduler Rekap Progresif Bulanan
 |--------------------------------------------------------------------------
 */
-Schedule::command('rekap:generate-bulanan')
-    ->monthlyOn(26, '01:00'); // SETIAP TANGGAL 26 JAM 01:00
 
-Schedule::command('trial:auto-activate')->dailyAt('01:00');
+// Rekap Progresif - Jalankan setiap tanggal 26 pukul 01:00 pagi
+Schedule::command('rekap:generate-bulanan')
+    ->monthlyOn(26, '01:00')
+    ->withoutOverlapping();        // ← Sangat disarankan
+
+// Command lain yang sudah ada
+Schedule::command('trial:auto-activate')
+    ->dailyAt('01:00')
+    ->withoutOverlapping();        // ← Tambahkan ini juga

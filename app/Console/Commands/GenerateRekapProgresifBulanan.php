@@ -6,83 +6,83 @@ use Illuminate\Console\Command;
 use Carbon\Carbon;
 use App\Models\Profile;
 use App\Models\RekapProgresif;
-use App\Http\Controllers\RekapProgresifController;
 use Illuminate\Support\Facades\Log;
 
 class GenerateRekapProgresifBulanan extends Command
 {
-    protected $signature = 'rekap:generate-bulanan';
-    protected $description = 'Generate Rekap Progresif otomatis untuk BULAN SEBELUMNYA setiap tanggal 26';
+    protected $signature = 'rekap:generate-bulanan {--force}';
+    protected $description = 'Generate Rekap Progresif otomatis untuk bulan sebelumnya (dijalankan tanggal 26 tiap bulan)';
 
     public function handle()
     {
+        $force = $this->option('force');
+
+        // Set locale Indonesia agar nama bulan jadi "februari", "maret", dll
+        Carbon::setLocale('id');
+
         $today = Carbon::now();
 
-        // SAFETY: hanya jalan di tanggal 26
-        if ($today->day !== 26) {
-            $this->info('Bukan tanggal 26. Command dilewati.');
-            return Command::SUCCESS;
-        }
-
         // Ambil BULAN SEBELUMNYA
-        $prevMonth = $today->copy()->subMonth();
-        $bulanNama = strtolower($prevMonth->translatedFormat('F')); // 'februari', 'maret', dll
+        $prevMonth = $today->copy()->subMonth()->startOfMonth();
+        $bulanNama = strtolower($prevMonth->translatedFormat('F')); // februari, maret, april, dst
         $tahun     = $prevMonth->year;
 
-        $this->info("Memulai generate Rekap Progresif untuk BULAN SEBELUMNYA: {$bulanNama} {$tahun}");
+        $this->info("🚀 Memulai generate Rekap Progresif untuk: {$bulanNama} {$tahun}");
 
-        $controller = app(RekapProgresifController::class);
+        // Query profile yang lebih fleksibel (sama seperti di controller kamu)
+        $profiles = Profile::where(function ($q) {
+                $q->whereRaw('LOWER(jabatan) LIKE ?', ['%guru%'])
+                  ->orWhereRaw('LOWER(jabatan) LIKE ?', ['%pengajar%'])
+                  ->orWhereRaw('LOWER(jabatan) LIKE ?', ['%tutor%'])
+                  ->orWhereRaw('LOWER(jabatan) LIKE ?', ['%kepala unit%'])
+                  ->orWhereRaw('LOWER(jabatan) LIKE ?', ['%kepala bimba%'])
+                  ->orWhereRaw('LOWER(jabatan) LIKE ?', ['%kepala sekolah%'])
+                  ->orWhereRaw('LOWER(jabatan) = ?', ['ku']);
+            })
+            ->whereNotIn('status_karyawan', ['Resign', 'Keluar', 'Pensiun', 'Non Aktif', 'Non-aktif'])
+            ->get();
 
         $totalGenerated = 0;
         $totalSkipped   = 0;
         $errors         = [];
 
-        // Ambil semua profile aktif yang relevan (Guru + Kepala Unit)
-        $profiles = Profile::whereIn('jabatan', ['Guru', 'Kepala Unit', 'KU'])
-            ->whereNotIn('status_karyawan', ['Resign', 'Keluar', 'Pensiun', 'Non Aktif', 'Non-aktif'])
-            ->get();
-
         foreach ($profiles as $profile) {
-            // Cek duplikat untuk bulan lalu
-            $exists = RekapProgresif::where('nama', $profile->nama)
+            // Cek apakah sudah ada rekap untuk bulan ini
+            if (!$force && RekapProgresif::where('nama', $profile->nama)
                 ->where('bulan', $bulanNama)
                 ->where('tahun', $tahun)
-                ->exists();
-
-            if ($exists) {
+                ->exists()) {
+                
                 $totalSkipped++;
                 continue;
             }
 
             try {
-                // Panggil method auto-generate di controller
+                // Panggil method di controller (sementara)
+                $controller = app(\App\Http\Controllers\RekapProgresifController::class);
                 $controller->autoGenerateForPreviousMonth($profile, $bulanNama, $tahun);
+
                 $totalGenerated++;
+                $this->info("✅ Berhasil generate: {$profile->nama}");
             } catch (\Throwable $e) {
-                $errors[] = [
-                    'nama'   => $profile->nama,
-                    'error'  => $e->getMessage(),
-                ];
-                Log::error('Gagal generate rekap progresif untuk bulan lalu', [
-                    'profile_id' => $profile->id,
-                    'nama'       => $profile->nama,
-                    'bulan'      => $bulanNama,
-                    'tahun'      => $tahun,
-                    'error'      => $e->getMessage(),
+                $errors[] = ['nama' => $profile->nama, 'error' => $e->getMessage()];
+                Log::error("Gagal generate rekap progresif", [
+                    'nama'  => $profile->nama,
+                    'bulan' => $bulanNama,
+                    'tahun' => $tahun,
+                    'error' => $e->getMessage()
                 ]);
+                $this->error("❌ Gagal: {$profile->nama} - {$e->getMessage()}");
             }
         }
 
-        $this->info("Selesai generate bulan lalu.");
-        $this->info("Dibuat: {$totalGenerated} record");
-        $this->info("Dilewati (sudah ada): {$totalSkipped} record");
+        $this->newLine();
+        $this->info("✅ Proses selesai!");
+        $this->info("Dibuat baru : {$totalGenerated} record");
+        $this->info("Dilewati    : {$totalSkipped} record");
 
-        if (!empty($errors)) {
-            $errorsCount = count($errors);
-            $this->error("Ada {$errorsCount} error:");
-            foreach ($errors as $err) {
-                $this->line(" - {$err['nama']}: {$err['error']}");
-            }
+        if (count($errors) > 0) {
+            $this->error("⚠️ Terdapat " . count($errors) . " error selama proses.");
         }
 
         return Command::SUCCESS;

@@ -40,7 +40,7 @@ body {
 /* CARD - Glassmorphism */
 .card-table {
   border: none;
-  border-radius: 1.5rem;
+ 
   background: rgba(255, 255, 255, 0.7);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -48,16 +48,9 @@ body {
     0 10px 30px -8px rgba(0,0,0,0.08),
     0 25px 60px -15px rgba(0,0,0,0.07),
     inset 0 1px 0 rgba(255,255,255,0.7);
-  overflow: hidden;
-  transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+
 }
 
-.card-table:hover {
-  transform: translateY(-8px);
-  box-shadow: 
-    0 25px 70px -15px rgba(0,0,0,0.15),
-    0 50px 120px -30px rgba(0,0,0,0.13);
-}
 
 /* TABLE */
 .table thead th {

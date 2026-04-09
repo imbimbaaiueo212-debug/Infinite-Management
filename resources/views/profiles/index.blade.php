@@ -379,6 +379,10 @@
                                     <div class="mobile-value fw-medium">{{ $formatDate($profile->tgl_masuk) }}</div>
                                 </div>
                                 <div class="mobile-inline">
+                                    <span class="mobile-label text-muted">Tgl Selesai Magang</span>
+                                    <div class="mobile-value fw-medium">{{ $formatDate($profile->tgl_selesai_magang) }}</div>
+                                </div>
+                                <div class="mobile-inline">
                                     <span class="mobile-label text-muted">Masa Kerja</span>
                                     <div class="mobile-value fw-medium">{{ $masaKerja }}</div>
                                 </div>

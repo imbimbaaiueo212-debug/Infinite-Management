@@ -12,8 +12,21 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withSchedule(function (Schedule $schedule) {
+        
+        // Rekap Progresif - Setiap tanggal 26 jam 01:00
+        $schedule->command('rekap:generate-bulanan')
+                 ->monthlyOn(26, '01:00')
+                 ->withoutOverlapping();
+
+        // Command lain yang sudah ada
         $schedule->command('imbalan:generate-bulan-ini')
-            ->monthlyOn(26, '01:00');
+                 ->monthlyOn(26, '01:00')
+                 ->withoutOverlapping();
+
+        // Command trial (jika masih dipakai)
+        $schedule->command('trial:auto-activate')
+                 ->dailyAt('01:00')
+                 ->withoutOverlapping();
     })
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->use([
@@ -27,7 +40,4 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withExceptions(function (Exceptions $exceptions): void {
         //
     })
-
-    // TAMBAHKAN INI: Bind path public ke public_html (naik satu level dari bootstrap)
     ->create();
-    //->usePublicPath(dirname(__DIR__) . '/public_html');  // <-- tambah baris ini
