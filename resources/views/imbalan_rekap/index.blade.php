@@ -30,6 +30,7 @@
             $startDate = now()->startOfMonth();
             $endDate   = now()->endOfMonth();
         }
+
         $periodeText = $startDate->locale('id')->translatedFormat('F Y') . 
                        ($startDate->isSameMonth($endDate) ? '' : ' — ' . $endDate->locale('id')->translatedFormat('F Y'));
     @endphp
@@ -42,7 +43,7 @@
                 <!-- INFO PERIODE -->
                 <div class="col-lg-5 mb-3 mb-lg-0">
                     <h5 class="mb-0 text-primary">
-                        Periode Tampil:
+                        Periode Tampil: 
                         <strong class="fs-5">{{ $periodeText }}</strong>
                     </h5>
                 </div>
@@ -105,7 +106,7 @@
                                 <label class="small text-muted mb-1">Unit biMBA</label>
                                 <select name="bimba_unit" class="form-select form-select-sm" onchange="this.form.submit()">
                                     <option value="">-- Semua Unit --</option>
-                                    @foreach($unitOptions as $unit)
+                                    @foreach($unitOptions ?? [] as $unit)
                                         <option value="{{ $unit }}" {{ request('bimba_unit') == $unit ? 'selected' : '' }}>
                                             {{ $unit }}
                                         </option>
@@ -119,7 +120,7 @@
                             <label class="small text-muted mb-1">Nama Relawan</label>
                             <select name="nama" class="form-select form-select-sm" onchange="this.form.submit()">
                                 <option value="">-- Semua Nama --</option>
-                                @foreach($namaOptions as $nama)
+                                @foreach($namaOptions ?? [] as $nama)
                                     <option value="{{ $nama }}" {{ request('nama') == $nama ? 'selected' : '' }}>
                                         {{ $nama }}
                                     </option>
@@ -127,11 +128,7 @@
                             </select>
                         </div>
 
-                        {{-- AKSI FILTER --}}
                         <div class="col-12 text-end">
-                            <button type="submit" class="btn btn-primary btn-sm">
-                                <i class="bi bi-funnel"></i> Filter
-                            </button>
                             <a href="{{ route('imbalan_rekap.index') }}" class="btn btn-outline-secondary btn-sm">
                                 <i class="bi bi-arrow-clockwise"></i> Reset
                             </a>
@@ -161,7 +158,7 @@
             </button>
         </form>
 
-        <!-- Generate Bulan Ini -->
+        <!-- Generate Periode Ini -->
         <form action="{{ route('imbalan_rekap.generate') }}" method="POST" class="d-inline">
             @csrf
             <input type="hidden" name="start_bulan" value="{{ $start_bulan }}">
@@ -210,7 +207,6 @@
                             <th>NIK</th>
                             <th>NAMA</th>
                             <th class="text-center" style="min-width: 140px;">INFO</th>
-
                             <th>WAKTU/MGG</th>
                             <th>WAKTU/BLN</th>
                             <th>DURASI</th>
@@ -218,7 +214,6 @@
                             <th>KTR</th>
                             <th>POKOK</th>
                             <th>LAINNYA</th>
-                            
                             <th>TOTAL</th>
                             <th>INSENTIF</th>
                             <th>KET. INSENTIF</th>
@@ -247,7 +242,7 @@
                     <tbody>
                         @php
                             $showAll = request()->has('all');
-                            $rows = $showAll ? \App\Models\ImbalanRekap::orderBy('nama')->get() : $rekaps;
+                            $rows = $showAll ? \App\Models\ImbalanRekap::orderBy('nama')->get() : ($rekaps ?? collect());
                         @endphp
 
                         @forelse($rows as $index => $r)
@@ -263,11 +258,11 @@
                             @endphp
                             <tr data-id="{{ $hasId ? $r->id : '' }}" class="{{ $isDibayar ? 'table-success' : '' }}">
                                 <td class="text-center fw-bold">
-                                    {{ $r->profile?->nik ?? ($showAll ? $index + 1 : $rekaps->firstItem() + $index) }}
+                                    {{ $r->profile?->nik ?? ($showAll ? $index + 1 : ($rekaps->firstItem() + $index ?? $index + 1)) }}
                                 </td>
                                 <td><strong>{{ $r->nama }}</strong></td>
 
-                                <!-- ==================== KOLOM INFO + MODAL ==================== -->
+                                <!-- KOLOM INFO -->
                                 <td class="text-center">
                                     <button type="button" 
                                             class="btn btn-outline-info btn-sm info-pegawai-btn"
@@ -286,7 +281,6 @@
                                     </button>
                                 </td>
 
-                                <!-- Sisanya tetap sama seperti kode asli -->
                                 <td class="text-center">{{ $r->waktu_mgg ?? '-' }}</td>
                                 <td class="text-center">{{ $r->waktu_bln ?? '-' }}</td>
                                 <td class="text-end">{{ $r->durasi_kerja ? number_format($r->durasi_kerja, 0, ',', '.') . ' Jam' : '-' }}</td>
@@ -523,12 +517,8 @@
                         @empty
                             <tr>
                                 <td colspan="36" class="text-center text-muted py-5">
-                                    @if(request('all'))
-                                        Belum ada data rekap sama sekali.
-                                    @else
-                                        Tidak ada data untuk periode <strong>{{ $periodeText }}</strong><br>
-                                        <small>Klik <strong>Generate Periode Ini</strong> untuk membuat data.</small>
-                                    @endif
+                                    Tidak ada data untuk periode <strong>{{ $periodeText }}</strong><br>
+                                    <small>Klik <strong>Generate Periode Ini</strong> untuk membuat data.</small>
                                 </td>
                             </tr>
                         @endforelse
@@ -540,12 +530,12 @@
 
     @unless(request('all'))
         <div class="mt-3 d-flex justify-content-center">
-            {{ $rekaps->appends(request()->query())->links() }}
+            {{ $rekaps->appends(request()->query())->links() ?? '' }}
         </div>
     @endunless
 </div>
 
-<!-- ==================== MODAL INFO PEGAWAI ==================== -->
+<!-- MODAL INFO PEGAWAI -->
 <div class="modal fade" id="infoModal" tabindex="-1" aria-labelledby="infoModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -561,35 +551,13 @@
                         <small class="text-muted">NIK</small>
                         <p id="modal-nik" class="fw-semibold text-primary mb-0"></p>
                     </div>
-
-                    <div class="col-md-6">
-                        <small class="text-muted">Bulan</small>
-                        <div id="modal-bulan" class="fw-semibold"></div>
-                    </div>
-                    <div class="col-md-6">
-                        <small class="text-muted">Jabatan</small>
-                        <div id="modal-jabatan" class="fw-semibold"></div>
-                    </div>
-                    <div class="col-md-6">
-                        <small class="text-muted">Status</small>
-                        <div id="modal-status" class="fw-semibold"></div>
-                    </div>
-                    <div class="col-md-6">
-                        <small class="text-muted">Departemen</small>
-                        <div id="modal-departemen" class="fw-semibold"></div>
-                    </div>
-                    <div class="col-md-6">
-                        <small class="text-muted">Unit biMBA</small>
-                        <div id="modal-unit" class="fw-semibold"></div>
-                    </div>
-                    <div class="col-md-6">
-                        <small class="text-muted">No. Cabang</small>
-                        <div id="modal-cabang" class="fw-semibold"></div>
-                    </div>
-                    <div class="col-md-6">
-                        <small class="text-muted">Masa Kerja</small>
-                        <div id="modal-masakerja" class="fw-semibold"></div>
-                    </div>
+                    <div class="col-md-6"><small class="text-muted">Bulan</small><div id="modal-bulan" class="fw-semibold"></div></div>
+                    <div class="col-md-6"><small class="text-muted">Jabatan</small><div id="modal-jabatan" class="fw-semibold"></div></div>
+                    <div class="col-md-6"><small class="text-muted">Status</small><div id="modal-status" class="fw-semibold"></div></div>
+                    <div class="col-md-6"><small class="text-muted">Departemen</small><div id="modal-departemen" class="fw-semibold"></div></div>
+                    <div class="col-md-6"><small class="text-muted">Unit biMBA</small><div id="modal-unit" class="fw-semibold"></div></div>
+                    <div class="col-md-6"><small class="text-muted">No. Cabang</small><div id="modal-cabang" class="fw-semibold"></div></div>
+                    <div class="col-md-6"><small class="text-muted">Masa Kerja</small><div id="modal-masakerja" class="fw-semibold"></div></div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -609,27 +577,205 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    // ... (semua script lama kamu tetap sama, hanya tambahkan bagian modal di bawah)
 
-    // ==================== MODAL INFO ====================
+    // Tooltip
+    document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootstrap.Tooltip(el));
+
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    if (!csrfToken) {
+        console.error('CSRF token tidak ditemukan!');
+        return;
+    }
+
+    const numericFields = ['imbalan_lainnya', 'insentif_mentor', 'kekurangan', 'kelebihan', 'at_hari'];
+
+    const formatRupiah = (value) => {
+        if (!value || value == 0) return '-';
+        const abs = Math.abs(value);
+        const formatted = 'Rp ' + abs.toLocaleString('id-ID');
+        return value < 0 ? `<span class="text-danger">(${formatted})</span>` : formatted;
+    };
+
+    // Inline Edit Input
+    document.querySelectorAll('.inline-edit-input').forEach(input => {
+        const container = input.closest('td');
+        const editIcon = container.querySelector('.edit-icon');
+        const saving = container.querySelector('.saving');
+
+        const save = () => {
+            const recordId = input.dataset.id;
+            if (!recordId) return;
+
+            let value = input.value.trim();
+            if (value === '' || value === '-') value = null;
+
+            if (numericFields.includes(input.dataset.field) && value !== null) {
+                value = parseInt(value.replace(/\./g, ''), 10) || 0;
+            }
+
+            if (saving) saving.style.display = 'inline';
+            if (editIcon) editIcon.style.display = 'none';
+
+            const formData = new FormData();
+            formData.append('id', recordId);
+            formData.append(input.dataset.field, value ?? '');
+            formData.append('_token', csrfToken);
+
+            fetch("{{ route('imbalan_rekap.update-inline') }}", {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    if (data.total_imbalan !== undefined) {
+                        document.getElementById('total_imbalan_' + recordId).innerHTML = formatRupiah(data.total_imbalan);
+                    }
+                    if (data.yang_dibayarkan !== undefined) {
+                        const el = document.getElementById('yang_dibayarkan_' + recordId);
+                        if (el) {
+                            el.innerHTML = formatRupiah(data.yang_dibayarkan);
+                            el.className = `text-end fw-bold bg-info-subtle ${data.yang_dibayarkan < 0 ? 'text-danger' : 'text-success'}`;
+                        }
+                    }
+                }
+            })
+            .catch(err => console.error('Error:', err))
+            .finally(() => {
+                if (saving) saving.style.display = 'none';
+                if (editIcon) editIcon.style.display = 'inline';
+            });
+        };
+
+        input.addEventListener('blur', save);
+        input.addEventListener('keypress', e => e.key === 'Enter' && (e.preventDefault(), input.blur()));
+    });
+
+    // === HANDLER CICILAN (PENTING) ===
+    document.querySelectorAll('.inline-edit-cicilan').forEach(select => {
+        let previousValue = select.value;
+
+        select.addEventListener('change', function () {
+            const recordId = this.dataset.id;
+            if (!recordId) return;
+
+            const newVal = this.value;
+            const container = this.parentElement;
+            const saving = container.querySelector('.saving');
+            const editIcon = container.querySelector('.edit-icon');
+
+            if (saving) saving.style.display = 'inline';
+            if (editIcon) editIcon.style.display = 'none';
+
+            const formData = new FormData();
+            formData.append('id', recordId);
+            formData.append('_token', csrfToken);
+
+            if (newVal === "") {
+                formData.append('installment_id', '');
+                formData.append('cicilan', 0);
+                formData.append('keterangan_cicilan', '');
+            } else {
+                const parts = newVal.split('|');
+                formData.append('installment_id', parts[0]);
+                formData.append('cicilan', parts[1] || 0);
+                formData.append('keterangan_cicilan', 'Cicilan Cash Advance | ' + (parts[2] || ''));
+            }
+
+            fetch("{{ route('imbalan_rekap.update-inline') }}", {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    const elBayar = document.getElementById('yang_dibayarkan_' + recordId);
+                    if (elBayar && data.yang_dibayarkan !== undefined) {
+                        elBayar.innerHTML = formatRupiah(data.yang_dibayarkan);
+                        elBayar.className = `text-end fw-bold bg-info-subtle ${data.yang_dibayarkan < 0 ? 'text-danger' : 'text-success'}`;
+                    }
+
+                    const inputKet = this.closest('tr').querySelector('input[readonly]');
+                    if (inputKet) inputKet.value = data.keterangan_cicilan || '';
+                } else {
+                    alert(data.message || 'Gagal menyimpan cicilan');
+                    this.value = previousValue;
+                }
+            })
+            .catch(() => {
+                alert('Terjadi kesalahan saat menyimpan cicilan');
+                this.value = previousValue;
+            })
+            .finally(() => {
+                if (saving) saving.style.display = 'none';
+                if (editIcon) editIcon.style.display = 'inline';
+            });
+
+            previousValue = newVal;
+        });
+    });
+
+    // Tombol Bayar Inline
+    document.querySelectorAll('.btn-bayar-inline').forEach(btn => {
+        btn.addEventListener('click', function () {
+            const id = this.dataset.id;
+            const nama = this.dataset.nama;
+
+            if (!confirm(`Tandai ${nama} sebagai SUDAH DIBAYAR untuk periode ini?`)) return;
+
+            const originalHTML = this.innerHTML;
+            this.innerHTML = '<i class="bi bi-hourglass-split"></i> Proses...';
+            this.disabled = true;
+
+            fetch("{{ route('imbalan_rekap.bayar-single') }}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken
+                },
+                body: JSON.stringify({ id: id })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    const td = this.closest('td');
+                    td.innerHTML = `
+                        <span class="badge bg-success px-3 py-2">
+                            <i class="bi bi-check-circle-fill me-1"></i> Sudah Dibayar
+                        </span>
+                        <div class="small text-muted mt-1">${new Date().toLocaleString('id-ID', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'})}</div>
+                    `;
+                    td.closest('tr').classList.add('table-success');
+                } else {
+                    alert(data.message || 'Gagal menandai pembayaran');
+                    this.innerHTML = originalHTML;
+                    this.disabled = false;
+                }
+            })
+            .catch(() => {
+                alert('Terjadi kesalahan');
+                this.innerHTML = originalHTML;
+                this.disabled = false;
+            });
+        });
+    });
+
+    // Modal Info
     const infoModal = document.getElementById('infoModal');
     if (infoModal) {
         infoModal.addEventListener('show.bs.modal', function (event) {
             const button = event.relatedTarget;
-
-            document.getElementById('modal-nama').textContent     = button.getAttribute('data-nama');
-            document.getElementById('modal-nik').textContent      = button.getAttribute('data-nik');
-            document.getElementById('modal-bulan').textContent    = button.getAttribute('data-bulan');
-            document.getElementById('modal-jabatan').textContent  = button.getAttribute('data-jabatan');
-            document.getElementById('modal-status').textContent   = button.getAttribute('data-status');
-            document.getElementById('modal-departemen').textContent = button.getAttribute('data-departemen');
-            document.getElementById('modal-unit').textContent     = button.getAttribute('data-unit');
-            document.getElementById('modal-cabang').textContent   = button.getAttribute('data-cabang');
-            document.getElementById('modal-masakerja').textContent = button.getAttribute('data-masakerja');
+            document.getElementById('modal-nama').textContent     = button.getAttribute('data-nama') || '-';
+            document.getElementById('modal-nik').textContent      = button.getAttribute('data-nik') || '-';
+            document.getElementById('modal-bulan').textContent    = button.getAttribute('data-bulan') || '-';
+            document.getElementById('modal-jabatan').textContent  = button.getAttribute('data-jabatan') || '-';
+            document.getElementById('modal-status').textContent   = button.getAttribute('data-status') || '-';
+            document.getElementById('modal-departemen').textContent = button.getAttribute('data-departemen') || '-';
+            document.getElementById('modal-unit').textContent     = button.getAttribute('data-unit') || '-';
+            document.getElementById('modal-cabang').textContent   = button.getAttribute('data-cabang') || '-';
+            document.getElementById('modal-masakerja').textContent = button.getAttribute('data-masakerja') || '-';
         });
     }
-
-    // ... (script lama kamu yang lain tetap di sini)
 });
 </script>
 @endsection
