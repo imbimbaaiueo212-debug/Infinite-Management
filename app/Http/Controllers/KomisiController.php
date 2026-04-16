@@ -12,6 +12,7 @@ use App\Models\Spp;
 use App\Models\MuridTrial;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
 
 class KomisiController extends Controller
 {
@@ -222,94 +223,99 @@ private function getUnitOptions()
         return redirect()->route('komisi.index')->with('success', 'Komisi berhasil disimpan!');
     }
 
-public function sync(Request $request)
+        public function sync(Request $request)
 {
-    $bulanMap = [
-        'januari' => 1, 'februari' => 2, 'maret' => 3, 'april' => 4,
-        'mei' => 5, 'juni' => 6, 'juli' => 7, 'agustus' => 8,
-        'september' => 9, 'oktober' => 10, 'november' => 11, 'desember' => 12
-    ];
+    DB::beginTransaction();
 
-    $user = auth()->user();
-    $isKepalaUnit = $user && str_contains(strtolower($user->jabatan ?? $user->posisi ?? ''), 'kepala unit');
-    $userUnit = null;
+    try {
+        $bulanMap = [
+            1=>'januari',2=>'februari',3=>'maret',4=>'april',
+            5=>'mei',6=>'juni',7=>'juli',8=>'agustus',
+            9=>'september',10=>'oktober',11=>'november',12=>'desember'
+        ];
 
-    if ($isKepalaUnit) {
-        $profileLogin = Profile::where('nama', $user->name)
-            ->orWhere('nik', $user->nik ?? null)
-            ->first();
+        $user = Auth::user();
+        $isKepalaUnit = $user && str_contains(strtolower($user->jabatan ?? $user->posisi ?? ''), 'kepala unit');
 
-        $userUnit = $profileLogin?->bimba_unit 
-                 ?? $profileLogin?->departemen 
-                 ?? $user->bimba_unit 
-                 ?? $user->unit 
-                 ?? null;
+        $userUnit = null;
 
-        Log::info("Sync oleh Kepala Unit: {$user->name}, Unit: " . ($userUnit ?? 'tidak ditemukan'));
-    }
+        if ($isKepalaUnit) {
+            $profileLogin = Profile::where('nama', $user->name)
+                ->orWhere('nik', $user->nik ?? null)
+                ->first();
 
-    $periodes = Penerimaan::select('bulan', 'tahun')->distinct()->get();
-    if ($periodes->isEmpty()) {
-        return back()->with('info', 'Tidak ada data penerimaan untuk disinkronkan.');
-    }
+            $userUnit = $profileLogin?->bimba_unit 
+                     ?? $profileLogin?->departemen 
+                     ?? $user->bimba_unit 
+                     ?? $user->unit 
+                     ?? null;
+        }
 
-    // Ambil karyawan unik (guru & kepala unit aktif)
-    $uniqueQuery = Profile::whereIn('jabatan', ['Kepala Unit', 'Guru'])
-        ->where('status_karyawan', 'Aktif');
+        // ============================================================
+        // 🔥 1. AMBIL SEMUA KARYAWAN (ANTI HILANG)
+        // ============================================================
+        $karyawanQuery = Profile::whereIn('jabatan', ['Kepala Unit', 'Guru'])
+            ->where('status_karyawan', 'Aktif');
 
-    if ($isKepalaUnit && $userUnit) {
-        $uniqueQuery->where(function ($q) use ($userUnit) {
-            $q->where('bimba_unit', $userUnit)
-              ->orWhere('departemen', $userUnit);
-        });
-    }
+        if ($isKepalaUnit && $userUnit) {
+            $karyawanQuery->where(function ($q) use ($userUnit) {
+                $q->where('bimba_unit', $userUnit)
+                  ->orWhere('departemen', $userUnit);
+            });
+        }
 
-    $uniqueKaryawan = $uniqueQuery->select('nama', 'bimba_unit', 'departemen')
-        ->distinct()
-        ->orderBy('no_urut')
-        ->get();
+        $karyawan = $karyawanQuery
+            ->orderBy('no_urut')
+            ->get();
 
-    $karyawan = collect();
-    foreach ($uniqueKaryawan as $uk) {
-        $profileQuery = Profile::where('nama', $uk->nama);
+        if ($karyawan->isEmpty()) {
+            return back()->with('warning', 'Tidak ada karyawan.');
+        }
 
-        if ($uk->bimba_unit) $profileQuery->where('bimba_unit', $uk->bimba_unit);
-        else $profileQuery->whereNull('bimba_unit');
+        // ============================================================
+        // 🔥 2. TENTUKAN PERIODE (WAJIB LOOP, WALAU DATA KOSONG)
+        // ============================================================
+        $bulan = $request->bulan ?? now()->subMonth()->month;
+        $tahun = $request->tahun ?? now()->subMonth()->year;
 
-        if ($uk->departemen) $profileQuery->where('departemen', $uk->departemen);
-        else $profileQuery->whereNull('departemen');
+        $bulanText = $bulanMap[$bulan];
 
-        $profile = $profileQuery->orderBy('id')->first();
-        if ($profile) $karyawan->push($profile);
-    }
+        // ============================================================
+        // 🔥 3. RESET DATA BULAN INI (ANTI NYANGKUT)
+        // ============================================================
+        Komisi::where('bulan', $bulan)
+            ->where('tahun', $tahun)
+            ->when($isKepalaUnit && $userUnit, function ($q) use ($userUnit) {
+                $q->where('bimba_unit', $userUnit);
+            })
+            ->update([
+                'spp_bimba' => 0,
+                'spp_english' => 0,
+                'murid_mb_bimba' => 0,
+                'mk_bimba' => 0,
+                'komisi_mb_bimba' => 0,
+                'sudah_dibayar' => 0,
+                'mb_umum_ku' => 0,
+                'am1_bimba' => 0,
+                'am2_bimba' => 0,
+            ]);
 
-    if ($karyawan->isEmpty()) {
-        return back()->with('warning', $isKepalaUnit 
-            ? "Tidak ada guru/kepala unit aktif di unit {$userUnit}."
-            : 'Tidak ada guru/kepala unit aktif.');
-    }
+        // ============================================================
+        // 🔥 4. LOOP SEMUA KARYAWAN (PASTI MUNCUL)
+        // ============================================================
+        $created = $updated = 0;
 
-    Log::info("Jumlah karyawan unik yang diproses: " . $karyawan->count());
+        foreach ($karyawan as $profile) {
 
-    $created = $updated = 0;
+            $nama = trim($profile->nama);
+            $unitKey = strtoupper(trim($profile->bimba_unit ?? $profile->departemen ?? 'UNKNOWN'));
 
-    foreach ($periodes as $p) {
-        $bulanStr   = strtolower(trim($p->bulan));
-        $bulanAngka = $bulanMap[$bulanStr] ?? null;
-        if (!$bulanAngka) continue;
-
-        // ────────────────────────────────────────────────────────────────
-        // 1. TOTAL SPP per unit (untuk kepala unit)
-        // ────────────────────────────────────────────────────────────────
-        $totalSppPerUnit = [];
-        $gurus = $karyawan->where('jabatan', 'Guru');
-
-        foreach ($gurus as $guru) {
-            $unitKey = strtoupper(trim($guru->bimba_unit ?? $guru->departemen ?? 'UNKNOWN'));
-
-            $sppBimba = Penerimaan::where('guru', trim($guru->nama))
-                ->where('bulan', $p->bulan)
-                ->where('tahun', $p->tahun)
+            // ========================================================
+            // 🔹 SPP
+            // ========================================================
+            $sppBimba = Penerimaan::where('guru', $nama)
+                ->where('bulan', $bulanText)
+                ->where('tahun', $tahun)
                 ->where(function ($q) {
                     $q->where('daftar', 'like', '%MBA%')
                       ->orWhere('kelas', 'like', '%MBA%')
@@ -317,211 +323,108 @@ public function sync(Request $request)
                 })
                 ->sum('spp') ?: 0;
 
-            $sppEnglish = Penerimaan::where('guru', trim($guru->nama))
-                ->where('bulan', $p->bulan)
-                ->where('tahun', $p->tahun)
+            $sppEnglish = Penerimaan::where('guru', $nama)
+                ->where('bulan', $bulanText)
+                ->where('tahun', $tahun)
                 ->where(function ($q) {
                     $q->where('daftar', 'like', '%English%')
                       ->orWhere('kelas', 'like', '%English%');
                 })
                 ->sum('spp') ?: 0;
 
-            $totalSppPerUnit[$unitKey] = $totalSppPerUnit[$unitKey] ?? ['bimba' => 0, 'english' => 0];
-            $totalSppPerUnit[$unitKey]['bimba']   += $sppBimba;
-            $totalSppPerUnit[$unitKey]['english'] += $sppEnglish;
-        }
-
-        // ────────────────────────────────────────────────────────────────
-        // 2. MB per unit
-        // ────────────────────────────────────────────────────────────────
-        $mbQuery = Penerimaan::where('penerimaan.bulan', $p->bulan)
-            ->where('penerimaan.tahun', $p->tahun)
-            ->join('buku_induk', 'penerimaan.nim', '=', 'buku_induk.nim')
-            ->where('buku_induk.status', 'Baru')
-            ->join('profiles', 'buku_induk.guru', '=', 'profiles.nama')
-            ->where('profiles.jabatan', 'Guru')
-            ->where(function ($q) {
-                $q->where('buku_induk.kelas', 'like', '%MBA%')
-                  ->orWhere('buku_induk.kelas', 'like', '%AIUEO%');
-            });
-
-        if ($isKepalaUnit && $userUnit) {
-            $mbQuery->where('profiles.bimba_unit', $userUnit);
-        }
-
-        $mbBimbaPerUnit = $mbQuery->selectRaw(
-            'UPPER(TRIM(COALESCE(profiles.bimba_unit, profiles.departemen))) as unit_key, COUNT(*) as jml'
-        )->groupBy('unit_key')->pluck('jml', 'unit_key')->toArray();
-
-        // ────────────────────────────────────────────────────────────────
-        // 3. MK per guru & per unit
-        // ────────────────────────────────────────────────────────────────
-        $mkQueryGuru = BukuInduk::where('status', 'Keluar')
-            ->whereNotNull('tgl_keluar')
-            ->whereYear('tgl_keluar', $p->tahun)
-            ->whereMonth('tgl_keluar', $bulanAngka)
-            ->where(function ($q) {
-                $q->where('kelas', 'like', '%MBA%')
-                  ->orWhere('kelas', 'like', '%AIUEO%');
-            });
-
-        if ($isKepalaUnit && $userUnit) {
-            $mkQueryGuru->where('bimba_unit', $userUnit);
-        }
-
-        $mkBimbaPerGuru = $mkQueryGuru->selectRaw('TRIM(guru) as guru_nama, COUNT(*) as jml')
-            ->groupBy('guru_nama')
-            ->pluck('jml', 'guru_nama')
-            ->toArray();
-
-        $mkBimbaPerUnit = (clone $mkQueryGuru)->join('profiles', 'buku_induk.guru', '=', 'profiles.nama')
-            ->where('profiles.jabatan', 'Guru')
-            ->selectRaw(
-                'UPPER(TRIM(COALESCE(profiles.bimba_unit, profiles.departemen))) as unit_key, COUNT(*) as jml'
-            )->groupBy('unit_key')->pluck('jml', 'unit_key')->toArray();
-
-        // ────────────────────────────────────────────────────────────────
-        // LOOP UTAMA: Hitung & simpan per karyawan (tanpa MT)
-        // ────────────────────────────────────────────────────────────────
-        foreach ($karyawan as $profile) {
-            $namaTrim  = trim($profile->nama);
-            $namaLower = strtolower($namaTrim);
-            $unitKey   = strtoupper(trim($profile->bimba_unit ?? $profile->departemen ?? 'UNKNOWN'));
-
-            // Tentukan bimba_unit & no_cabang
-            $bimba_unit = $profile->bimba_unit;
-            $no_cabang  = null;
-            if ($bimba_unit) {
-                $unitModel = Unit::whereRaw('LOWER(TRIM(biMBA_unit)) = ?', [strtolower(trim($bimba_unit))])->first();
-                $no_cabang = $unitModel?->no_cabang;
-            } else {
-                $firstBuku = BukuInduk::where('guru', $namaTrim)
-                    ->whereNotNull('bimba_unit')
-                    ->first();
-                if ($firstBuku) {
-                    $bimba_unit = $firstBuku->bimba_unit;
-                    $unitModel  = Unit::whereRaw('LOWER(TRIM(biMBA_unit)) = ?', [strtolower(trim($bimba_unit))])->first();
-                    $no_cabang  = $unitModel?->no_cabang;
-                }
-            }
-
-            // SPP
-            $sppBimba = $profile->jabatan === 'Guru'
-                ? Penerimaan::where('guru', $namaTrim)
-                    ->where('bulan', $p->bulan)->where('tahun', $p->tahun)
-                    ->where(function ($q) {
-                        $q->where('daftar', 'like', '%MBA%')
-                          ->orWhere('kelas', 'like', '%MBA%')
-                          ->orWhere('kelas', 'like', '%AIUEO%');
-                    })
-                    ->sum('spp') ?: 0
-                : ($totalSppPerUnit[$unitKey]['bimba'] ?? 0);
-
-            $sppEnglish = $profile->jabatan === 'Guru'
-                ? Penerimaan::where('guru', $namaTrim)
-                    ->where('bulan', $p->bulan)->where('tahun', $p->tahun)
-                    ->where(function ($q) {
-                        $q->where('daftar', 'like', '%English%')
-                          ->orWhere('kelas', 'like', '%English%');
-                    })
-                    ->sum('spp') ?: 0
-                : ($totalSppPerUnit[$unitKey]['english'] ?? 0);
-
-            // MB / MK
-            $mb = $profile->jabatan === 'Kepala Unit' ? ($mbBimbaPerUnit[$unitKey] ?? 0) : 0;
-            $mk = $profile->jabatan === 'Guru' 
-                ? ($mkBimbaPerGuru[$namaTrim] ?? 0) 
-                : ($mkBimbaPerUnit[$unitKey] ?? 0);
-
-            // AM1 & AM2
-            $am1 = $profile->jabatan === 'Guru'
-                ? BukuInduk::where('guru', $namaTrim)
-                    ->where('status', 'Aktif')
-                    ->where(function ($q) {
-                        $q->where('kelas', 'like', '%MBA%')
-                          ->orWhere('kelas', 'like', '%AIUEO%');
-                    })
-                    ->count()
-                : BukuInduk::join('profiles', 'buku_induk.guru', '=', 'profiles.nama')
-                    ->where('profiles.jabatan', 'Guru')
-                    ->whereRaw('UPPER(TRIM(COALESCE(profiles.bimba_unit, profiles.departemen))) = ?', [$unitKey])
-                    ->where('buku_induk.status', 'Aktif')
-                    ->where(function ($q) {
-                        $q->where('buku_induk.kelas', 'like', '%MBA%')
-                          ->orWhere('buku_induk.kelas', 'like', '%AIUEO%');
-                    })
-                    ->count();
-
-            $am2 = $profile->jabatan === 'Guru'
-                ? Penerimaan::where('guru', $namaTrim)
-                    ->where('bulan', $p->bulan)->where('tahun', $p->tahun)
-                    ->where('penerimaan.spp', '>', 0)
-                    ->where(function ($q) {
-                        $q->where('penerimaan.kelas', 'like', '%MBA%')
-                          ->orWhere('penerimaan.kelas', 'like', '%AIUEO%');
-                    })
-                    ->distinct('penerimaan.nim')->count('penerimaan.nim')
-                : Penerimaan::where('penerimaan.bulan', $p->bulan)
-                    ->where('penerimaan.tahun', $p->tahun)
-                    ->where('penerimaan.spp', '>', 0)
-                    ->where(function ($q) {
-                        $q->where('penerimaan.kelas', 'like', '%MBA%')
-                          ->orWhere('penerimaan.kelas', 'like', '%AIUEO%');
-                    })
+            // ========================================================
+            // 🔹 MB
+            // ========================================================
+            $mb = 0;
+            if ($profile->jabatan === 'Kepala Unit') {
+                $mb = Penerimaan::where('bulan', $bulanText)
+                    ->where('tahun', $tahun)
                     ->join('buku_induk', 'penerimaan.nim', '=', 'buku_induk.nim')
                     ->join('profiles', 'buku_induk.guru', '=', 'profiles.nama')
                     ->where('profiles.jabatan', 'Guru')
                     ->whereRaw('UPPER(TRIM(COALESCE(profiles.bimba_unit, profiles.departemen))) = ?', [$unitKey])
-                    ->distinct('penerimaan.nim')->count('penerimaan.nim');
+                    ->where('buku_induk.status', 'Baru')
+                    ->count();
+            }
 
-            // ────────────────────────────────────────────────────────────────
-            // SIMPAN / UPDATE KOMISI (tanpa MT)
-            // ────────────────────────────────────────────────────────────────
+            // ========================================================
+            // 🔹 MK
+            // ========================================================
+            $mk = BukuInduk::where('status', 'Keluar')
+                ->whereYear('tgl_keluar', $tahun)
+                ->whereMonth('tgl_keluar', $bulan)
+                ->when($profile->jabatan === 'Guru', function ($q) use ($nama) {
+                    $q->where('guru', $nama);
+                })
+                ->when($profile->jabatan === 'Kepala Unit', function ($q) use ($unitKey) {
+                    $q->join('profiles', 'buku_induk.guru', '=', 'profiles.nama')
+                      ->whereRaw('UPPER(TRIM(COALESCE(profiles.bimba_unit, profiles.departemen))) = ?', [$unitKey]);
+                })
+                ->count();
+
+            // ========================================================
+            // 🔹 AM
+            // ========================================================
+            $am1 = BukuInduk::where('guru', $nama)
+                ->where('status', 'Aktif')
+                ->count();
+
+            $am2 = Penerimaan::where('guru', $nama)
+                ->where('bulan', $bulanText)
+                ->where('tahun', $tahun)
+                ->where('spp', '>', 0)
+                ->distinct('nim')
+                ->count('nim');
+
+            // ========================================================
+            // 🔥 SIMPAN (PASTI ADA)
+            // ========================================================
             $upsert = Komisi::updateOrCreate(
                 [
-                    'nama'  => $namaTrim,
-                    'bulan' => $bulanAngka,
-                    'tahun' => $p->tahun,
+                    'nama'  => $nama,
+                    'bulan' => $bulan,
+                    'tahun' => $tahun,
                 ],
                 [
-                    'profile_id'       => $profile->id,
-                    'nomor_urut'       => $profile->no_urut ?? 999,
-                    'jabatan'          => $profile->jabatan,
-                    'status'           => $profile->status_karyawan,
-                    'departemen'       => $profile->departemen,
-                    'masa_kerja'       => $profile->masa_kerja ?? '-',
-                    'bimba_unit'       => $bimba_unit,
-                    'no_cabang'        => $no_cabang,
-                    'nik'              => $profile->nik ?? null,
+                    'profile_id' => $profile->id,
+                    'nomor_urut' => $profile->no_urut ?? 999,
+                    'jabatan'    => $profile->jabatan,
+                    'status'     => $profile->status_karyawan,
+                    'departemen' => $profile->departemen,
+                    'masa_kerja' => $profile->masa_kerja ?? '-',
+                    'bimba_unit' => $profile->bimba_unit,
+                    'nik'        => $profile->nik,
 
-                    'spp_bimba'        => $sppBimba,
-                    'spp_english'      => $sppEnglish,
+                    'spp_bimba'  => $sppBimba,
+                    'spp_english'=> $sppEnglish,
 
-                    'murid_mb_bimba'   => $mb,
-                    'mk_bimba'         => $mk,
+                    'murid_mb_bimba'  => $mb,
+                    'mk_bimba'        => $mk,
+                    'komisi_mb_bimba' => $mb * 50000,
+                    'sudah_dibayar'   => $mb * 50000,
+                    'mb_umum_ku'      => $mb * 50000,
 
-                    'komisi_mb_bimba'  => $mb * 50000,
-                    'sudah_dibayar'    => ($mb) * 50000,  // MT sudah di-handle observer, jadi hanya MB
-                    'mb_umum_ku'       => $mb * 50000,
+                    'am1_bimba' => $am1,
+                    'am2_bimba' => $am2,
 
-                    'am1_bimba'        => $am1,
-                    'am2_bimba'        => $am2,
-
-                    'keterangan'       => 'Sync manual (SPP/MB/MK/AM) - ' . now()->format('d/m/Y H:i') . 
-                                      ($isKepalaUnit ? " (oleh Kepala Unit {$user->name})" : ''),
+                    'keterangan' => 'AUTO SYNC FINAL - ' . now()->format('d/m/Y H:i'),
                 ]
             );
 
             $upsert->wasRecentlyCreated ? $created++ : $updated++;
         }
-    }
 
-    return back()->with(
-        'success',
-        "Sync KOMISI BERHASIL! " . 
-        ($isKepalaUnit ? "Hanya unit {$userUnit} yang diproses." : "Semua unit diproses.") . 
-        " {$created} data baru, {$updated} diperbarui. MT sudah otomatis via observer."
-    );
+        DB::commit();
+
+        return back()->with('success',
+            "🔥 SYNC BERHASIL | {$created} baru | {$updated} update"
+        );
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+
+        return back()->with('error', $e->getMessage());
+    }
 }
 
 

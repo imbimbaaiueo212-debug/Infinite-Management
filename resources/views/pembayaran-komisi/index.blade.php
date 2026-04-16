@@ -27,7 +27,7 @@
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-bordered table-striped mb-0">
-                    <thead class="bg-primary text-white">
+                    <thead class="bg-primary text-dark">
                         <tr>
                             <th rowspan="2">NO</th>
                             <th rowspan="2">NAMA</th>

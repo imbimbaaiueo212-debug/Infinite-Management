@@ -153,7 +153,7 @@
     <div class="row g-4 mb-5">
         <div class="col-12 col-lg-8">
             <div class="card">
-                <div class="card-header bg-gradient-primary text-white">
+                <div class="card-header bg-gradient-primary text-dark">
                     <h5 class="mb-0">Tren Pendaftaran Murid Baru {{ now()->year }}</h5>
                 </div>
                 <div class="card-body chart-container">
@@ -215,15 +215,15 @@
                             <div class="list-group-item px-4 py-3">
                                 <div class="d-flex justify-content-between align-items-center">
                                     <div class="d-flex align-items-center">
-    <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-3"
-         style="width: 48px; height: 48px; font-size: 1.2rem;">
-        {{ strtoupper(substr($unit->unit->biMBA_unit ?? 'U', 0, 1)) }}
-    </div>
-    <div>
-        <h6 class="mb-0">{{ $unit->unit->biMBA_unit ?? 'Unit' }}</h6>
-        <small class="text-muted">{{ $unit->total_murid }} murid</small>
-    </div>
-</div>
+                                        <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-3"
+                                            style="width: 48px; height: 48px; font-size: 1.2rem;">
+                                            {{ strtoupper(substr($unit->unit->biMBA_unit ?? 'U', 0, 1)) }}
+                                        </div>
+                                        <div>
+                                            <h6 class="mb-0">{{ $unit->unit->biMBA_unit ?? 'Unit' }}</h6>
+                                            <small class="text-muted">{{ $unit->total_murid }} murid</small>
+                                        </div>
+                                    </div>
                                     <span class="text-primary fw-bold fs-5">
                                         {{ number_format($unit->total_murid / ($totalBaru + $totalAktif + $totalKeluar) * 100, 1) }}%
                                     </span>

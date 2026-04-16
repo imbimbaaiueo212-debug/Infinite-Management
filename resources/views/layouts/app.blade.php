@@ -7,26 +7,35 @@
 
     <!-- CSRF Token untuk AJAX -->
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    
+
+    <!-- PWA Fullscreen -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#0d6efd">
+
+    <!-- Json -->
+    <link rel="manifest" href="/manifest.json">
 
     <!-- Favicon Utama -->
-<link rel="icon" href="{{ asset('template/img/favicon.ico') }}" type="image/x-icon">
+    <link rel="icon" href="{{ asset('template/img/favicon.ico') }}" type="image/x-icon">
 
-<!-- Ukuran kecil untuk tab browser -->
-<link rel="icon" type="image/png" sizes="32x32" href="{{ asset('template/img/favicon-32x32.png') }}">
-<link rel="icon" type="image/png" sizes="16x16" href="{{ asset('template/img/favicon-16x16.png') }}">
+    <!-- Ukuran kecil untuk tab browser -->
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ asset('template/img/favicon-32x32.png') }}">
+    <link rel="icon" type="image/png" sizes="16x16" href="{{ asset('template/img/favicon-16x16.png') }}">
 
-<!-- Android/Chrome & PWA -->
-<link rel="icon" type="image/png" sizes="192x192" href="{{ asset('template/img/android-chrome-192x192.png') }}">
-<link rel="icon" type="image/png" sizes="512x512" href="{{ asset('template/img/android-chrome-512x512.png') }}">
+    <!-- Android/Chrome & PWA -->
+    <link rel="icon" type="image/png" sizes="192x192" href="{{ asset('template/img/android-chrome-192x192.png') }}">
+    <link rel="icon" type="image/png" sizes="512x512" href="{{ asset('template/img/android-chrome-512x512.png') }}">
 
-<!-- iOS / Apple Touch Icon (Home Screen) -->
-<link rel="apple-touch-icon" sizes="180x180" href="{{ asset('template/img/apple-touch-icon.png') }}">
-<link rel="apple-touch-icon" sizes="152x152" href="{{ asset('template/img/apple-touch-icon-152x152.png') }}">
-<link rel="apple-touch-icon" sizes="167x167" href="{{ asset('template/img/apple-touch-icon-167x167.png') }}">
+    <!-- iOS / Apple Touch Icon (Home Screen) -->
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ asset('template/img/apple-touch-icon.png') }}">
+    <link rel="apple-touch-icon" sizes="152x152" href="{{ asset('template/img/apple-touch-icon-152x152.png') }}">
+    <link rel="apple-touch-icon" sizes="167x167" href="{{ asset('template/img/apple-touch-icon-167x167.png') }}">
 
-<!-- Windows Tiles (opsional) -->
-<meta name="msapplication-TileColor" content="#ffffff">
-<meta name="msapplication-TileImage" content="{{ asset('template/img/ms-icon-144x144.png') }}">
+    <!-- Windows Tiles (opsional) -->
+    <meta name="msapplication-TileColor" content="#ffffff">
+    <meta name="msapplication-TileImage" content="{{ asset('template/img/ms-icon-144x144.png') }}">
 
 
 

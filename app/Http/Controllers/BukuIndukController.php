@@ -14,6 +14,7 @@ use App\Models\BukuIndukHistory;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB; // Tambahan untuk ambil data units
+use Illuminate\Support\Facades\Auth; // Tambahan untuk cek user login
 
 class BukuIndukController extends Controller
 {
@@ -151,12 +152,12 @@ class BukuIndukController extends Controller
         $unitsJson = json_encode($units);
 
         // Tentukan status admin & data user
-        $isAdmin = auth()->user()->is_admin ?? false;
+        $isAdmin = Auth::user()->is_admin ?? false;
         $userUnit = null;
         $userNoCabang = null;
 
         if (!$isAdmin) {
-            $userUnit = auth()->user()->bimba_unit;
+            $userUnit = Auth::user()->bimba_unit;
             if ($userUnit) {
                 $userNoCabang = Unit::where('bimba_unit', $userUnit)->value('no_cabang');
             }
@@ -235,7 +236,7 @@ if (!$isAdmin && $userUnit) {
 
     public function store(Request $request)
     {
-        $user = auth()->user();
+        $user = Auth::user();
         $isAdmin = $user->is_admin ?? false;
 
         // Force unit & cabang untuk non-admin yang sudah punya unit
@@ -601,7 +602,7 @@ if (!$isAdmin && $userUnit) {
         BukuIndukHistory::create([
             'buku_induk_id' => $bukuInduk->id,
             'action' => 'update',
-            'user' => auth()->user()?->name ?? 'system',
+            'user' => Auth::user()?->name ?? 'system',
             'old_data' => $changedOld,
             'new_data' => $changedNew,
         ]);
@@ -635,7 +636,7 @@ if (!$isAdmin && $userUnit) {
     public function history($id)
     {
         // Cek apakah user login dan punya role 'admin'
-        if (!auth()->check() || auth()->user()->role !== 'admin') {
+        if (!Auth::check() || Auth::user()->role !== 'admin') {
             abort(403, 'Hanya admin yang diizinkan melihat riwayat perubahan.');
         }
 
@@ -664,7 +665,7 @@ public function show($id)
     public function allHistory()
     {
         // Sama seperti di atas
-        if (!auth()->check() || auth()->user()->role !== 'admin') {
+        if (!Auth::check() || Auth::user()->role !== 'admin') {
             abort(403, 'Hanya admin yang diizinkan melihat semua riwayat.');
         }
 

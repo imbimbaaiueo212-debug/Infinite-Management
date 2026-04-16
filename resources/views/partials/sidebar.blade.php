@@ -1,5 +1,22 @@
 <div id="layoutSidenav_nav">
     <nav class="sb-sidenav accordion sb-sidenav-light" id="sidenavAccordion">
+        <!-- 🔥 LOGO & TITLE HEADER -->
+        <div class="sb-sidenav-header p-1 border-bottom text-center">
+            <div class="d-flex align-items-center justify-content-center">
+                <!-- Logo -->
+                <img src="{{ asset('template/img/finaly.png') }}" 
+                     alt="Logo" 
+                     class="me-2" 
+                     style="height: 32px; width: auto;">
+                
+                <!-- Title -->
+                <div>
+                    <div class="fw-bold fs-6 mb-0">Infinite</div>
+                    <div class="small opacity-90">Management</div>
+                </div>
+            </div>
+        </div>
+
         <div class="sb-sidenav-menu">
             <div class="nav">
 
@@ -539,9 +556,14 @@
                 </a>
 
                 {{-- Komisi --}}
-                <a class="nav-link {{ $routeIs(['komisi.*', 'pembayaran-komisi.*']) ? 'active' : '' }}"
+                <a class="nav-link {{ $routeIs(['komisi.*']) ? 'active' : '' }}"
                    href="{{ route('komisi.index') }}">
                     Komisi
+                </a>
+
+                <a class="nav-link {{ $routeIs('pembayaran-komisi.*') ? 'active' : '' }}"
+                   href="{{ route('pembayaran-komisi.index') }}">
+                    Pembayaran Komisi
                 </a>
 
                 {{-- Slip Komisi --}}

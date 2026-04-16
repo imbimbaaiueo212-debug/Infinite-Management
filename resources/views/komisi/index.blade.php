@@ -23,50 +23,51 @@
                 </div>
 
                 {{-- Tahun Awal --}}
-<div class="col-md-2">
-    <label class="form-label fw-bold">Tahun Awal</label>
-    <input type="number" name="tahun_awal"
-           value="{{ $tahunAwal ?? now()->subMonth()->year }}"
-           class="form-control" placeholder="2026" min="2020">
-</div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">Tahun Awal</label>
+                    <input type="number" name="tahun_awal"
+                        value="{{ $tahunAwal ?? now()->subMonth()->year }}"
+                        class="form-control" placeholder="2026" min="2020">
+                </div>
 
-{{-- Bulan Awal (Default = Bulan Lalu) --}}
-<div class="col-md-2">
-    <label class="form-label fw-bold">Bulan Awal</label>
-    <select name="bulan_awal" class="form-select">
-        <option value="">-- Pilih Bulan --</option>
-        @foreach([1=>'Januari',2=>'Februari',3=>'Maret',4=>'April',5=>'Mei',6=>'Juni',
-                  7=>'Juli',8=>'Agustus',9=>'September',10=>'Oktober',11=>'November',12=>'Desember'] as $i => $nama)
-            <option value="{{ $i }}"
-                    {{ $i == ($bulanAwal ?? now()->subMonth()->month) ? 'selected' : '' }}>
-                {{ $nama }}
-            </option>
-        @endforeach
-    </select>
-</div>
+                {{-- Bulan Awal (Default = Bulan Lalu) --}}
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">Bulan Awal</label>
+                    <select name="bulan_awal" class="form-select">
+                        <option value="">-- Pilih Bulan --</option>
+                        @foreach([1=>'Januari',2=>'Februari',3=>'Maret',4=>'April',5=>'Mei',6=>'Juni',
+                                7=>'Juli',8=>'Agustus',9=>'September',10=>'Oktober',11=>'November',12=>'Desember'] as $i => $nama)
+                            <option value="{{ $i }}"
+                                    {{ $i == ($bulanAwal ?? now()->subMonth()->month) ? 'selected' : '' }}>
+                                {{ $nama }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
 
-{{-- Tahun Akhir --}}
-<div class="col-md-2">
-    <label class="form-label fw-bold">Tahun Akhir</label>
-    <input type="number" name="tahun_akhir"
-           value="{{ $tahunAkhir ?? now()->subMonth()->year }}"
-           class="form-control" placeholder="2026" min="2020">
-</div>
+                {{-- Tahun Akhir --}}
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">Tahun Akhir</label>
+                    <input type="number" name="tahun_akhir"
+                        value="{{ $tahunAkhir ?? now()->subMonth()->year }}"
+                        class="form-control" placeholder="2026" min="2020">
+                </div>
 
-{{-- Bulan Akhir (Default = Bulan Lalu) --}}
-<div class="col-md-2">
-    <label class="form-label fw-bold">Bulan Akhir</label>
-    <select name="bulan_akhir" class="form-select">
-        <option value="">-- Pilih Bulan --</option>
-        @foreach([1=>'Januari',2=>'Februari',3=>'Maret',4=>'April',5=>'Mei',6=>'Juni',
-                  7=>'Juli',8=>'Agustus',9=>'September',10=>'Oktober',11=>'November',12=>'Desember'] as $i => $nama)
-            <option value="{{ $i }}"
-                    {{ $i == ($bulanAkhir ?? now()->subMonth()->month) ? 'selected' : '' }}>
-                {{ $nama }}
-            </option>
-        @endforeach
-    </select>
-</div>
+                {{-- Bulan Akhir (Default = Bulan Lalu) --}}
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">Bulan Akhir</label>
+                    <select name="bulan_akhir" class="form-select">
+                        <option value="">-- Pilih Bulan --</option>
+                        @foreach([1=>'Januari',2=>'Februari',3=>'Maret',4=>'April',5=>'Mei',6=>'Juni',
+                                7=>'Juli',8=>'Agustus',9=>'September',10=>'Oktober',11=>'November',12=>'Desember'] as $i => $nama)
+                            <option value="{{ $i }}"
+                                    {{ $i == ($bulanAkhir ?? now()->subMonth()->month) ? 'selected' : '' }}>
+                                {{ $nama }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+                
                 <div class="col-md-1 d-flex align-items-end">
                     <button type="submit" class="btn btn-primary w-100">Filter</button>
                 </div>
@@ -140,7 +141,13 @@
                                         data-departemen="{{ $k->departemen ?? '-' }}"
                                         data-unit="{{ $k->bimba_unit ?? '-' }}"
                                         data-cabang="{{ $k->no_cabang ?? '-' }}"
-                                        data-masakerja="{{ $k->profile?->masa_kerja_format ?? ($k->masa_kerja . ' bulan') }}">
+                                        @php
+                                            $bulan = $k->masa_kerja ?? 0;
+                                            $tahun = floor($bulan / 12);
+                                            $sisaBulan = $bulan % 12;
+                                        @endphp
+
+                                        data-masakerja="{{ $k->profile?->masa_kerja_format ?? ($tahun . ' tahun ' . $sisaBulan . ' bulan') }}"
                                     <i class="bi bi-info-circle"></i> Info
                                 </button>
                             </td>
