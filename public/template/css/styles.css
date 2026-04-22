@@ -10903,11 +10903,11 @@ body {
 
 /* mainan di dalam sini */
 #layoutSidenav #layoutSidenav_nav {
-  flex-basis: 225px;
+  flex-basis: 255px;
   flex-shrink: 0;
   transition: transform 0.40s ease-in-out;
   z-index: 1038;
-  transform: translateX(-225px);
+  transform: translateX(-255px);
 }
 #layoutSidenav #layoutSidenav_content {
   position: relative;
@@ -10917,7 +10917,7 @@ body {
   min-width: 0;
   flex-grow: 1;
   min-height: calc(100vh - 56px);
-  margin-left: -225px;
+  margin-left: -255px;
 }
 
 .sb-sidenav-toggled #layoutSidenav #layoutSidenav_nav {
@@ -10964,7 +10964,7 @@ body[style*="overflow: hidden"] {
   z-index: 1039;
 }
 .sb-nav-fixed #layoutSidenav #layoutSidenav_nav {
-  width: 225px;
+  width: 255px;
   height: 100vh;
   z-index: 1038;
 }
