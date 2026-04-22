@@ -10,10 +10,10 @@
                      style="height: 32px; width: auto;">
                 
                 <!-- Title -->
-                <div>
+                <!--<div>
                     <div class="fw-bold fs-6 mb-0">Infinite</div>
                     <div class="small opacity-90">Management</div>
-                </div>
+                </div>-->
             </div>
         </div>
 
