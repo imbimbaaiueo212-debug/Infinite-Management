@@ -58,20 +58,20 @@
                         </div>
 
                         <!-- Nama Murid dengan Autocomplete -->
-                        <div class="col-md-4 position-relative">
-                            <label class="form-label small fw-medium text-muted mb-1">Nama Murid</label>
-                            <input type="text" id="search" name="search" 
-                                   class="form-control form-control-sm" 
-                                   placeholder="Ketik nama murid..." 
-                                   value="{{ request('search') }}" 
-                                   autocomplete="off">
+                        <div class="col-md-4">
+    <label class="form-label small fw-medium text-muted mb-1">Nama Murid</label>
+    <select name="search" id="searchSelect" class="form-select form-select-sm">
+        <option value="">-- Semua Murid --</option>
 
-                            <!-- Dropdown Suggestion -->
-                            <div id="murid-dropdown" class="dropdown-menu p-2 shadow" 
-                                 style="width:100%; max-height:320px; overflow-y:auto; display:none; z-index:1050;">
-                                <!-- Diisi oleh JavaScript -->
-                            </div>
-                        </div>
+        @foreach($muridList as $m)
+            <option value="{{ $m['nama_murid'] }}"
+                {{ request('search') == $m['nama_murid'] ? 'selected' : '' }}>
+                
+                {{ $m['nim'] ?? '-' }} — {{ $m['nama_murid'] }}
+            </option>
+        @endforeach
+    </select>
+</div>
 
                         <!-- Bulan -->
                         <div class="col-auto">
@@ -349,6 +349,18 @@ $(document).ready(function() {
 
     searchInput.on('keypress', function(e) {
         if (e.which === 13) $('#filter-form').submit();
+    });
+});
+$(document).ready(function() {
+    $('#searchSelect').select2({
+        placeholder: "-- Pilih atau ketik nama murid --",
+        allowClear: true,
+        width: '100%'
+    });
+
+    // auto submit saat pilih
+    $('#searchSelect').on('change', function() {
+        $('#filter-form').submit();
     });
 });
 </script>
