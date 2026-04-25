@@ -127,6 +127,32 @@
                                     <div class="text-danger small">{{ $message }}</div> 
                                 @enderror
                             </div>
+
+                                                  @php
+                                    $user = auth()->user();
+                                @endphp
+
+                                @if($user && empty($user->no_cabang))
+                                    {{-- ADMIN / belum punya no cabang → tampilkan --}}
+                                    <div class="col-lg-3">
+                                        <label class="form-label fw-bold">No Cabang</label>
+
+                                        <input type="text"
+                                            id="no_cabang_display"
+                                            class="form-control bg-light text-center fw-bold fs-5 text-primary"
+                                            readonly
+                                            value="{{ old('no_cabang', $bukuInduk->no_cabang ?? '-') }}">
+
+                                        <input type="hidden"
+                                            name="no_cabang"
+                                            id="no_cabang_hidden"
+                                            value="{{ old('no_cabang', $bukuInduk->no_cabang ?? '') }}">
+                                    </div>
+                                @else
+                                    {{-- USER → tidak tampil, pakai dari login --}}
+                                    <input type="hidden" name="no_cabang" value="{{ $user->no_cabang }}">
+                                @endif
+                            
                             <!--- End -->
                             <div class="col-md-12">
                                 <label class="form-label fw-bold">Status Saat Ini</label>
@@ -490,6 +516,7 @@
                             <!-- Supply Modul -->
                             <div class="col-12"><hr class="my-4"></div>
                                 <h4 class="col-12 mb-3">📚 Supply Modul</h4>
+                                
 
                             <div class="col-md-6">
                                 <label class="form-label">Asal Modul</label>
@@ -502,31 +529,7 @@
                                 <textarea name="keterangan_optional" class="form-control" rows="2">{{ old('keterangan_optional', $bukuInduk->keterangan_optional) }}</textarea>
                             </div>
 
-                                                        @php
-                                    $user = auth()->user();
-                                @endphp
-
-                                @if($user && empty($user->no_cabang))
-                                    {{-- ADMIN / belum punya no cabang → tampilkan --}}
-                                    <div class="col-lg-3">
-                                        <label class="form-label fw-bold">No Cabang</label>
-
-                                        <input type="text"
-                                            id="no_cabang_display"
-                                            class="form-control bg-light text-center fw-bold fs-5 text-primary"
-                                            readonly
-                                            value="{{ old('no_cabang', $bukuInduk->no_cabang ?? '-') }}">
-
-                                        <input type="hidden"
-                                            name="no_cabang"
-                                            id="no_cabang_hidden"
-                                            value="{{ old('no_cabang', $bukuInduk->no_cabang ?? '') }}">
-                                    </div>
-                                @else
-                                    {{-- USER → tidak tampil, pakai dari login --}}
-                                    <input type="hidden" name="no_cabang" value="{{ $user->no_cabang }}">
-                                @endif
-                            </div>
+                                  
 
                         </div>
 
