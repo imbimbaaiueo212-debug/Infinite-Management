@@ -290,6 +290,8 @@ Route::get('buku-induk/{id}/history', [\App\Http\Controllers\BukuIndukController
 Route::get('/buku-induk/histories', [BukuIndukController::class, 'allHistory'])->name('buku_induk.histories')->middleware('auth');
 Route::get('buku-induk/history', [BukuIndukController::class, 'allHistory'])->name('buku_induk.all_history')->middleware('auth');
 
+Route::get('/export-google-sheet', [BukuIndukController::class, 'exportToSheet']);
+
 
 
 //kartu spp
@@ -315,6 +317,10 @@ Route::resource('sertifikat-beasiswa', SertifikatBeasiswaController::class)->mid
 
 //garansi bca
 Route::resource('garansi-bca', GaransiBCAController::class)->middleware('auth');
+Route::post('/garansi/approve/{id}', [GaransiBCAController::class, 'approve'])
+    ->name('garansi.approve');
+Route::post('/garansi/reject/{id}', [GaransiBCAController::class, 'reject'])
+    ->name('garansi.reject');
 
 //daftar harga
 Route::resource('daftar-harga', DaftarHargaController::class)->middleware('auth');

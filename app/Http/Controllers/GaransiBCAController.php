@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\GaransiBCA;
 use App\Models\BukuInduk;
+use App\Models\PengajuanGaransi;
 use App\Models\Unit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -19,20 +20,27 @@ class GaransiBCAController extends Controller
      * ===================================================== */
     public function index()
 {
+    $user = Auth::user();
+
+    /* ================= GARANSI (SUDAH DIBERIKAN) ================= */
     $query = GaransiBCA::query()->orderBy('id', 'desc');
 
-    // Jika bukan admin → jangan pakai filter bimba_unit sama sekali
-    if (auth()->check() && (auth()->user()->is_admin ?? false)) {
-        // Hanya admin yang boleh filter unit
-        // (kalau ada filter request unit, tambahkan di sini)
-    } else {
-        // Non-admin: tidak ada filter bimba_unit
-        // Bisa kosongkan atau abaikan saja
-    }
+    // kalau nanti mau filter admin vs non-admin bisa ditambah di sini
 
     $data = $query->get();
 
-    return view('garansi_bca.index', compact('data'));
+    /* ================= PENGAJUAN GARANSI ================= */
+    $pengajuanQuery = PengajuanGaransi::query()->orderBy('id', 'desc');
+
+    // OPTIONAL: kalau mau filter unit
+    if (!$user->is_admin ?? false) {
+        // contoh kalau mau batasi per unit
+        // $pengajuanQuery->where('bimba_unit', $user->bimba_unit);
+    }
+
+    $pengajuan = $pengajuanQuery->get();
+
+    return view('garansi_bca.index', compact('data', 'pengajuan'));
 }
 
     /* =====================================================
@@ -89,43 +97,50 @@ class GaransiBCAController extends Controller
      * STORE
      * ===================================================== */
     public function store(Request $request)
-    {
-        $request->validate([
-            'nim'             => 'required|exists:buku_induk,nim',
-            'virtual_account' => 'nullable|string',
-        ]);
+{
+    $request->validate([
+        'nim'             => 'required|exists:buku_induk,nim',
+        'virtual_account' => 'nullable|string',
+    ]);
 
-        /* ================= AMBIL DATA BUKU INDUK ================= */
-        $murid = BukuInduk::where('nim', trim($request->nim))->firstOrFail();
+    /* ================= AMBIL DATA BUKU INDUK ================= */
+    $murid = BukuInduk::where('nim', trim($request->nim))->firstOrFail();
 
-        /* ================= SIMPAN ================= */
-        GaransiBCA::create([
-            'virtual_account' => $request->virtual_account,
+    // 🔥 simpan tanggal ke variable (biar dipakai ulang)
+    $tanggalDiberikan = Carbon::today();
 
-            // 🔑 DATA OTOMATIS DARI BUKU INDUK
-            'nama_murid' => $murid->nama,
+    /* ================= SIMPAN GARANSI ================= */
+    GaransiBCA::create([
+        'virtual_account' => $request->virtual_account,
 
-            'tempat_tanggal_lahir' => trim(
-                ($murid->tmpt_lahir ?: '-') .
-                ', ' .
-                ($murid->tgl_lahir
-                    ? $murid->tgl_lahir->format('d-m-Y')
-                    : '-'
-                )
-            ),
+        'nama_murid' => $murid->nama,
 
-            'tanggal_masuk'       => $murid->tgl_masuk,
-            'nama_orang_tua_wali' => $murid->orangtua,
-            'bimba_unit'          => $murid->bimba_unit,
+        'tempat_tanggal_lahir' => trim(
+            ($murid->tmpt_lahir ?: '-') . ', ' .
+            ($murid->tgl_lahir
+                ? $murid->tgl_lahir->format('d-m-Y')
+                : '-'
+            )
+        ),
 
-            // ✅ TANGGAL DIBERIKAN OTOMATIS
-            'tanggal_diberikan'   => Carbon::today(),
-        ]);
+        'tanggal_masuk'       => $murid->tgl_masuk,
+        'nama_orang_tua_wali' => $murid->orangtua,
+        'bimba_unit'          => $murid->bimba_unit,
 
-        return redirect()
-            ->route('garansi-bca.index')
-            ->with('success', 'Data Garansi BCA berhasil ditambahkan');
-    }
+        // ✅ tanggal garansi
+        'tanggal_diberikan'   => $tanggalDiberikan,
+        'sumber' => 'manual', // 🔥 tambah ini
+    ]);
+
+    /* ================= UPDATE KE BUKU INDUK ================= */
+    $murid->update([
+        'tgl_surat_garansi' => $tanggalDiberikan
+    ]);
+
+    return redirect()
+        ->route('garansi-bca.index')
+        ->with('success', 'Data Garansi BCA berhasil ditambahkan & tersinkron ke buku induk');
+}
 
     /* =====================================================
      * EDIT
@@ -196,5 +211,47 @@ public function pdf($id)
     return $pdf->stream(
         'garansi-bca-' . str_replace(' ', '-', strtolower($data->nama_murid)) . '.pdf'
     );
+}
+
+public function approve($id)
+{
+    $p = PengajuanGaransi::findOrFail($id);
+
+    $murid = BukuInduk::where('nim', $p->nim)->first();
+
+    $tanggal = Carbon::today();
+
+    // simpan ke garansi_bca
+    GaransiBCA::create([
+        'nama_murid' => $murid->nama,
+        'tanggal_masuk' => $murid->tgl_masuk,
+        'nama_orang_tua_wali' => $murid->orangtua,
+        'bimba_unit' => $murid->bimba_unit,
+        'tanggal_diberikan' => $tanggal,
+        'sumber' => 'pengajuan', // 🔥 tambah ini
+    ]);
+
+    // update buku induk
+    $murid->update([
+        'tgl_surat_garansi' => $tanggal
+    ]);
+
+    // update status
+    $p->update([
+        'status' => 'disetujui'
+    ]);
+
+    return back()->with('success', 'Garansi berhasil disetujui');
+}
+
+public function reject($id)
+{
+    $p = PengajuanGaransi::findOrFail($id);
+
+    $p->update([
+        'status' => 'ditolak'
+    ]);
+
+    return back()->with('success', 'Pengajuan ditolak');
 }
 }

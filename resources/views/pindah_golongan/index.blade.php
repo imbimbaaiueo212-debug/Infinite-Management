@@ -3,234 +3,216 @@
 @section('title', 'Pindah Golongan')
 
 @section('content')
-    <main>
-        <div class="container-fluid px-4">
-            <h2 class="mt-4">Data Murid Pindah Golongan</h2>
+<main>
+    <div class="container-fluid px-4">
+        <h2 class="mt-4">Data Murid Pindah Golongan</h2>
 
-            <div class="card mb-4">
-                <div class="card-body">
+        <div class="card mb-4">
+            <div class="card-body">
 
-                    {{-- Tombol Update Golongan --}}
-                    <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h5 class="mb-0 fw-semibold">Data Pindah Golongan</h5>
-                        <div>
-                            <a href="{{ route('pindah-golongan.index', ['sync' => 1]) }}"
-                               class="btn btn-outline-primary"
-                               onclick="return confirm('Jalankan sinkronisasi dari Google Sheet sekarang?')">
-                                Update Golongan
-                            </a>
-                        </div>
+                {{-- Tombol Update --}}
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h5 class="mb-0 fw-semibold">Data Pindah Golongan</h5>
+                    <a href="{{ route('pindah-golongan.index', ['sync' => 1]) }}"
+                       class="btn btn-outline-primary"
+                       onclick="return confirm('Jalankan sinkronisasi dari Google Sheet sekarang?')">
+                        Update Golongan
+                    </a>
+                </div>
+
+                @if (session('success'))
+                    <div class="alert alert-success alert-dismissible fade show">
+                        {{ session('success') }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                     </div>
+                @endif
 
-                    @if (session('success'))
-                        <div class="alert alert-success alert-dismissible fade show" role="alert">
-                            {{ session('success') }}
-                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                        </div>
-                    @endif
+                {{-- FILTER --}}
+                <form method="GET" action="{{ route('pindah-golongan.index') }}" id="filterForm" class="mb-4">
+                    <div class="row g-3 align-items-end">
 
-                    {{-- FORM FILTER --}}
-                    <form method="GET" action="{{ route('pindah-golongan.index') }}" id="filterForm" class="mb-4">
-                        <div class="row g-3 align-items-end">
-
-                            @if (auth()->check() && (auth()->user()->is_admin ?? false))
-                                <div class="col-md-3 col-lg-2">
-                                    <label class="form-label fw-bold small">Unit</label>
-                                    <select name="unit" id="unitFilter" class="form-select form-select-sm">
-                                        <option value="">-- Semua Unit --</option>
-                                        @foreach($units as $u)
-                                            <option value="{{ $u }}" {{ request('unit') == $u ? 'selected' : '' }}>
-                                                {{ $u }}
-                                            </option>
-                                        @endforeach
-                                    </select>
-                                </div>
-                            @endif
-
-                            <div class="col-md-{{ auth()->check() && (auth()->user()->is_admin ?? false) ? '5' : '6' }} col-lg-{{ auth()->check() && (auth()->user()->is_admin ?? false) ? '4' : '5' }}">
-                                <label class="form-label fw-bold small">NIM | Nama Murid</label>
-                                <select name="nim" id="nimFilter" class="form-select form-select-sm">
-                                    <option value="">— Ketik untuk cari NIM atau Nama —</option>
-                                    @foreach($muridOptions as $m)
-                                        @php $nimPad = str_pad($m->nim, 3, '0', STR_PAD_LEFT); @endphp
-                                        <option value="{{ $m->nim }}" {{ request('nim') == $m->nim ? 'selected' : '' }}>
-                                            {{ $nimPad }} | {{ $m->nama }}
+                        @if (auth()->check() && (auth()->user()->is_admin ?? false))
+                            <div class="col-md-3 col-lg-2">
+                                <label class="form-label fw-bold small">Unit</label>
+                                <select name="unit" id="unitFilter" class="form-select form-select-sm">
+                                    <option value="">-- Semua Unit --</option>
+                                    @foreach($units as $u)
+                                        <option value="{{ $u }}" {{ request('unit') == $u ? 'selected' : '' }}>
+                                            {{ $u }}
                                         </option>
                                     @endforeach
                                 </select>
                             </div>
+                        @endif
 
-                            <div class="col-md-2 col-lg-2">
-                                <label class="form-label fw-bold small">Tanggal Dari</label>
-                                <input type="date" name="tanggal_dari" class="form-control form-control-sm"
-                                       value="{{ request('tanggal_dari') }}">
-                            </div>
-
-                            <div class="col-md-2 col-lg-2">
-                                <label class="form-label fw-bold small">Tanggal Sampai</label>
-                                <input type="date" name="tanggal_sampai" class="form-control form-control-sm"
-                                       value="{{ request('tanggal_sampai') }}">
-                            </div>
-
-                            <div class="col-md-auto col-lg-2 d-flex align-items-end gap-2">
-                                <button type="submit" class="btn btn-primary btn-sm flex-grow-1">Filter</button>
-                                <a href="{{ route('pindah-golongan.index') }}" 
-                                   class="btn btn-outline-secondary btn-sm flex-grow-1">Reset</a>
-                            </div>
-
+                        <div class="col-md-5 col-lg-4">
+                            <label class="form-label fw-bold small">NIM | Nama Murid</label>
+                            <select name="nim" id="nimFilter" class="form-select form-select-sm">
+                                <option value="">— Cari NIM atau Nama —</option>
+                                @foreach($muridOptions as $m)
+                                    @php $nimPad = str_pad($m->nim, 3, '0', STR_PAD_LEFT); @endphp
+                                    <option value="{{ $m->nim }}" {{ request('nim') == $m->nim ? 'selected' : '' }}>
+                                        {{ $nimPad }} | {{ $m->nama }}
+                                    </option>
+                                @endforeach
+                            </select>
                         </div>
-                    </form>
 
-                    <div class="table-responsive">
-                        <table class="table table-bordered table-striped table-sm">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>NIM</th>
-                                    <th>Nama</th>
-                                    <th>Guru</th>
-                                    <th>Gol Lama</th>
-                                    <th>Kode Lama</th>
-                                    <th>SPP Lama (Rp)</th>
-                                    <th>Unit</th>
-                                    <th>Cabang</th>
-                                    <th>Gol Baru</th>
-                                    <th>Kode Baru</th>
-                                    <th>SPP Baru (Rp)</th>
-                                    <th>Tanggal Pindah</th>
-                                    <th>Keterangan</th>
-                                    <th>Alasan Pindah</th>
-                                    <th>Aksi</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @forelse($data as $item)
-                                    @php
-                                        $golLama    = $item->gol ?? ($item->bukuInduk->gol ?? '-');
-                                        $kdLama     = $item->kd  ?? ($item->bukuInduk->kd  ?? '-');
-                                        $sppLamaRaw = $item->spp ?? ($item->bukuInduk->spp ?? 0);
-                                        $sppLama    = (int) str_replace('.', '', $sppLamaRaw);
+                        <div class="col-md-2">
+                            <label class="form-label fw-bold small">Tanggal Dari</label>
+                            <input type="date" name="tanggal_dari" id="tanggal_dari"
+                                   class="form-control form-control-sm"
+                                   value="{{ request('tanggal_dari') }}">
+                        </div>
 
-                                        $unit = $item->bimba_unit ?? ($item->bukuInduk->bimba_unit ?? '-');
-                                        $cab  = $item->no_cabang  ?? ($item->bukuInduk->no_cabang  ?? '-');
+                        <div class="col-md-2">
+                            <label class="form-label fw-bold small">Tanggal Sampai</label>
+                            <input type="date" name="tanggal_sampai" id="tanggal_sampai"
+                                   class="form-control form-control-sm"
+                                   value="{{ request('tanggal_sampai') }}">
+                        </div>
 
-                                        $tglPindah = $item->tanggal_pindah_golongan
-                                            ? \Carbon\Carbon::parse($item->tanggal_pindah_golongan)->format('d-m-Y')
-                                            : '-';
-                                    @endphp
-                                    <tr>
-                                        <td>{{ $item->nim }}</td>
-                                        <td>{{ $item->nama }}</td>
-                                        <td>{{ $item->guru ?? '-' }}</td>
-                                        <td>{{ $golLama }}</td>
-                                        <td>{{ $kdLama }}</td>
-                                        <td class="text-end">Rp {{ number_format($sppLama, 0, ',', '.') }}</td>
-                                        <td>{{ $unit }}</td>
-                                        <td>{{ $cab }}</td>
-                                        <td>{{ $item->gol_baru ?? '-' }}</td>
-                                        <td>{{ $item->kd_baru ?? '-' }}</td>
-                                        <td class="text-end">Rp {{ number_format((int) str_replace('.', '', $item->spp_baru ?? 0), 0, ',', '.') }}</td>
-                                        <td>{{ $tglPindah }}</td>
-                                        <td>{{ $item->keterangan ?? '-' }}</td>
-                                        <td>{{ $item->alasan_pindah ?? '-' }}</td>
-                                        <td class="text-nowrap">
-                                            <a href="{{ route('pindah-golongan.edit', $item->id) }}"
-                                               class="btn btn-warning btn-sm">Edit</a>
+                        <div class="col-md-2 d-flex gap-2">
+                            <button class="btn btn-primary btn-sm flex-grow-1">Filter</button>
+                            <a href="{{ route('pindah-golongan.index') }}"
+                               class="btn btn-outline-secondary btn-sm flex-grow-1">Reset</a>
+                        </div>
 
-                                            @if (auth()->user()?->role === 'admin')
-                                                <form action="{{ route('pindah-golongan.destroy', $item->id) }}" method="POST"
-                                                      class="d-inline">
-                                                    @csrf @method('DELETE')
-                                                    <button type="submit" class="btn btn-danger btn-sm"
-                                                            onclick="return confirm('Yakin hapus data ini?')">Hapus</button>
-                                                </form>
-                                            @endif
-                                        </td>
-                                    </tr>
-                                @empty
-                                    <tr>
-                                        <td colspan="15" class="text-center py-4 text-muted fst-italic">
-                                            Tidak ada data
-                                        </td>
-                                    </tr>
-                                @endforelse
-                            </tbody>
-                        </table>
                     </div>
+                </form>
 
-                    {{-- Petunjuk --}}
-                    <div class="mt-4 pt-3 border-top">
-                        <h6 class="fw-bold">Cara Menggunakan Pindah Golongan:</h6>
-                        <ul class="mb-0 small text-muted">
-                            <li>Jika ada murid yang ingin pindah golongan, salin link form berikut dan kirim ke orang tua:</li>
-                            <li>
-                                <a href="javascript:void(0)" onclick="copyLink(this)"
-                                   data-url="https://docs.google.com/forms/d/e/1FAIpQLSd2TtFBNPaUMJ7vq93Y2ZAevDQYVT_QW_iEcCkNwTwN08TJnQ/viewform?usp=dialog"
-                                   class="text-primary text-decoration-underline">
-                                    Salin Link Form
-                                </a>
-                            </li>
-                            <li>Setelah orang tua mengisi form → klik tombol <strong>Update Golongan</strong> di atas.</li>
-                        </ul>
-                    </div>
+                {{-- TABLE --}}
+                <div class="table-responsive">
+                    <table class="table table-bordered table-striped table-sm">
+                        <thead class="table-light">
+                        <tr>
+                            <th>NIM</th>
+                            <th>Nama</th>
+                            <th>Guru</th>
+                            <th>Gol Lama</th>
+                            <th>Kode Lama</th>
+                            <th>SPP Lama</th>
+                            <th>Unit</th>
+                            <th>Cabang</th>
+                            <th>Gol Baru</th>
+                            <th>Kode Baru</th>
+                            <th>SPP Baru</th>
+                            <th>Tanggal</th>
+                            <th>Keterangan</th>
+                            <th>Alasan</th>
+                            <th>Aksi</th>
+                        </tr>
+                        </thead>
 
+                        <tbody>
+                        @forelse($data as $item)
+                            @php
+                                $tgl = $item->tanggal_pindah_golongan
+                                    ? \Carbon\Carbon::parse($item->tanggal_pindah_golongan)->format('d-m-Y')
+                                    : '-';
+                            @endphp
+
+                            <tr>
+                                <td>{{ $item->nim }}</td>
+                                <td>{{ $item->nama }}</td>
+                                <td>{{ $item->guru ?? '-' }}</td>
+                                <td>{{ $item->gol ?? '-' }}</td>
+                                <td>{{ $item->kd ?? '-' }}</td>
+                                <td class="text-end">{{ $item->spp ?? 0 }}</td>
+                                <td>{{ $item->bimba_unit ?? '-' }}</td>
+                                <td>{{ $item->no_cabang ?? '-' }}</td>
+                                <td>{{ $item->gol_baru ?? '-' }}</td>
+                                <td>{{ $item->kd_baru ?? '-' }}</td>
+                                <td class="text-end">{{ $item->spp_baru ?? 0 }}</td>
+                                <td>{{ $tgl }}</td>
+                                <td>{{ $item->keterangan ?? '-' }}</td>
+                                <td>{{ $item->alasan_pindah ?? '-' }}</td>
+
+                                <td>
+                                    <a href="{{ route('pindah-golongan.edit', $item->id) }}"
+                                       class="btn btn-warning btn-sm">Edit</a>
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="15" class="text-center text-muted py-3">
+                                    Tidak ada data
+                                </td>
+                            </tr>
+                        @endforelse
+                        </tbody>
+                    </table>
                 </div>
+
+                {{-- PETUNJUK --}}
+                <div class="mt-4 border-top pt-3">
+                    <h6>Cara Penggunaan</h6>
+                    <ul class="small text-muted">
+                        <li>Kirim link form ke orang tua</li>
+                        <li>
+                            <a href="#" onclick="copyLink(this); return false;"
+                               data-url="https://docs.google.com/forms/d/e/1FAIpQLSd2TtFBNPaUMJ7vq93Y2ZAevDQYVT_QW_iEcCkNwTwN08TJnQ/viewform?usp=dialog">
+                                📋 Salin Link Form
+                            </a>
+                        </li>
+                        <li>Setelah diisi → klik Update Golongan</li>
+                    </ul>
+                </div>
+
             </div>
         </div>
-    </main>
+    </div>
+</main>
 
-    <!-- Script copy link (sama seperti sebelumnya) -->
-    <script>
-        function copyLink(el) {
-            const url = el.getAttribute('data-url');
-            navigator.clipboard.writeText(url).then(() => {
-                const original = el.textContent;
-                el.textContent = '✓ Tersalin!';
-                el.style.color = '#198754';
-                setTimeout(() => {
-                    el.textContent = original;
-                    el.style.color = '';
-                }, 1800);
-            }).catch(() => {
-                alert('Gagal menyalin. Silakan salin manual.');
-            });
-        }
-    </script>
+{{-- COPY LINK FIX (FULL COMPATIBLE) --}}
+<script>
+function copyLink(el) {
+    const url = el.getAttribute('data-url');
 
-    @push('styles')
-        <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-    @endpush
+    // fallback method (WORKS 100% browser)
+    const tempInput = document.createElement("input");
+    document.body.appendChild(tempInput);
+    tempInput.value = url;
+    tempInput.select();
+    document.execCommand("copy");
+    document.body.removeChild(tempInput);
 
-    @push('scripts')
-        <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
-        <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-        <script>
-            $(document).ready(function () {
-                $('#nimFilter').select2({
-                    width: '100%',
-                    placeholder: "— Ketik untuk cari NIM atau Nama —",
-                    allowClear: true,
-                    minimumInputLength: 2   // mulai cari setelah 2 karakter
-                });
+    const old = el.innerText;
+    el.innerText = "✔ Tersalin!";
+    setTimeout(() => el.innerText = old, 1500);
+}
+</script>
 
-                $('#unitFilter').select2({
-                    width: '100%',
-                    placeholder: "-- Semua Unit --",
-                    allowClear: true
-                });
+@push('scripts')
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
-                // Auto submit saat ganti filter (kecuali jika masih mengetik di select2 nim)
-                $('#unitFilter, #tanggalDari, #tanggalSampai').on('change', function () {
-                    if ($(this).attr('id') === 'unitFilter') {
-                        $('#nimFilter').val(null).trigger('change');
-                    }
-                    $('#filterForm').submit();
-                });
+<script>
+$(document).ready(function () {
 
-                // Untuk nimFilter, submit hanya saat pilihan benar-benar dipilih (bukan saat mengetik)
-                $('#nimFilter').on('select2:select', function () {
-                    $('#filterForm').submit();
-                });
-            });
-        </script>
-    @endpush
+    $('#nimFilter').select2({
+        width: '100%',
+        placeholder: "Cari NIM atau Nama",
+        allowClear: true,
+        minimumInputLength: 2
+    });
+
+    $('#unitFilter').select2({
+        width: '100%',
+        placeholder: "Semua Unit",
+        allowClear: true
+    });
+
+    $('#unitFilter, #tanggal_dari, #tanggal_sampai').on('change', function () {
+        $('#filterForm').submit();
+    });
+
+    $('#nimFilter').on('select2:select', function () {
+        $('#filterForm').submit();
+    });
+
+});
+</script>
+@endpush
+
 @endsection

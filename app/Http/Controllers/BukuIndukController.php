@@ -8,10 +8,12 @@ use App\Models\HargaSaptataruna;
 use App\Models\Profile;
 use App\Models\LevelHistory;
 use App\Models\Unit;
+use App\Models\PengajuanGaransi;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Imports\BukuIndukImport;
 use App\Exports\BukuIndukExport;
 use App\Models\BukuIndukHistory;
+use App\Services\GoogleFormService;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB; // Tambahan untuk ambil data units
@@ -264,7 +266,7 @@ if (!$isAdmin && $userUnit) {
         ]);
 
         // Kosongkan tanggal jika tidak diisi
-        $dateFields = ['tgl_lahir', 'tgl_masuk', 'tgl_keluar', 'tgl_mulai', 'tgl_akhir', 'tgl_bayar', 'tgl_selesai', 'tanggal_pindah'];
+        $dateFields = ['tgl_lahir', 'tgl_masuk', 'tgl_keluar', 'tgl_mulai', 'tgl_akhir', 'tgl_bayar', 'tgl_selesai', 'tanggal_pindah', 'tgl_surat_garansi'];
         foreach ($dateFields as $field) {
             if (!$request->filled($field)) $request->merge([$field => null]);
         }
@@ -467,6 +469,11 @@ if (!$isAdmin && $userUnit) {
     // pastikan NIM bersih
     $request->merge(['nim' => trim($request->nim)]);
 
+    if (!in_array($request->note_garansi, ['Tidak Memenuhi Syarat', 'Berkebutuhan Khusus'])) {
+    $request->merge([
+        'tgl_surat_garansi' => null
+    ]);
+}
     /* =====================================================
      * VALIDASI — SELARAS 100% DENGAN MODEL
      * ===================================================== */
@@ -536,6 +543,10 @@ if (!$isAdmin && $userUnit) {
         'tgl_aktif'   => 'nullable|date',
         'tgl_tahapan' => 'nullable|date',
         'keterangan_info' => 'nullable|string',
+        'tgl_pengajuan_garansi' => 'nullable|date',
+        'tgl_selesai_garansi' => 'nullable|date',
+        'perpanjang_garansi' => 'nullable|string',
+        'alasan_garansi' => 'nullable|string',
     ]);
 
     // ← TAMBAHKAN INI
@@ -551,7 +562,10 @@ if (!$isAdmin && $userUnit) {
     'tgl_akhir','tgl_bayar','tgl_selesai','tanggal_pindah',
     'tgl_level',
     'tgl_tahapan',
-    'tgl_aktif'
+    'tgl_aktif',
+    'tgl_surat_garansi',
+    'tgl_pengajuan_garansi',
+    'tgl_selesai_garansi',
 ] as $f) {
     if (empty($data[$f])) {
         $data[$f] = null;
@@ -603,6 +617,37 @@ if (!$isAdmin && $userUnit) {
         return back()->withErrors(['nim' => "NIM harus diawali {$correctNoCabang}"])->withInput();
     }
 
+/* =====================================================
+ * AUTO GARANSI 6 BULAN + NOTIF
+ * ===================================================== */
+if (!empty($data['tgl_pengajuan_garansi'])) {
+
+    $tglPengajuan = Carbon::parse($data['tgl_pengajuan_garansi']);
+
+    $tglSelesai = $tglPengajuan->copy()->addMonths(6);
+
+    $data['tgl_selesai_garansi'] = $tglSelesai;
+
+    // ✅ FIX DISINI
+    $data['masa_aktif_garansi']  = 6;
+
+    $today = Carbon::today();
+    $sisaHari = $today->diffInDays($tglSelesai, false);
+
+    if ($sisaHari <= 30 && $sisaHari >= 0) {
+        $data['perpanjang_garansi'] = 'Segera perpanjang (' . $sisaHari . ' hari lagi)';
+    } elseif ($sisaHari < 0) {
+        $data['perpanjang_garansi'] = 'Sudah habis';
+    } else {
+        $data['perpanjang_garansi'] = 'Aktif';
+    }
+
+} else {
+    $data['tgl_selesai_garansi'] = null;
+    $data['masa_aktif_garansi']  = null;
+    $data['perpanjang_garansi']  = null;
+}
+
     /* =====================================================
      * SIMPAN & HISTORY
      * ===================================================== */
@@ -649,6 +694,18 @@ if ($bukuInduk->wasChanged('level') && !empty($data['level'])) {
             'new_data' => $changedNew,
         ]);
     }
+
+    if ($request->filled('tgl_pengajuan_garansi')) {
+
+    PengajuanGaransi::create([
+        'nim'           => $bukuInduk->nim,
+        'nama_murid'    => $bukuInduk->nama,
+        'bimba_unit'    => $bukuInduk->bimba_unit,
+        'tgl_pengajuan' => $request->tgl_pengajuan_garansi,
+        'alasan'        => $request->alasan_garansi,
+        'status'        => 'pending',
+    ]);
+}
 
     return redirect()
         ->route('buku_induk.index')
@@ -840,5 +897,50 @@ public function nextSuffix(Request $request)
     $next = $lastSuffix + 1;
 
     return response()->json(['next_suffix' => $next]);
+}
+public function approve($id)
+{
+    $pengajuan = PengajuanGaransi::findOrFail($id);
+
+    // update status pengajuan
+    $pengajuan->update([
+        'status' => 'disetujui'
+    ]);
+
+    // ambil buku induk berdasarkan NIM
+    $buku = BukuInduk::where('nim', $pengajuan->nim)->first();
+
+    if ($buku) {
+
+        $tglPengajuan = \Carbon\Carbon::parse($pengajuan->tgl_pengajuan);
+        $tglSelesai   = $tglPengajuan->copy()->addMonths(6);
+
+        $buku->update([
+            'tgl_surat_garansi'     => now(), // ← tanggal diberikan
+            'note_garansi'          => 'Garansi BCA Disetujui',
+            'tgl_pengajuan_garansi' => $pengajuan->tgl_pengajuan,
+            'tgl_selesai_garansi'   => $tglSelesai,
+            'masa_aktif_garansi'    => 6,
+            'perpanjang_garansi'    => 'Aktif',
+        ]);
+    }
+
+    return back()->with('success', 'Pengajuan berhasil disetujui & garansi aktif');
+}
+
+
+
+public function exportToSheet(GoogleFormService $service)
+{
+    $data = BukuInduk::select(
+        'nim',
+        'nama',
+        'bimba_unit as cabang',
+        'status'
+    )->get();
+
+    $service->exportBukuInduk($data, 'buku_induk');
+
+    return 'Export berhasil ke Google Sheet';
 }
 }

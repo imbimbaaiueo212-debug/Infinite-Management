@@ -532,10 +532,44 @@
                             <div class="col-12"><hr class="my-4"></div>
                             <h4 class="col-12 mb-3">📝 SURAT GARANSI BCA 372 BEBAS</h4>
 
-                            <div class="col-md-6">
-                                <label class="form-label">Tanggal Surat Garansi</label>
+                            <div class="col-md-3">
+                                <label class="form-label">Tanggal Surat Diberikan Garansi</label>
                                 <input type="date" name="tgl_surat_garansi" class="form-control"
-                                    value="{{ old('tgl_surat_garansi', $bukuInduk->tgl_surat_garansi) }}">
+                                    value="{{ old('tgl_surat_garansi', optional($bukuInduk->tgl_surat_garansi)->format('Y-m-d')) }}">
+                            </div>
+
+                            <div class="col-md-3">
+                                <label class="form-label">Tgl Pengajuan Garansi</label>
+                                <input type="date" name="tgl_pengajuan_garansi" class="form-control"
+                                    value="{{ old('tgl_pengajuan_garansi', $bukuInduk->tgl_pengajuan_garansi?->format('Y-m-d')) }}">
+                            </div>
+
+                            <div class="col-md-3">
+                                <label class="form-label">Tgl Selesai Garansi</label>
+                                <input type="date" name="tgl_selesai_garansi" class="form-control"
+                                    value="{{ old('tgl_selesai_garansi', $bukuInduk->tgl_selesai_garansi?->format('Y-m-d')) }}" readonly>
+                            </div>
+
+                            <div class="col-md-3">
+                                <label class="form-label">Masa Aktif</label>
+                                <input type="text" name="masa_aktif_garansi" class="form-control"
+                                    value="{{ old('masa_aktif_garansi', $bukuInduk->masa_aktif_garansi) }}" readonly>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label">Alasan Pengajuan Garansi</label>
+                                <textarea name="alasan_garansi" class="form-control" rows="1">
+                                    {{ old('alasan_garansi', $bukuInduk->alasan_garansi) }}
+                                </textarea>
+                            </div>
+
+                             <div class="col-md-3">
+                                <label class="form-label">Perpanjang Garansi</label>
+                                <select name="perpanjang_garansi" class="form-select">
+                                    <option value="">-- Pilih --</option>
+                                    <option value="Ya" {{ old('perpanjang_garansi', $bukuInduk->perpanjang_garansi) == 'Ya' ? 'selected' : '' }}>Ya</option>
+                                    <option value="Tidak" {{ old('perpanjang_garansi', $bukuInduk->perpanjang_garansi) == 'Tidak' ? 'selected' : '' }}>Tidak</option>
+                                </select>
                             </div>
 
                             <div class="col-md-6">
@@ -549,9 +583,7 @@
                                         </option>
                                     @endforeach
                                 </select>
-                            </div>
-
-                                  
+                            </div>                                
 
                         </div>
 
@@ -699,6 +731,27 @@ document.getElementById('level').addEventListener('change', function () {
         let today = new Date().toISOString().split('T')[0];
         tglInput.value = today;
     }
+});
+
+document.querySelector('[name="tgl_pengajuan_garansi"]').addEventListener('change', function () {
+    let start = this.value;
+    if (!start) return;
+
+    let d = new Date(start);
+
+    // tambah 6 bulan
+    d.setMonth(d.getMonth() + 6);
+
+    let year  = d.getFullYear();
+    let month = String(d.getMonth() + 1).padStart(2, '0');
+    let day   = String(d.getDate()).padStart(2, '0');
+
+    let result = `${year}-${month}-${day}`;
+
+    document.querySelector('[name="tgl_selesai_garansi"]').value = result;
+
+    // isi masa aktif
+    document.querySelector('[name="masa_aktif_garansi"]').value = "6 bulan";
 });
 </script>
 @endpush

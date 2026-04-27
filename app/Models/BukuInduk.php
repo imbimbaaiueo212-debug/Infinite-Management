@@ -27,6 +27,7 @@ class BukuInduk extends Model
         'jenis_kbm', 'kode_jadwal', 'hari_jam', 'alamat_murid', 'status_pindah',
         'tanggal_pindah', 'ke_bimba_intervio', 'keterangan', 'bimba_unit', 'no_cabang', 'info', 'tgl_daftar',
         'tgl_surat_garansi', 'keterangan_level', 'tgl_level', 'tgl_aktif', 'tgl_tahapan', 'keterangan_info',
+        'tgl_pengajuan_garansi', 'tgl_selesai_garansi', 'masa_aktif_garansi', 'perpanjang_garansi', 'alasan_garansi',
     ];
 
     // =================================================================
@@ -48,6 +49,8 @@ class BukuInduk extends Model
         'tgl_level'        => 'date',
         'tgl_aktif'        => 'date',
         'tgl_tahapan'      => 'date',
+        'tgl_pengajuan_garansi' => 'date',
+        'tgl_selesai_garansi' => 'date',
         ];
 
     // =================================================================
@@ -236,5 +239,10 @@ public function levelHistories()
 {
     return $this->hasMany(LevelHistory::class)
                 ->orderByDesc('tgl_level');
+}
+
+public function pengajuanGaransi()
+{
+    return $this->hasMany(PengajuanGaransi::class, 'nim', 'nim');
 }
 }

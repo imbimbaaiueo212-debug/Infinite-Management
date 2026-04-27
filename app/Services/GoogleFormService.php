@@ -122,4 +122,69 @@ class GoogleFormService
         }
         return $letter;
     }
+
+    public function exportBukuInduk(
+    \Illuminate\Support\Collection|array $data,
+    string $sheetName = 'Sheet1',
+    bool $withHeader = true,
+    bool $clearBeforeWrite = true
+): void {
+    // Pastikan nama sheet valid (pakai metadata yang sudah kamu pakai di getResponses)
+    $spreadsheet = $this->service->spreadsheets->get($this->spreadsheetId);
+    $sheets = collect($spreadsheet->getSheets())->map(fn($s) => $s->getProperties()->getTitle());
+
+    if (!$sheets->contains($sheetName)) {
+        throw new \RuntimeException("Sheet '{$sheetName}' tidak ditemukan.");
+    }
+
+    // Quote kalau ada spasi
+    $rangeSheet = str_contains($sheetName, ' ')
+        ? "'{$sheetName}'"
+        : $sheetName;
+
+    // Normalisasi ke array
+    if ($data instanceof \Illuminate\Support\Collection) {
+        $data = $data->values()->all();
+    }
+
+    // ===== Mapping kolom =====
+    // Sesuaikan dengan struktur buku induk kamu
+    $headers = ['NIM', 'Nama', 'Cabang', 'Status'];
+
+    $rows = [];
+    foreach ($data as $item) {
+        // dukung object atau array
+        $nim     = is_array($item) ? ($item['nim'] ?? null)     : ($item->nim ?? null);
+        $nama    = is_array($item) ? ($item['nama'] ?? null)    : ($item->nama ?? null);
+        $cabang  = is_array($item) ? ($item['cabang'] ?? null)  : ($item->cabang ?? null);
+        $status  = is_array($item) ? ($item['status'] ?? null)  : ($item->status ?? null);
+
+        $rows[] = [$nim, $nama, $cabang, $status];
+    }
+
+    $values = $withHeader ? array_merge([$headers], $rows) : $rows;
+
+    // (Opsional) bersihkan isi sheet dulu biar tidak nyampur data lama
+    if ($clearBeforeWrite) {
+        $this->service->spreadsheets_values->clear(
+            $this->spreadsheetId,
+            "{$rangeSheet}!A:Z",
+            new \Google\Service\Sheets\ClearValuesRequest()
+        );
+    }
+
+    // Tulis mulai dari A1
+    $body = new \Google\Service\Sheets\ValueRange([
+        'values' => $values
+    ]);
+
+    $params = ['valueInputOption' => 'RAW'];
+
+    $this->service->spreadsheets_values->update(
+        $this->spreadsheetId,
+        "{$rangeSheet}!A1",
+        $body,
+        $params
+    );
+}
 }

@@ -197,7 +197,7 @@
         </a>
         <a class="nav-link {{ request()->routeIs('sertifikat-beasiswa.*') ? 'active' : '' }}"
             href="{{ route('sertifikat-beasiswa.index') }}">
-            <i class="fas fa-certificate me-2"></i> Sertifikat Beasiswa
+            <i class="fas fa-certificate me-2"></i> Masa Aktif (DHUAFA & BNF)
         </a>
         <a class="nav-link {{ request()->routeIs('garansi-bca.*') ? 'active' : '' }}"
             href="{{ route('garansi-bca.index') }}">

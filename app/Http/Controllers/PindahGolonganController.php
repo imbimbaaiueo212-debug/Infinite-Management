@@ -11,6 +11,7 @@ use App\Models\Penerimaan;
 use App\Traits\HasBulanIndo;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Auth;
 
 class PindahGolonganController extends Controller
 {
@@ -276,7 +277,7 @@ class PindahGolonganController extends Controller
                 \App\Models\BukuIndukHistory::create([
                     'buku_induk_id' => $bukuInduk->id,
                     'action'        => 'update_pindah_golongan',
-                    'user'          => auth()->user()->name ?? 'system',
+                    'user'          => Auth::user()->name ?? 'system',
                     'old_data'      => $changedOld,
                     'new_data'      => $changedNew,
                 ]);

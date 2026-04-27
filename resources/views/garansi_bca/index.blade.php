@@ -4,23 +4,32 @@
 
 @section('content')
 <div class="card card-body">
-    <div class="card shadow-sm">
+
+    <h1 class="mb-4">Daftar Garansi BCA 372</h1>
+
+    {{-- TOMBOL --}}
+    <a href="{{ route('garansi-bca.create') }}" class="btn btn-primary mb-3">
+        Tambah Garansi BCA
+    </a>
+
+    {{-- NOTIF --}}
+    @if(session('success'))
+        <div class="alert alert-success">
+            {{ session('success') }}
+        </div>
+    @endif
+
+
+    {{-- =============================== --}}
+    {{-- ✅ TABEL 1: GARANSI DIBERIKAN --}}
+    {{-- =============================== --}}
+    <div class="card shadow-sm mb-4">
         <div class="card-body">
-            <h1 class="mb-4">Daftar Garansi BCA 372</h1>
 
-            {{-- TOMBOL TAMBAH --}}
-            <a href="{{ route('garansi-bca.create') }}" class="btn btn-primary mb-3">
-                Tambah Garansi BCA
-            </a>
+            <h4 class="mb-3 text-primary">
+                📄 Garansi Yang Sudah Diberikan
+            </h4>
 
-            {{-- NOTIFIKASI --}}
-            @if(session('success'))
-                <div class="alert alert-success">
-                    {{ session('success') }}
-                </div>
-            @endif
-
-            {{-- TABEL --}}
             <div class="table-responsive">
                 <table class="table table-bordered table-striped align-middle">
                     <thead class="table-light">
@@ -28,65 +37,83 @@
                             <th>No</th>
                             <th>Virtual Account</th>
                             <th>Nama Murid</th>
-                            <th>Tempat & Tanggal Lahir</th>
+                            <th>TTL</th>
                             <th>Tanggal Masuk</th>
                             <th>Tanggal Diberikan</th>
-                            <th>Nama Orang Tua / Wali</th>
+                            <th>Orang Tua</th>
+                            <th>Sumber</th> {{-- 🔥 TAMBAH DI SINI --}}
                             <th>Aksi</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @forelse($data as $index => $d)
+                        @forelse($data as $i => $d)
                             <tr>
-                                <td>{{ $index + 1 }}</td>
+                                <td>{{ $i + 1 }}</td>
                                 <td>{{ $d->virtual_account ?? '-' }}</td>
-                                <td>{{ $d->nama_murid ?? '-' }}</td>
-                                <td>{{ $d->tempat_tanggal_lahir ?? '-' }}</td>
+                                <td>{{ $d->nama_murid }}</td>
+                                <td>{{ $d->tempat_tanggal_lahir }}</td>
 
                                 <td>
-                                    {{ $d->tanggal_masuk
-                                        ? $d->tanggal_masuk->format('d-m-Y')
+                                    {{ $d->tanggal_masuk 
+                                        ? $d->tanggal_masuk->format('d-m-Y') 
                                         : '-' }}
                                 </td>
 
                                 <td>
-                                    {{ $d->tanggal_diberikan
-                                        ? $d->tanggal_diberikan->format('d-m-Y')
+                                    {{ $d->tanggal_diberikan 
+                                        ? $d->tanggal_diberikan->format('d-m-Y') 
                                         : '-' }}
                                 </td>
 
-                                <td>{{ $d->nama_orang_tua_wali ?? '-' }}</td>
+                                <td>{{ $d->nama_orang_tua_wali }}</td>
+
+                                {{-- 🔥 SUMBER GARANSI --}}
+                                <td>
+                                    @if($d->sumber == 'manual')
+    <span 
+        class="badge bg-primary"
+        data-bs-toggle="tooltip"
+        data-bs-placement="top"
+        title="Garansi diberikan langsung oleh admin (tanpa pengajuan)">
+        Pemberian
+    </span>
+@else
+    <span 
+        class="badge bg-success"
+        data-bs-toggle="tooltip"
+        data-bs-placement="top"
+        title="Garansi berasal dari pengajuan orang tua murid dan sudah disetujui">
+        Pengajuan
+    </span>
+@endif
+                                </td>
 
                                 <td class="text-nowrap">
-    <a href="{{ route('garansi-bca.edit', $d->id) }}"
-       class="btn btn-sm btn-warning">
-        Edit
-    </a>
-    <a href="{{ route('garansi-bca.pdf', $d->id) }}"
-       target="_blank"
-       class="btn btn-sm btn-info">
-        PDF
-    </a>
+                                    <a href="{{ route('garansi-bca.edit', $d->id) }}"
+                                       class="btn btn-warning btn-sm">Edit</a>
 
-    @if (auth()->user()?->role === 'admin')
-        <form action="{{ route('garansi-bca.destroy', $d->id) }}"
-              method="POST"
-              class="d-inline"
-              onsubmit="return confirm('Yakin ingin menghapus data ini?')">
-            @csrf
-            @method('DELETE')
-            <button type="submit"
-                    class="btn btn-sm btn-danger">
-                Hapus
-            </button>
-        </form>
-    @endif
-</td>
+                                    <a href="{{ route('garansi-bca.pdf', $d->id) }}"
+                                       target="_blank"
+                                       class="btn btn-info btn-sm">PDF</a>
+
+                                    @if(auth()->user()?->role === 'admin')
+                                        <form action="{{ route('garansi-bca.destroy', $d->id) }}"
+                                              method="POST"
+                                              class="d-inline"
+                                              onsubmit="return confirm('Yakin?')">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button class="btn btn-danger btn-sm">
+                                                Hapus
+                                            </button>
+                                        </form>
+                                    @endif
+                                </td>
                             </tr>
                         @empty
                             <tr>
                                 <td colspan="8" class="text-center text-muted">
-                                    Tidak ada data Garansi BCA.
+                                    Tidak ada data
                                 </td>
                             </tr>
                         @endforelse
@@ -96,5 +123,83 @@
 
         </div>
     </div>
+
+
+    {{-- =============================== --}}
+    {{-- ✅ TABEL 2: PENGAJUAN GARANSI --}}
+    {{-- =============================== --}}
+    <div class="card shadow-sm border-warning">
+        <div class="card-body">
+
+            <h4 class="mb-3 text-warning">
+                📝 Pengajuan Garansi Murid
+            </h4>
+
+            <div class="table-responsive">
+                <table class="table table-bordered table-striped align-middle">
+                    <thead class="table-warning">
+                        <tr>
+                            <th>No</th>
+                            <th>Nama Murid</th>
+                            <th>Tanggal Pengajuan</th>
+                            <th>Alasan</th>
+                            <th>Status</th>
+                            <th>Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse($pengajuan as $i => $p)
+                            <tr>
+                                <td>{{ $i + 1 }}</td>
+                                <td>{{ $p->nama_murid }}</td>
+
+                                <td>
+                                    {{ $p->tgl_pengajuan 
+                                        ? \Carbon\Carbon::parse($p->tgl_pengajuan)->format('d-m-Y') 
+                                        : '-' }}
+                                </td>
+
+                                <td>{{ $p->alasan ?? '-' }}</td>
+
+                                <td>
+                                    @if($p->status == 'pending')
+                                        <span class="badge bg-warning">Pending</span>
+                                    @elseif($p->status == 'disetujui')
+                                        <span class="badge bg-success">Disetujui</span>
+                                    @else
+                                        <span class="badge bg-danger">Ditolak</span>
+                                    @endif
+                                </td>
+
+                                <td>
+                                    @if($p->status == 'pending')
+                                        <form action="{{ route('garansi.approve', $p->id) }}" method="POST" class="d-inline">
+                                            @csrf
+                                            <button class="btn btn-success btn-sm">Approve</button>
+                                        </form>
+
+                                        <form action="{{ route('garansi.reject', $p->id) }}" method="POST" class="d-inline">
+                                            @csrf
+                                            <button class="btn btn-danger btn-sm">Tolak</button>
+                                        </form>
+                                    @else
+                                        <span class="text-muted">Selesai</span>
+                                    @endif
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="6" class="text-center text-muted">
+                                    Tidak ada pengajuan
+                                </td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+
+        </div>
+    </div>
+
 </div>
 @endsection

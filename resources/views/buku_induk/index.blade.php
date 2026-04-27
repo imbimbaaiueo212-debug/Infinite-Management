@@ -200,14 +200,74 @@
 
                                 <!-- PERIODE / GARANSI -->
                                 <td>
-                                    {{ $item->periode ?? '-' }}
-                                    @if ($item->tgl_mulai && $item->tgl_akhir)
-                                        <br><small>({{ $item->tgl_mulai }} → {{ $item->tgl_akhir }})</small>
-                                    @endif
-                                    @if ($item->note_garansi)
-                                        <br><small class="text-muted">Garansi: {{ $item->note_garansi }}</small>
-                                    @endif
-                                </td>
+    {{ $item->periode ?? '-' }}
+
+    {{-- PERIODE BELAJAR --}}
+    @if ($item->tgl_mulai && $item->tgl_akhir)
+        <br>
+        <small>
+            ({{ \Carbon\Carbon::parse($item->tgl_mulai)->format('d-m-Y') }}
+            →
+            {{ \Carbon\Carbon::parse($item->tgl_akhir)->format('d-m-Y') }})
+        </small>
+    @endif
+
+    {{-- ✅ GARANSI HANYA JIKA SUDAH APPROVE --}}
+    @if ($item->tgl_surat_garansi)
+
+        <hr class="my-1">
+
+        <small class="text-primary fw-bold">
+            📌 GARANSI 372
+        </small>
+
+        <br>
+        <small>
+            Diberikan:
+            {{ \Carbon\Carbon::parse($item->tgl_surat_garansi)->format('d-m-Y') }}
+        </small>
+
+        <br>
+        <small>
+            Pengajuan:
+            {{ \Carbon\Carbon::parse($item->tgl_pengajuan_garansi)->format('d-m-Y') }}
+        </small>
+
+        <br>
+        <small>
+            Selesai:
+            {{ \Carbon\Carbon::parse($item->tgl_selesai_garansi)->format('d-m-Y') }}
+        </small>
+
+        <br>
+        <small>
+            Masa Aktif:
+            {{ $item->masa_aktif_garansi ?? '-' }} bulan
+        </small>
+
+        <br>
+        <small>
+            Status:
+            @if($item->perpanjang_garansi == 'Aktif')
+                <span class="badge bg-success">Aktif</span>
+            @elseif(str_contains($item->perpanjang_garansi, 'Segera'))
+                <span class="badge bg-warning text-dark">
+                    {{ $item->perpanjang_garansi }}
+                </span>
+            @else
+                <span class="badge bg-danger">Habis</span>
+            @endif
+        </small>
+
+        @if ($item->note_garansi)
+            <br>
+            <small class="text-muted">
+                {{ $item->note_garansi }}
+            </small>
+        @endif
+
+    @endif
+</td>
 
                                 <!-- Aksi -->
                                 <td class="text-center" style="min-width: 140px;">
@@ -528,17 +588,58 @@
                                             Surat Garansi BCA 372 Bebas
                                             ========================= --}}
 
-                                        <div class="border rounded p-3 mb-3">
-                                            <h6 class="fw-bold text-muted mb-3">📌 SURAT GARANSI BCA 372 BEBAS</h6>
-                                            <dl class="row mb-0">
-                                                <dt class="col-sm-4">Tanggal diberikan Surat Garansi</dt>
-                                                <dd class="col-sm-8">: {{ $item->tgl_surat_garansi_formatted }}</dd>
-                                                <dt class="col-sm-4">Note</dt>
-                                                <dd class="col-sm-8">: {{ $item->note }}</dd>
+                                        @if ($item->tgl_surat_garansi)
 
-                                                
-                                            </dl>
-                                        </div>
+<div class="border rounded p-3 mb-3">
+    <h6 class="fw-bold text-muted mb-3">
+        📌 SURAT GARANSI BCA 372 BEBAS
+    </h6>
+
+    <dl class="row mb-0">
+
+        <dt class="col-sm-4">Tanggal Diberikan</dt>
+        <dd class="col-sm-8">
+            : {{ \Carbon\Carbon::parse($item->tgl_surat_garansi)->format('d-m-Y') }}
+        </dd>
+
+        <dt class="col-sm-4">Tanggal Pengajuan</dt>
+        <dd class="col-sm-8">
+            : {{ \Carbon\Carbon::parse($item->tgl_pengajuan_garansi)->format('d-m-Y') }}
+        </dd>
+
+        <dt class="col-sm-4">Berlaku Sampai</dt>
+        <dd class="col-sm-8">
+            : {{ \Carbon\Carbon::parse($item->tgl_selesai_garansi)->format('d-m-Y') }}
+        </dd>
+
+        <dt class="col-sm-4">Masa Aktif</dt>
+        <dd class="col-sm-8">
+            : {{ $item->masa_aktif_garansi }} bulan
+        </dd>
+
+        <dt class="col-sm-4">Status</dt>
+        <dd class="col-sm-8">
+            :
+            @if($item->perpanjang_garansi == 'Aktif')
+                <span class="badge bg-success">Aktif</span>
+            @elseif(str_contains($item->perpanjang_garansi, 'Segera'))
+                <span class="badge bg-warning text-dark">
+                    {{ $item->perpanjang_garansi }}
+                </span>
+            @else
+                <span class="badge bg-danger">Habis</span>
+            @endif
+        </dd>
+
+        <dt class="col-sm-4">Note</dt>
+        <dd class="col-sm-8">
+            : {{ $item->note_garansi ?? '-' }}
+        </dd>
+
+    </dl>
+</div>
+
+@endif
 
                                     </div>
                                         <div class="modal-footer">

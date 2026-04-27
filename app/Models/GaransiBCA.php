@@ -18,6 +18,8 @@ class GaransiBCA extends Model
         'tanggal_masuk',
         'nama_orang_tua_wali',
         'tanggal_diberikan',
+        'sumber',
+        'manual',
     ];
 
     protected $casts = [
