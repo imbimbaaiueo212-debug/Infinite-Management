@@ -167,7 +167,7 @@ class MuridTrialController extends Controller
     $rules = [
         'nama'       => 'required|string|max:255',
         'tgl_lahir'  => 'nullable|date',
-        'usia'       => 'nullable|integer',   // tambahkan kalau mau
+        'usia'       => 'nullable|integer',
         'orangtua'   => 'nullable|string|max:255',
         'no_telp'    => 'nullable|string|max:20',
         'alamat'     => 'nullable|string',
@@ -176,26 +176,28 @@ class MuridTrialController extends Controller
         'tgl_mulai'  => 'nullable|date',
         'guru_trial' => 'nullable|string|max:255',
         'info'       => 'nullable|string',
-        'tanggal_trial_baru' => 'nullable|date', // tambahkan ini
+        'tanggal_trial_baru' => 'nullable|date',
     ];
 
     $data = $request->validate($rules);
 
+    // === DEFAULT STATUS BARU ===
+    $data['status_trial'] = 'daftar_baru';
+
     if (empty($data['usia'] ?? null) && $data['tgl_lahir'] ?? null) {
         $data['usia'] = Carbon::parse($data['tgl_lahir'])->age;
     }
-    if (empty($data['tanggal_trial_baru'])) {
-    $data['tanggal_trial_baru'] = now()->format('Y-m-d');
-}
 
-    // 🔹 Tambahkan ini
+    if (empty($data['tanggal_trial_baru'])) {
+        $data['tanggal_trial_baru'] = now()->format('Y-m-d');
+    }
+
     $data['waktu_submit'] = now();
 
-    
     MuridTrial::create($data);
 
     return redirect()->route('murid_trials.index')
-        ->with('success', 'Data murid trial berhasil ditambahkan.');
+        ->with('success', 'Data murid trial berhasil ditambahkan dengan status **Daftar Baru**.');
 }
 
     public function update(Request $request, MuridTrial $murid_trial)

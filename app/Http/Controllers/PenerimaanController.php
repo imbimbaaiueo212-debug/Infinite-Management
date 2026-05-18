@@ -69,7 +69,10 @@ class PenerimaanController extends Controller
                         
 
     // Total Ringkasan
-    $totalVoucher     = $queryForSum->sum('voucher');
+    $totalVoucher = (clone $queryForSum)
+    ->whereNotNull('voucher')
+    ->where('voucher', '!=', 0)
+    ->count() * 50000;
     $totalSpp         = $queryForSum->sum('spp');
     $totalKaosPendek  = $queryForSum->sum('kaos');
     $totalKaosPanjang = $queryForSum->sum('kaos_lengan_panjang');
@@ -231,14 +234,21 @@ public function updateUkuranKaos(Request $request)
 
     public function create(Request $request)
 {
-    $selectedNim = $request->nim;
+    // ==================== PREFILL DARI REGISTRASI ====================
+    $selectedNim = $request->nim ?? $request->query('nim') ?? null;
 
-    // Semua murid aktif/baru
-    $murids = BukuInduk::whereIn(DB::raw('LOWER(status)'), ['Aktif', 'Baru'])
+    // Murid yang dipilih (untuk prefill otomatis)
+    $selectedMurid = null;
+    if ($selectedNim) {
+        $selectedMurid = BukuInduk::where('nim', $selectedNim)->first();
+    }
+
+    // ==================== SEMUA MURID AKTIF/BARU ====================
+    $murids = BukuInduk::whereIn(DB::raw('LOWER(status)'), ['aktif', 'baru'])
         ->orderBy('nama')
         ->get()
         ->map(function ($murid) {
-            $nominal = $this->cleanMoneyInput($murid->spp);
+            $nominal = $this->cleanMoneyInput($murid->spp ?? 0);
             if ($nominal > 0 && $nominal < 1000) {
                 $nominal *= 1000;
             }
@@ -246,9 +256,8 @@ public function updateUkuranKaos(Request $request)
             return $murid;
         });
 
-    // === VOUCHER ===
+    // ==================== VOUCHER ====================
     $vouchers = collect();
-
     if ($selectedNim) {
         $vouchers = VoucherLama::where('nim', $selectedNim)
             ->where('jumlah_voucher', '>', 0)
@@ -262,7 +271,7 @@ public function updateUkuranKaos(Request $request)
             ->get();
     }
 
-    // SPP Lunas (untuk validasi)
+    // ==================== SPP LUNAS (VALIDASI) ====================
     $sppLunas = Penerimaan::where('spp', '>', 0)
         ->select('nim', 'bulan', 'tahun')
         ->get()
@@ -270,6 +279,7 @@ public function updateUkuranKaos(Request $request)
         ->unique()
         ->toArray();
 
+    // ==================== UNIT & CABANG OPTIONS ====================
     $unitOptions = BukuInduk::query()
         ->whereNotNull('bimba_unit')
         ->whereRaw("TRIM(COALESCE(bimba_unit,'')) <> ''")
@@ -288,12 +298,11 @@ public function updateUkuranKaos(Request $request)
         ->pluck('no_cabang')
         ->toArray();
 
-    // === AMBIL HARGA KAOS ===
+    // ==================== HARGA KAOS ====================
     $hargaKaos = HargaSaptataruna::where('kategori', 'PENJUALAN')
         ->where('nama', 'LIKE', '%kaos%')
         ->get();
 
-    // Kaos Pendek
     $kaosPendekList = $hargaKaos->filter(function ($item) {
         return stripos($item->nama, 'pendek') !== false || 
                stripos($item->nama, 'lengan pendek') !== false;
@@ -306,7 +315,6 @@ public function updateUkuranKaos(Request $request)
         ];
     })->values();
 
-    // Kaos Panjang
     $kaosPanjangList = $hargaKaos->filter(function ($item) {
         return stripos($item->nama, 'panjang') !== false || 
                stripos($item->nama, 'lengan panjang') !== false;
@@ -319,141 +327,135 @@ public function updateUkuranKaos(Request $request)
         ];
     })->values();
 
-// === AMBIL HANYA BIAYA DAFTAR (biMBA-AIUEO & English biMBA) ===
-$daftarList = HargaSaptataruna::whereIn('kode', ['bA', 'Eb'])
-    ->orWhere('nama', 'LIKE', '%biMBA-AIUEO%')
-    ->orWhere('nama', 'LIKE', '%English biMBA%')
-    ->orderBy('nama')
-    ->get()
-    ->map(function ($item) {
-        return [
-            'kode'          => $item->kode,
-            'nama'          => $item->nama,
-            'harga_duafa'   => (float)($item->duafa ?? 0),
-            'harga_promo'   => (float)($item->promo_2019 ?? 0),
-            'harga_daftar'  => (float)($item->daftar_ulang ?? 0),
-            'harga_spesial' => (float)($item->spesial ?? 0),
-            'harga_umum1'   => (float)($item->umum1 ?? 0),
-            'harga_umum2'   => (float)($item->umum2 ?? 0),
-        ];
-    });
+    // ==================== DAFTAR LIST ====================
+    $daftarList = HargaSaptataruna::whereIn('kode', ['bA', 'Eb'])
+        ->orWhere('nama', 'LIKE', '%biMBA-AIUEO%')
+        ->orWhere('nama', 'LIKE', '%English biMBA%')
+        ->orderBy('nama')
+        ->get()
+        ->map(function ($item) {
+            return [
+                'kode'          => $item->kode,
+                'nama'          => $item->nama,
+                'harga_duafa'   => (float)($item->duafa ?? 0),
+                'harga_promo'   => (float)($item->promo_2019 ?? 0),
+                'harga_daftar'  => (float)($item->daftar_ulang ?? 0),
+                'harga_spesial' => (float)($item->spesial ?? 0),
+                'harga_umum1'   => (float)($item->umum1 ?? 0),
+                'harga_umum2'   => (float)($item->umum2 ?? 0),
+            ];
+        });
 
-// === AMBIL DATA KPK ===
-$kpkList = HargaSaptataruna::where('nama', 'LIKE', '%KPK%')
-    ->orWhere('kode', 'LIKE', '%KPK%')
-    ->orderBy('nama')
-    ->get()
-    ->map(function ($item) {
-        return [
-            'kode'  => $item->kode,
-            'nama'  => $item->nama,
-            'harga' => (float)$item->harga,   // ambil harga utama
-        ];
-    })
-    ->values();
+    // ==================== KPK ====================
+    $kpkList = HargaSaptataruna::where('nama', 'LIKE', '%KPK%')
+        ->orWhere('kode', 'LIKE', '%KPK%')
+        ->orderBy('nama')
+        ->get()
+        ->map(function ($item) {
+            return [
+                'kode'  => $item->kode,
+                'nama'  => $item->nama,
+                'harga' => (float)$item->harga,
+            ];
+        })->values();
 
-// === AMBIL DATA TAS ===
-$tasList = HargaSaptataruna::where('nama', 'LIKE', '%TAS%')
-    ->orWhere('kode', 'LIKE', '%TAS%')
-    ->orderBy('nama')
-    ->get()
-    ->map(function ($item) {
-        return [
-            'kode'  => $item->kode,
-            'nama'  => $item->nama,
-            'harga' => (float)$item->harga,     // ← Perbaikan: harga (bukan hargi)
-        ];
-    })
-    ->values();
+    // ==================== TAS ====================
+    $tasList = HargaSaptataruna::where('nama', 'LIKE', '%TAS%')
+        ->orWhere('kode', 'LIKE', '%TAS%')
+        ->orderBy('nama')
+        ->get()
+        ->map(function ($item) {
+            return [
+                'kode'  => $item->kode,
+                'nama'  => $item->nama,
+                'harga' => (float)$item->harga,
+            ];
+        })->values();
 
-    // === AMBIL DATA SERTIFIKAT ===
-$sertifikatList = HargaSaptataruna::where('nama', 'LIKE', '%SERTIFIKAT%')
-    ->orWhere('nama', 'LIKE', '%STF%')
-    ->orWhere('kode', 'LIKE', '%STF%')
-    ->orderBy('nama')
-    ->get()
-    ->map(function ($item) {
-        return [
-            'kode'  => $item->kode,
-            'nama'  => $item->nama,
-            'harga' => (float)$item->harga,
-        ];
-    })
-    ->values();
+    // ==================== SERTIFIKAT ====================
+    $sertifikatList = HargaSaptataruna::where('nama', 'LIKE', '%SERTIFIKAT%')
+        ->orWhere('nama', 'LIKE', '%STF%')
+        ->orWhere('kode', 'LIKE', '%STF%')
+        ->orderBy('nama')
+        ->get()
+        ->map(function ($item) {
+            return [
+                'kode'  => $item->kode,
+                'nama'  => $item->nama,
+                'harga' => (float)$item->harga,
+            ];
+        })->values();
 
-    // === AMBIL DATA STP ===
-$stpbList = HargaSaptataruna::where('nama', 'LIKE', '%STPB%')
-    ->orWhere('kode', 'LIKE', '%STPB%')
-    ->orderBy('nama')
-    ->get()
-    ->map(function ($item) {
-        return [
-            'kode'  => $item->kode,
-            'nama'  => $item->nama,
-            'harga' => (float)$item->harga,     // ← Perbaikan: harga (bukan hargi)
-        ];
-    })
-    ->values();
+    // ==================== STPB ====================
+    $stpbList = HargaSaptataruna::where('nama', 'LIKE', '%STPB%')
+        ->orWhere('kode', 'LIKE', '%STPB%')
+        ->orderBy('nama')
+        ->get()
+        ->map(function ($item) {
+            return [
+                'kode'  => $item->kode,
+                'nama'  => $item->nama,
+                'harga' => (float)$item->harga,
+            ];
+        })->values();
 
-    // === AMBIL DATA RBAS ===
-$rbasList = HargaSaptataruna::where('nama', 'LIKE', '%RBAS%')
-    ->orWhere('kode', 'LIKE', '%RBAS%')
-    ->orderBy('nama')
-    ->get()
-    ->map(function ($item) {
-        return [
-            'kode'  => $item->kode,
-            'nama'  => $item->nama,
-            'harga' => (float)$item->harga,
-        ];
-    })
-    ->values();
+    // ==================== RBAS ====================
+    $rbasList = HargaSaptataruna::where('nama', 'LIKE', '%RBAS%')
+        ->orWhere('kode', 'LIKE', '%RBAS%')
+        ->orderBy('nama')
+        ->get()
+        ->map(function ($item) {
+            return [
+                'kode'  => $item->kode,
+                'nama'  => $item->nama,
+                'harga' => (float)$item->harga,
+            ];
+        })->values();
 
-    // === AMBIL DATA BCABS01 & BCABS02 ===
-$bcabs01List = HargaSaptataruna::where('kode', 'BCABS.01')
-    ->orWhere('kode', 'LIKE', '%BCABS01%')
-    ->orderBy('nama')
-    ->get()
-    ->map(function ($item) {
-        return [
-            'kode'  => $item->kode,
-            'nama'  => $item->nama,
-            'harga' => (float)$item->harga,
-        ];
-    })
-    ->values();
+    // ==================== BCABS01 & BCABS02 ====================
+    $bcabs01List = HargaSaptataruna::where('kode', 'BCABS.01')
+        ->orWhere('kode', 'LIKE', '%BCABS01%')
+        ->orderBy('nama')
+        ->get()
+        ->map(function ($item) {
+            return [
+                'kode'  => $item->kode,
+                'nama'  => $item->nama,
+                'harga' => (float)$item->harga,
+            ];
+        })->values();
 
-$bcabs02List = HargaSaptataruna::where('kode', 'BCABS.02')
-    ->orWhere('kode', 'LIKE', '%BCABS02%')
-    ->orderBy('nama')
-    ->get()
-    ->map(function ($item) {
-        return [
-            'kode'  => $item->kode,
-            'nama'  => $item->nama,
-            'harga' => (float)$item->harga,
-        ];
-    })
-    ->values();
+    $bcabs02List = HargaSaptataruna::where('kode', 'BCABS.02')
+        ->orWhere('kode', 'LIKE', '%BCABS02%')
+        ->orderBy('nama')
+        ->get()
+        ->map(function ($item) {
+            return [
+                'kode'  => $item->kode,
+                'nama'  => $item->nama,
+                'harga' => (float)$item->harga,
+            ];
+        })->values();
 
-return view('penerimaan.create', compact(
-    'murids',
-    'vouchers',
-    'sppLunas',
-    'unitOptions',
-    'cabangOptions',
-    'kaosPendekList',
-    'kaosPanjangList',
-    'daftarList',
-    'kpkList',          // ← TAMBAHKAN INI
-    'tasList',
-    'sertifikatList',
-    'stpbList',
-    'rbasList',
-    'bcabs01List',
-    'bcabs02List',
-
-));
+    return view('penerimaan.create', compact(
+        'murids',
+        'selectedMurid',     // ← Untuk prefill otomatis
+        'selectedNim',       // ← Untuk prefill otomatis
+        'vouchers',
+        'sppLunas',
+        'unitOptions',
+        'cabangOptions',
+        'kaosPendekList',
+        'kaosPanjangList',
+        'daftarList',
+        'kpkList',
+        'tasList',
+        'sertifikatList',
+        'stpbList',
+        'rbasList',
+        'bcabs01List',
+        'bcabs02List',
+    ));
 }
 
 private function extractUkuran($nama)
@@ -1368,7 +1370,9 @@ public function update(Request $request, Penerimaan $penerimaan)
 
     // Total
     $totalSPP     = (clone $query)->sum('spp');
-    $totalVoucher = (clone $query)->sum('voucher');
+    $totalVoucher = (clone $query)
+                    ->where('voucher', '>', 0)
+                    ->count() * 50000;
 
     return view('penerimaan.spp', compact(
         'penerimaan',

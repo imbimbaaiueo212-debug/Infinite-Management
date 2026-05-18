@@ -81,8 +81,21 @@
                     <td>{{ $row->bulan }}</td>
                     <td>{{ $row->tahun }}</td>
                     <td class="text-end">{{ number_format($row->spp ?? 0, 0, ',', '.') }}</td>
-                    <td class="text-end">{{ number_format($row->voucher ?? 0, 0, ',', '.') }}</td>
-                    <td class="text-end fw-bold">{{ number_format(($row->spp ?? 0) + ($row->voucher ?? 0), 0, ',', '.') }}</td>
+                     <td>
+                                        @if($row->voucher)
+                                            {{ number_format(50000, 0, ',', '.') }}
+                                        @else
+                                            -
+                                        @endif
+                                    </td>
+                    <td class="text-end fw-bold">
+    {{ number_format(
+        ($row->spp ?? 0) + (!empty($row->voucher) && $row->voucher != '0' ? 50000 : 0),
+        0,
+        ',',
+        '.'
+    ) }}
+</td>
                 </tr>
                 @empty
                 <tr>

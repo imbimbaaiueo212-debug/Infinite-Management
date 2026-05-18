@@ -92,4 +92,10 @@ class Registration extends Model
     });
 }
 
+public function muridTrial()
+{
+    return $this->belongsTo(\App\Models\MuridTrial::class, 'murid_trial_id'); 
+    // Sesuaikan foreign key jika nama kolomnya berbeda
+}
+
 }

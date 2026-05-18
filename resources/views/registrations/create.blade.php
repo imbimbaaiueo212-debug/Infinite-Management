@@ -42,35 +42,122 @@
             <form method="POST" action="{{ route('registrations.store') }}" enctype="multipart/form-data">
                 @csrf
 
-                {{-- PILIH MURID --}}
-                <div class="mb-3">
-                    <label class="form-label fw-bold">Murid</label>
+                {{-- IDENTITAS MURID --}}
+        <h5 class="mb-3">Identitas Murid</h5>
 
-                    @if ($students->isEmpty())
-                        <div class="alert alert-warning mb-2">
-                            Belum ada data murid. Set status trial ke <b>LANJUT</b> dulu.
-                        </div>
-                    @endif
+        <div class="mb-3">
+            <label class="form-label fw-bold">Nama Murid</label>
+            <select name="student_id" class="form-select" required id="studentSelect" 
+                    {{ $students->isEmpty() ? 'disabled' : '' }}>
+                <option value="">-- Pilih Murid --</option>
+                @foreach ($students as $s)
+                    <option value="{{ $s->id }}"
+                        data-unit="{{ $s->bimba_unit ?? '' }}"
+                        data-cabang="{{ $s->no_cabang ?? '' }}"
+                        data-nim="{{ $s->nim ?? '' }}"
+                        data-nama="{{ $s->nama ?? '' }}"
+                        data-tgllahir="{{ $s->tgl_lahir ?? $s->muridTrial?->tgl_lahir ?? '' }}"
+                        data-orangtua="{{ $s->orangtua ?? $s->muridTrial?->orangtua ?? '' }}"
+                        data-alamat="{{ $s->alamat ?? $s->muridTrial?->alamat ?? '' }}"
+                        data-info="{{ $s->muridTrial?->info ?? '' }}"
+                        {{ (int) $selectedStudentId === (int) $s->id ? 'selected' : '' }}>
+                        {{ $s->nim ?: '—' }} — {{ $s->nama }}
+                    </option>
+                @endforeach
+            </select>
+        </div>
 
-                    <select name="student_id" class="form-select" required
-                            id="studentSelect" {{ $students->isEmpty() ? 'disabled' : '' }}>
-                        <option value="">-- Pilih Murid --</option>
-                        @foreach ($students as $s)
-                            <option value="{{ $s->id }}"
-                                data-unit="{{ $s->bimba_unit ?? '' }}"
-                                data-cabang="{{ $s->no_cabang ?? '' }}"
-                                data-nim="{{ $s->nim ?? '' }}"
-                                data-nama="{{ $s->nama ?? '' }}"
-                                data-tgllahir="{{ $s->tgl_lahir ?? $s->muridTrial->tgl_lahir ?? '' }}"
-                                data-orangtua="{{ $s->orangtua ?? $s->muridTrial->orangtua ?? '' }}"
-                                data-alamat="{{ $s->alamat ?? $s->muridTrial->alamat ?? '' }}"
-                                data-info="{{ $s->muridTrial->info ?? '' }}"
-                                {{ (int) $selectedStudentId === (int) $s->id ? 'selected' : '' }}>
-                                {{ $s->nim ?: '—' }} — {{ $s->nama }}
-                            </option>
-                        @endforeach
-                    </select>
-                </div>
+        {{-- TEMPAT & TANGGAL LAHIR (SEJAJAR) --}}
+        <div class="row">
+            <div class="col-md-4 mb-3">
+                <label class="form-label fw-bold text-primary">Tempat Lahir</label>
+                <input type="text"
+                    id="displayTempatLahir"
+                    class="form-control bg-light"
+                    value="{{ old('bi[tempat_lahir]', $prefilledTmptLahir ?? '') }}"
+                    readonly>
+                <input type="hidden"
+                    name="bi[tempat_lahir]"
+                    value="{{ old('bi[tempat_lahir]', $prefilledTmptLahir ?? '') }}">
+            </div>
+
+            <div class="col-md-4 mb-3">
+                <label class="form-label fw-bold text-primary">Tanggal Lahir</label>
+                <input type="text"
+                    id="displayTglLahir"
+                    class="form-control bg-light"
+                    value="{{ old('bi[tanggal_lahir]', $prefilledTglLahir ? \Carbon\Carbon::parse($prefilledTglLahir)->format('Y-m-d') : '') }}"
+                    readonly>
+                <input type="hidden"
+                    name="bi[tanggal_lahir]"
+                    value="{{ old('bi[tanggal_lahir]', $prefilledTglLahir ? \Carbon\Carbon::parse($prefilledTglLahir)->format('Y-m-d') : '') }}">
+            </div>
+
+            <div class="col-md-4 mb-3">
+            <label class="form-label fw-bold text-primary">Usia</label>
+            <input type="text"
+                id="displayUsia"
+                class="form-control bg-light"
+                readonly>
+            <input type="hidden"
+                name="bi[usia]"
+                id="hiddenUsia"
+                value="{{ old('bi[usia]', $prefilledUsia ?? '') }}">
+        </div>
+            <div class="col-md-4 mb-3">
+                <label class="form-label fw-bold text-primary">Nama Orang Tua</label>
+                <input type="text"
+                    class="form-control bg-light"
+                    value="{{ old('bi[orangtua]', $prefilledOrangtua ?? '') }}"
+                    readonly>
+                <input type="hidden"
+                    name="bi[orangtua]"
+                    value="{{ old('bi[orangtua]', $prefilledOrangtua ?? '') }}">
+            </div>
+
+            <div class="col-md-4 mb-3">
+            <label class="form-label fw-bold text-primary">Nomor Telepon</label>
+            <input type="text"
+                class="form-control bg-light"
+                value="{{ old('bi[no_telp]', 
+                    trim(implode(' / ', array_filter([
+                        $prefilledHpAyah ?? '', 
+                        $prefilledHpIbu ?? ''
+                    ]))) ?: ($prefilledNoTelp ?? '')
+                ) }}"
+                readonly>
+            <input type="hidden"
+                name="bi[no_telp]"
+                value="{{ old('bi[no_telp]', 
+                    trim(implode(' / ', array_filter([
+                        $prefilledHpAyah ?? '', 
+                        $prefilledHpIbu ?? ''
+                    ]))) ?: ($prefilledNoTelp ?? '')
+                ) }}">
+        </div>
+
+        <div class="col-md-12 mb-3">
+            <label class="form-label fw-bold text-primary">Alamat Lengkap</label>
+            <input type="text"
+                class="form-control bg-light"
+                readonly
+                value="{{ old('bi[alamat]', 
+                    trim(implode(', ', array_filter([
+                        $prefilledAlamat,
+                        $prefilledNoRumah,
+                        ($prefilledRt && $prefilledRw) ? "RT/RW {$prefilledRt}/{$prefilledRw}" : null,
+                        $prefilledKelurahan,
+                        $prefilledKecamatan,
+                        $prefilledKodyaKab,
+                        $prefilledProvinsi
+                    ])))
+                ) }}">
+            
+            <input type="hidden" 
+                name="bi[alamat]"
+                value="{{ old('bi[alamat]', $prefilledAlamat ?? '') }}">
+        </div>
+        </div>
 
                 {{-- UNIT & CABANG (OTOMATIS DARI MURID) --}}
                 <div class="row">
@@ -118,298 +205,73 @@
                             <option value="rejected" {{ $st === 'rejected' ? 'selected' : '' }}>Rejected</option>
                         </select>
                     </div>
-
                     <div class="col-md-6 mb-3">
                         <label class="form-label fw-bold">Tanggal Daftar</label>
                         <input type="date"
                             name="tanggal_daftar"
                             class="form-control"
-                            value="{{ old('tanggal_daftar', 
-                                $selectedStudent?->muridTrial?->tgl_mulai?->format('Y-m-d') 
-                                ?? now()->format('Y-m-d')
-                            ) }}">
+                            value="{{ old('tanggal_daftar') }}">
                         @error('tanggal_daftar')
                             <div class="text-danger small mt-1">{{ $message }}</div>
                         @enderror
                     </div>
                 </div>
-
-                {{-- IDENTITAS MURID (NIM, NAMA, TGL LAHIR, TGL MASUK) --}}
-                <hr class="my-4">
-                <h5 class="mb-3">Identitas Murid</h5>
-
-                <div class="row mb-3">
-                    
-                </div>
-
                 <div class="row mb-4">
                     <div class="col-md-6 mb-3">
-                        <label class="form-label fw-bold">Tanggal Penerimaan</label>
+                        <label class="form-label fw-bold">Tanggal Mulai KBM</label>
                         <input type="date"
                             name="tanggal_penerimaan"
                             class="form-control"
-                            value="{{ old('tanggal_penerimaan', now()->format('Y-m-d')) }}">
+                            value="{{ old('tanggal_penerimaan') }}">
                         @error('tanggal_penerimaan')
                             <div class="text-danger small mt-1">{{ $message }}</div>
                         @enderror
                     </div>
                 </div>
 
-                <hr class="my-4">
-                <h5 class="text-primary">Biaya Daftar</h5>
-
-            <div class="row g-3 mb-4">
-                <div class="col-md-4">
-                    <label class="form-label">Biaya Daftar</label>
-
-                    <select name="daftar_kode" id="daftar_select" class="form-select mb-1">
-                        <option value="">-- Pilih Biaya Daftar --</option>
-                        @foreach($daftarList as $item)
-                            <option value="{{ $item['kode'] }}" 
-                                    data-harga-duafa="{{ $item['harga_duafa'] }}"
-                                    data-harga-promo="{{ $item['harga_promo'] }}"
-                                    data-harga-daftar="{{ $item['harga_daftar'] }}"
-                                    data-harga-spesial="{{ $item['harga_spesial'] }}"
-                                    data-harga-umum1="{{ $item['harga_umum1'] }}"
-                                    data-harga-umum2="{{ $item['harga_umum2'] }}">
-                                {{ $item['nama'] }}
-                            </option>
-                        @endforeach
-                    </select>
-
-                    <select name="daftar_tipe_harga" id="daftar_tipe_harga" class="form-select form-select-sm mb-2">
-                        <option value="">-- Pilih Biaya Daftar --</option>
-                        <option value="harga_daftar">Daftar Ulang</option>
-                        <option value="harga_duafa">Dhuafa</option>
-                        <option value="harga_promo">Promo Khusus</option>
-                        <option value="harga_spesial">Spesial</option>
-                        <option value="harga_umum1">Umum 1</option>
-                        <option value="harga_umum2">Promo Gratis</option>
-                    </select>
-
-                    <div class="d-flex align-items-center gap-2 d-none">
-                        <input type="number"
-                            id="daftar_qty"
-                            class="form-control text-center"
-                            value="0"
-                            min="0"
-                            style="width:90px;">
-
-                        <small class="text-muted">× Harga</small>
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label fw-bold text-primary">Hari</label>
+                        <input type="text" 
+                            name="bi[hari]" 
+                            class="form-control"
+                            value="{{ old('bi[hari]', $prefilledHari ?? '') }}"
+                            placeholder="Senin, Selasa, Rabu..." readonly>
                     </div>
 
-                    <input type="hidden" name="daftar" id="daftar_hidden" value="0">
-
-                    
-                    <div class="col-md-6">
-                        <label class="form-label fw-bold text-primary">TOTAL BIAYA PENDAFTARAN</label>
-                        <input type="text"
-                            id="total_daftar"
-                            class="form-control text-end bg-success fw-bold text-white"
-                            readonly
-                            value="0">
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label fw-bold text-primary">Jam</label>
+                        <input type="text" 
+                            name="bi[jam]" 
+                            class="form-control"
+                            value="{{ old('bi[jam]', $prefilledJam ?? '') }}"
+                            placeholder="08:00 - 09:30" readonly>
                     </div>
                 </div>
-            </div>
-
-            <hr class="my-4">
-            <h5>Biaya Lain-lain</h5>
-
-            <div class="row g-3">
-
-               <!-- KAOS PENDEK -->
-                <div class="col-md-4">
-                    <label class="form-label">Kaos Pendek</label>
-                    <div id="kaos-pendek-container">
-                        <div class="kaos-pendek-row d-flex gap-2 mb-2 align-items-end">
-                            <select name="kaos_pendek_kode[]" class="form-select kaos-pendek-select" style="flex: 1;">
-                                <option value="">-- Pilih Ukuran --</option>
-                                @foreach($kaosPendekList as $kaos)
-                                    <option value="{{ $kaos['kode'] }}" data-harga="{{ $kaos['harga'] }}">
-                                        {{ $kaos['kode'] }} - Rp {{ number_format($kaos['harga'], 0, ',', '.') }}
-                                    </option>
-                                @endforeach
-                            </select>
-                            <input type="number" name="kaos_pendek_qty[]" class="form-control kaos-pendek-qty" 
-                                value="0" min="0" style="width: 80px;">
-                            <button type="button" class="btn btn-success btn-sm btn-add-kaos-pendek">+ Tambah</button>
-                        </div>
-                    </div>
-                    <input type="hidden" name="kaos_pendek" id="kaos_pendek_hidden" value="0">
-                    <div id="ukuran-pendek-info" class="mt-2 small text-muted"></div>
-                </div>
-
-                <!-- KAOS PANJANG (sama) -->
-                <div class="col-md-4">
-                    <label class="form-label">Kaos Panjang (Lengan Panjang)</label>
-                    <div id="kaos-panjang-container">
-                        <div class="kaos-panjang-row d-flex gap-2 mb-2 align-items-end">
-                            <select name="kaos_panjang_kode[]" class="form-select kaos-panjang-select" style="flex: 1;">
-                                <option value="">-- Pilih Ukuran --</option>
-                                @foreach($kaosPanjangList as $kaos)
-                                    <option value="{{ $kaos['kode'] }}" data-harga="{{ $kaos['harga'] }}">
-                                        {{ $kaos['kode'] }} - Rp {{ number_format($kaos['harga'], 0, ',', '.') }}
-                                    </option>
-                                @endforeach
-                            </select>
-                            <input type="number" name="kaos_panjang_qty[]" class="form-control kaos-panjang-qty" 
-                                value="0" min="0" style="width: 80px;">
-                            <button type="button" class="btn btn-success btn-sm btn-add-kaos-panjang">+ Tambah</button>
-                        </div>
-                    </div>
-                    <input type="hidden" name="kaos_panjang" id="kaos_panjang_hidden" value="0">
-                    <div id="ukuran-panjang-info" class="mt-2 small text-muted"></div>
-                </div>
-            <!--- End --->
-
-           <div class="col-md-3">
-                <label class="form-label">KPK</label>
-                <select name="kpk_kode" id="kpk_select" class="form-select">
-                    <option value="">-- Pilih KPK --</option>
-                    @foreach($kpkList as $kpk)
-                        <option value="{{ $kpk['kode'] }}" 
-                                data-harga="{{ $kpk['harga'] }}">
-                            {{ $kpk['kode'] }} - Rp {{ number_format($kpk['harga'], 0, ',', '.') }}
-                        </option>
-                    @endforeach
-                </select>
-                <input type="hidden" name="kpk" id="kpk_hidden" value="0">
-                <div id="kpk-info" class="mt-1 small"></div>
-            </div>
-
-            <div class="col-md-3">
-                <label class="form-label">Tas</label>
-                <select name="tas_kode" id="tas_select" class="form-select">
-                    <option value="">-- Pilih Tas --</option>
-                    @foreach($tasList as $tas)
-                        <option value="{{ $tas['kode'] }}" 
-                                data-harga="{{ $tas['harga'] }}">
-                            {{ $tas['kode'] }} - Rp {{ number_format($tas['harga'], 0, ',', '.') }}
-                        </option>
-                    @endforeach
-                </select>
-                <input type="hidden" name="tas" id="tas_hidden" value="0">
-                <div id="tas-info" class="mt-1 small"></div>
-            </div>
-
-            <div class="col-md-3">
-                <label class="form-label">Sertifikat</label>
-                <select name="sertifikat_kode" id="sertifikat_select" class="form-select">
-                    <option value="">-- Pilih --</option>
-                    @foreach($sertifikatList as $sertifikat)
-                        <option value="{{ $sertifikat['kode'] }}" 
-                                data-harga="{{ $sertifikat['harga'] }}">
-                            {{ $sertifikat['kode'] }} - Rp {{ number_format($sertifikat['harga'], 0, ',', '.') }}
-                        </option>
-                    @endforeach
-                </select>
-                <input type="hidden" name="sertifikat" id="sertifikat_hidden" value="0">
-                <div id="sertifikat-info" class="mt-1 small"></div>
-            </div>
-
-            <div class="col-md-3">
-                <label class="form-label">STPB</label>
-                <select name="stpb_kode" id="stpb_select" class="form-select">
-                    <option value="">-- Pilih --</option>
-                    @foreach($stpbList as $stpb)
-                        <option value="{{ $stpb['kode'] }}" 
-                                data-harga="{{ $stpb['harga'] }}">
-                            {{ $stpb['kode'] }} - Rp {{ number_format($stpb['harga'], 0, ',', '.') }}
-                        </option>
-                    @endforeach
-                </select>
-                <input type="hidden" name="stpb" id="stpb_hidden" value="0">
-                <div id="stpb-info" class="mt-1 small"></div>
-            </div>
-
-            <div class="col-md-3">
-                <label class="form-label">Event</label>
-                <input type="text" name="event" class="form-control biaya-lain text-end" value="">
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">Lain-lain</label>
-                <input type="text" name="lain_lain" class="form-control biaya-lain text-end" value="0">
-            </div>
-
-            <div class="col-md-3">
-                <label class="form-label">RBAS</label>
-                <select name="rbas_kode" id="rbas_select" class="form-select">
-                    <option value="">-- Pilih RBAS --</option>
-                    @foreach($rbasList as $rbas)
-                        <option value="{{ $rbas['kode'] }}" 
-                                data-harga="{{ $rbas['harga'] }}">
-                            {{ $rbas['kode'] }} - Rp {{ number_format($rbas['harga'], 0, ',', '.') }}
-                        </option>
-                    @endforeach
-                </select>
-                <input type="hidden" name="RBAS" id="rbas_hidden" value="0">
-                <div id="rbas-info" class="mt-1 small"></div>
-            </div>
-
-            <div class="col-md-3">
-                <label class="form-label">BCABS01</label>
-                <select name="bcabs01_kode" id="bcabs01_select" class="form-select">
-                    <option value="">-- Pilih BCABS01 --</option>
-                    @foreach($bcabs01List as $item)
-                        <option value="{{ $item['kode'] }}" 
-                                data-harga="{{ $item['harga'] }}">
-                            {{ $item['kode'] }} - Rp {{ number_format($item['harga'], 0, ',', '.') }}
-                        </option>
-                    @endforeach
-                </select>
-                <input type="hidden" name="BCABS01" id="bcabs01_hidden" value="0">
-                <div id="bcabs01-info" class="mt-1 small"></div>
-            </div>
-
-            <div class="col-md-3">
-                <label class="form-label">BCABS02</label>
-                <select name="bcabs02_kode" id="bcabs02_select" class="form-select">
-                    <option value="">-- Pilih BCABS02 --</option>
-                    @foreach($bcabs02List as $item)
-                        <option value="{{ $item['kode'] }}" 
-                                data-harga="{{ $item['harga'] }}">
-                            {{ $item['kode'] }} - Rp {{ number_format($item['harga'], 0, ',', '.') }}
-                        </option>
-                    @endforeach
-                </select>
-                <input type="hidden" name="BCABS02" id="bcabs02_hidden" value="0">
-                <div id="bcabs02-info" class="mt-1 small"></div>
-            </div>            
-
-            <div class="col-md-6">
-                <label class="form-label fw-bold text-primary">TOTAL LAIN-LAIN</label>
-                <input type="text"
-                    id="total_lain"
-                    class="form-control text-end bg-success fw-bold text-white"
-                    readonly
-                    value="0">
-            </div>
-
-            <div class="col-md-6">
-                <label class="form-label fw-bold text-danger">GRAND TOTAL</label>
-                <input type="text"
-                    id="grand_total"
-                    class="form-control bg-warning text-end fs-4 fw-bold"
-                    readonly
-                    value="0">
-            </div>
-        </div>
-
-                {{-- DATA BUKU INDUK --}}
-                <hr class="my-4">
-                <h5 class="mb-3">Data Buku Induk</h5>
+                {{-- End --}}
 
                 <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Tahapan</label>
-                        <select class="form-control" name="bi[tahap]">
-                            <option value="">-- Pilih Tahapan --</option>
-                            @foreach ($tahapanOptions as $t)
-                                <option value="{{ $t }}" {{ old('bi.tahap') === $t ? 'selected' : '' }}>
-                                    {{ $t }}
-                                </option>
-                            @endforeach
-                        </select>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold">Tahapan</label>
+                            <select class="form-control" name="bi[tahap]" id="tahap">
+                                <option value="">-- Pilih Tahapan --</option>
+                                @foreach ($tahapanOptions as $t)
+                                    <option value="{{ $t }}" {{ old('bi.tahap') === $t ? 'selected' : '' }}>
+                                        {{ $t }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+
+                        <div class="col-md-6 mb-3" id="tgl_tahapan_wrapper" style="display: none;">
+                            <label class="form-label fw-bold text-success">Tanggal Tahapan <span class="text-danger">*</span></label>
+                            <input type="date" 
+                                name="bi[tgl_tahapan]" 
+                                id="tgl_tahapan" 
+                                class="form-control"
+                                value="{{ old('bi.tgl_tahapan') }}">
+                        </div>
                     </div>
 
                     <div class="col-md-6 mb-3">
@@ -474,37 +336,82 @@
                 </div>
                 <div class="row mb-4">
 
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label fw-bold">Tempat Lahir</label>
-                        <input type="text"
-                            class="form-control"
-                            name="bi[tmpt_lahir]"
-                            value="{{ old('bi.tmpt_lahir', $prefilledTmptLahir) }}"
-                            placeholder="Contoh: Bandung">
-                    </div>
+                    <div class="row">
+                <!-- Jenis KBM -->
+                <div class="col-md-4 mb-3">
+                    <label class="form-label fw-bold">Jenis KBM</label>
+                    <select name="bi[jenis_kbm]" class="form-control">
+                        <option value="">-- Pilih Jenis KBM --</option>
+                        @foreach($jenisKbmOptions ?? [] as $jk)
+                            <option value="{{ $jk }}">{{ $jk }}</option>
+                        @endforeach
+                    </select>
+                </div>
 
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label fw-bold">Tanggal Lahir</label>
-                        <input type="date"
-                name="bi[tanggal_lahir]"
-                class="form-control"
-                value="{{ old('bi.tanggal_lahir', $prefilledTglLahir) }}">
-                    </div>
+                <!-- Level -->
+                <div class="col-md-4 mb-3">
+                    <label class="form-label fw-bold">Level</label>
+                    <select name="bi[level]" id="level" class="form-control">
+                        <option value="">-- Pilih Level --</option>
+                        @foreach($levelOptions ?? [] as $l)
+                            <option value="{{ $l }}">{{ $l }}</option>
+                        @endforeach
+                    </select>
+                </div>
 
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label fw-bold">Nama Orang Tua</label>
-                        <input type="text"
-                name="bi[orangtua]"
-                class="form-control"
-                value="{{ old('bi.orangtua', $prefilledOrangtua) }}">
-                    </div>
+                <!-- Tanggal Level (muncul otomatis) -->
+                <div class="col-md-4 mb-3" id="tgl_level_wrapper" style="display: none;">
+                    <label class="form-label fw-bold text-success">Tanggal Level</label>
+                    <input type="date" 
+                        name="bi[tgl_level]" 
+                        id="tgl_level" 
+                        class="form-control"
+                        value="{{ old('bi.tgl_level') }}">
+                </div>
+            </div>
 
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label fw-bold">Info / Sumber Informasi</label>
-                        <input type="text"
-                name="bi[info]"
-                class="form-control"
-                value="{{ old('bi.info', $prefilledInfo) }}">
+            <hr class="my-4">
+
+            <h5 class="mb-3 text-primary">Supply Modul</h5>
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label fw-bold">Asal Modul</label>
+                    <select name="bi[asal_modul]" class="form-control">
+                        <option value="">-- Pilih Asal Modul --</option>
+                        @foreach($asalModulOptions ?? [] as $am)
+                            <option value="{{ $am }}">{{ $am }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div class="col-md-6 mb-3">
+                    <label class="form-label fw-bold">Keterangan Optional</label>
+                    <input type="text" 
+                        name="bi[keterangan_optional]" 
+                        class="form-control" 
+                        value="{{ old('bi.keterangan_optional') }}"
+                        placeholder="Catatan tambahan...">
+                </div>
+            </div>
+                   <div class="col-md-2 mb-3">
+                        <label class="form-label fw-bold">Informasi</label>
+
+                        {{-- Hidden agar value tetap terkirim --}}
+                        <input type="hidden"
+                            name="bi[info]"
+                            value="{{ old('bi.info', $prefilledInfo ?? '') }}">
+
+                        <select class="form-select" disabled>
+                            <option value="">-- Pilih Informasi --</option>
+
+                            @foreach($infoOptions as $option)
+                                <option value="{{ $option }}"
+                                    {{ old('bi.info', $prefilledInfo ?? '') == $option ? 'selected' : '' }}>
+                                    {{ $option }}
+                                </option>
+                            @endforeach
+                        </select>
                     </div>
 
                 </div>
@@ -535,445 +442,127 @@
     </div>
 </div>
 
+@push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    const select      = document.getElementById('studentSelect');
-    const unit        = document.getElementById('displayUnit');
-    const cabang      = document.getElementById('displayCabang');
-    const nim         = document.getElementById('displayNim');
-    const nama        = document.getElementById('displayNama');
-    const hiddenNim   = document.querySelector('input[name="bi[nim]"]');
-    const hiddenNama  = document.querySelector('input[name="bi[nama]"]');
-    const hiddenUnit  = document.querySelector('input[name="bimba_unit"]');
-    const hiddenCabang= document.querySelector('input[name="no_cabang"]');
 
-    function updateInfo() {
-        const option = select.options[select.selectedIndex];
+    // ==================== USIA ====================
+    const tglLahirInput = document.querySelector('input[name="bi[tanggal_lahir]"]');
+    const displayUsia   = document.getElementById('displayUsia');
+    const hiddenUsia    = document.getElementById('hiddenUsia');
 
-        if (option && option.value) {
-            const vUnit   = option.dataset.unit   || '';
-            const vCabang = option.dataset.cabang || '';
-            const vNim    = option.dataset.nim    || '';
-            const vNama   = option.dataset.nama   || '';
+    function hitungUsia() {
+        if (!tglLahirInput || !displayUsia) return;
 
-            unit.value   = vUnit;
-            cabang.value = vCabang;
-            nim.value    = vNim;
-            nama.value   = vNama;
-
-            hiddenUnit.value   = vUnit;
-            hiddenCabang.value = vCabang;
-            hiddenNim.value    = vNim;
-            hiddenNama.value   = vNama;
-        }
-    }
-
-    // Jalankan saat halaman dimuat (misal dari Trial langsung ke sini)
-    if (select) {
-        updateInfo();
-        select.addEventListener('change', updateInfo);
-    }
-
-    // === SPP OTOMATIS ===
-    const mapping = @json($sppMapping);
-    const gol     = document.getElementById('bi_gol');
-    const kd      = document.getElementById('bi_kd');
-    const spp     = document.getElementById('bi_spp');
-    const disp    = document.getElementById('bi_spp_display');
-
-    function updateSPP() {
-        const g = gol?.value || '';
-        const k = kd?.value  || '';
-        const val = mapping[g]?.[k] ?? '';
-
-        if (spp)  spp.value  = val || '';
-        if (disp) disp.value = val
-            ? new Intl.NumberFormat('id-ID').format(val)
-            : '';
-    }
-
-    gol?.addEventListener('change', updateSPP);
-    kd?.addEventListener('change', updateSPP);
-    updateSPP();
-});
-// ==================== BIAYA DAFTAR ====================
-
-const daftarSelect      = document.getElementById('daftar_select');
-const daftarTipeHarga   = document.getElementById('daftar_tipe_harga');
-const daftarQty         = document.getElementById('daftar_qty');
-const daftarHidden      = document.getElementById('daftar_hidden');
-const totalDaftar       = document.getElementById('total_daftar');
-
-// FORMAT RUPIAH
-function formatRupiah(angka) {
-    return new Intl.NumberFormat('id-ID').format(
-        parseInt(angka || 0)
-    );
-}
-
-// AMBIL HARGA DARI DATA ATTRIBUTE
-function getHargaDaftar(selectedOption, tipe) {
-
-    if (!selectedOption) return 0;
-
-    switch (tipe) {
-
-        case 'harga_duafa':
-            return parseInt(selectedOption.dataset.hargaDuafa || 0);
-
-        case 'harga_promo':
-            return parseInt(selectedOption.dataset.hargaPromo || 0);
-
-        case 'harga_daftar':
-            return parseInt(selectedOption.dataset.hargaDaftar || 0);
-
-        case 'harga_spesial':
-            return parseInt(selectedOption.dataset.hargaSpesial || 0);
-
-        case 'harga_umum1':
-            return parseInt(selectedOption.dataset.hargaUmum1 || 0);
-
-        case 'harga_umum2':
-            return parseInt(selectedOption.dataset.hargaUmum2 || 0);
-
-        default:
-            return 0;
-    }
-}
-
-// UPDATE TOTAL BIAYA DAFTAR
-function updateBiayaDaftar() {
-
-    // VALIDASI ELEMENT
-    if (!daftarSelect || !daftarTipeHarga || !daftarHidden || !totalDaftar) {
-        return;
-    }
-
-    const selectedOption = daftarSelect.options[daftarSelect.selectedIndex];
-
-    // RESET JIKA BELUM PILIH
-    if (!selectedOption || !selectedOption.value) {
-
-        if (daftarQty) {
-            daftarQty.value = 0;
-        }
-
-        daftarHidden.value = 0;
-        totalDaftar.value  = '0';
-
-        return;
-    }
-
-    const tipe  = daftarTipeHarga.value;
-
-    // AMBIL HARGA
-    let harga = getHargaDaftar(selectedOption, tipe);
-
-    // QTY DEFAULT = 1
-    let qty = 1;
-
-    if (daftarQty) {
-
-        qty = parseInt(daftarQty.value) || 0;
-
-        // AUTO SET 1 JIKA ADA HARGA
-        if (harga > 0 && qty <= 0) {
-
-            qty = 1;
-            daftarQty.value = 1;
-        }
-
-        // RESET JIKA HARGA 0
-        if (harga <= 0) {
-
-            qty = 0;
-            daftarQty.value = 0;
-        }
-    }
-
-    // HITUNG TOTAL
-    const total = harga * qty;
-
-    // SIMPAN KE INPUT HIDDEN
-    daftarHidden.value = total;
-
-    // TAMPILKAN FORMAT
-    totalDaftar.value = formatRupiah(total);
-}
-
-// EVENT
-daftarSelect?.addEventListener('change', updateBiayaDaftar);
-daftarTipeHarga?.addEventListener('change', updateBiayaDaftar);
-daftarQty?.addEventListener('input', updateBiayaDaftar);
-
-// LOAD AWAL
-updateBiayaDaftar();
-// ============================
-// FORMAT
-// ============================
-
-function formatRupiah(angka) {
-    return new Intl.NumberFormat('id-ID').format(
-        parseInt(angka || 0)
-    );
-}
-
-// ============================
-// SIMPLE SELECT HARGA
-// ============================
-
-function setupSingleBiaya(config) {
-
-    const select  = document.getElementById(config.selectId);
-    const hidden  = document.getElementById(config.hiddenId);
-    const info    = document.getElementById(config.infoId);
-
-    if (!select || !hidden) return;
-
-    function update() {
-
-        const option = select.options[select.selectedIndex];
-
-        if (!option || !option.value) {
-
-            hidden.value = 0;
-
-            if (info) {
-                info.innerHTML = '';
-            }
-
-            hitungGrandTotal();
+        let val = tglLahirInput.value.trim();
+        if (!val) {
+            displayUsia.value = '';
+            if (hiddenUsia) hiddenUsia.value = '';
             return;
         }
 
-        const harga = parseInt(option.dataset.harga || 0);
-
-        hidden.value = harga;
-
-        if (info) {
-
-            info.innerHTML = `
-                <div class="alert alert-info py-1 px-2 mb-0">
-                    Rp ${formatRupiah(harga)}
-                </div>
-            `;
+        let birthDate = new Date(val);
+        if (isNaN(birthDate.getTime())) {
+            let parts = val.split(/[-/]/);
+            if (parts.length === 3) {
+                if (parts[0].length === 4) {
+                    birthDate = new Date(parts[0], parts[1]-1, parts[2]);
+                } else {
+                    birthDate = new Date(parts[2], parts[1]-1, parts[0]);
+                }
+            }
         }
 
-        hitungGrandTotal();
+        if (isNaN(birthDate.getTime())) {
+            displayUsia.value = 'Format salah';
+            return;
+        }
+
+        const today = new Date();
+        let years = today.getFullYear() - birthDate.getFullYear();
+        let months = today.getMonth() - birthDate.getMonth();
+
+        if (months < 0 || (months === 0 && today.getDate() < birthDate.getDate())) {
+            years--;
+            months += 12;
+        }
+
+        const usiaText = `${years} tahun ${months} bulan`;
+        displayUsia.value = usiaText;
+        if (hiddenUsia) hiddenUsia.value = years;
     }
 
-    select.addEventListener('change', update);
+    if (tglLahirInput) {
+        tglLahirInput.addEventListener('change', hitungUsia);
+        tglLahirInput.addEventListener('blur', hitungUsia);
+    }
+    setTimeout(hitungUsia, 600);
 
-    update();
-}
+    // ==================== TAHAPAN ====================
+    const tahapSelect = document.getElementById('tahap');
+    const tglTahapanWrapper = document.getElementById('tgl_tahapan_wrapper');
 
-function setupKaos(config) {
-    const container = document.getElementById(config.containerId);
-    const hidden    = document.getElementById(config.hiddenId);
-    const infoBox   = document.getElementById(config.infoId);
-
-    if (!container || !hidden) return;
-
-    function hitungTotal() {
-        let total = 0;
-        let infoHtml = '';
-
-        container.querySelectorAll(config.rowClass).forEach(row => {
-            const select = row.querySelector('select');
-            const qtyInput = row.querySelector('input[type="number"]');
-
-            if (!select || !qtyInput) return;
-
-            const harga = parseFloat(select.selectedOptions[0]?.dataset.harga || 0);
-            let qty = parseInt(qtyInput.value || 0);
-
-            // OTOMATIS SET QTY = 1 saat memilih ukuran
-            if (harga > 0 && qty === 0) {
-                qty = 1;
-                qtyInput.value = 1;
-            } else if (harga === 0) {
-                qty = 0;
-                qtyInput.value = 0;
-            }
-
-            if (harga > 0 && qty > 0) {
-                const subtotal = harga * qty;
-                total += subtotal;
-
-                infoHtml += `
-                    <div class="text-success small">
-                        ${select.value} × ${qty} = Rp ${formatRupiah(subtotal)}
-                    </div>`;
-            }
-        });
-
-        hidden.value = Math.round(total);
-        if (infoBox) infoBox.innerHTML = infoHtml || '<small class="text-muted">Belum ada pilihan</small>';
-        
-        hitungGrandTotal();
+    function toggleTanggalTahapan() {
+        if (!tahapSelect || !tglTahapanWrapper) return;
+        const value = tahapSelect.value;
+        tglTahapanWrapper.style.display = (value === 'Persiapan' || value === 'Lanjutan') ? 'block' : 'none';
     }
 
-    // Event listeners
-    container.addEventListener('change', hitungTotal);
-    container.addEventListener('input', hitungTotal);
+    if (tahapSelect) {
+        tahapSelect.addEventListener('change', toggleTanggalTahapan);
+        setTimeout(toggleTanggalTahapan, 300);
+    }
 
-    // Tambah / Hapus baris
-    container.addEventListener('click', function(e) {
-        if (e.target.classList.contains('btn-add-kaos-pendek') || 
-            e.target.classList.contains('btn-add-kaos-panjang')) {
-            
-            const firstRow = container.querySelector(config.rowClass);
-            if (!firstRow) return;
+    // ==================== SPP (PERBAIKAN TERBARU) ====================
+    const mapping = @json($sppMapping);
+    const golSelect = document.getElementById('bi_gol');
+    const kdSelect  = document.getElementById('bi_kd');
+    const sppHidden = document.getElementById('bi_spp');
+    const sppDisplay = document.getElementById('bi_spp_display');
 
-            const clone = firstRow.cloneNode(true);
-            clone.querySelector('select').value = '';
-            clone.querySelector('input[type="number"]').value = 0;
+    function updateSPP() {
+        if (!golSelect || !kdSelect) return;
 
-            const btn = clone.querySelector('button');
-            btn.classList.remove('btn-success');
-            btn.classList.add('btn-danger');
-            btn.textContent = 'Hapus';
-            btn.classList.add('btn-remove-kaos');
+        const gol = (golSelect.value || '').trim().toUpperCase();
+        const kd  = (kdSelect.value || '').trim().toUpperCase();
 
-            container.appendChild(clone);
-            hitungTotal();
+        let nilaiSPP = 0;
+        if (mapping[gol] && mapping[gol][kd] !== undefined) {
+            nilaiSPP = mapping[gol][kd];
         }
 
-        if (e.target.classList.contains('btn-remove-kaos')) {
-            e.target.closest(config.rowClass).remove();
-            hitungTotal();
+        if (sppHidden) sppHidden.value = nilaiSPP;
+        if (sppDisplay) {
+            sppDisplay.value = nilaiSPP > 0 
+                ? new Intl.NumberFormat('id-ID').format(nilaiSPP) 
+                : '0';
         }
-    });
+    }
 
-    hitungTotal(); // initial
-}
+    if (golSelect) golSelect.addEventListener('change', updateSPP);
+    if (kdSelect)  kdSelect.addEventListener('change', updateSPP);
 
-// ============================
-// GRAND TOTAL
-// ============================
+    setTimeout(updateSPP, 400);
+    setTimeout(updateSPP, 1000);
 
-function hitungGrandTotal() {
-
-    const daftar = parseInt(
-        document.getElementById('daftar_hidden')?.value || 0
-    );
-
-    const lain = [
-
-        'kaos_pendek_hidden',
-        'kaos_panjang_hidden',
-        'kpk_hidden',
-        'tas_hidden',
-        'sertifikat_hidden',
-        'stpb_hidden',
-        'rbas_hidden',
-        'bcabs01_hidden',
-        'bcabs02_hidden'
-
-    ].reduce((sum, id) => {
-
-        return sum + parseInt(
-            document.getElementById(id)?.value || 0
-        );
-
-    }, 0);
-
-    const eventVal = parseInt(
-        document.querySelector('input[name="event"]')?.value || 0
-    );
-
-    const lainVal = parseInt(
-        document.querySelector('input[name="lain_lain"]')?.value || 0
-    );
-
-    const totalLain = lain + eventVal + lainVal;
-
-    document.getElementById('total_lain').value =
-        formatRupiah(totalLain);
-
-    document.getElementById('grand_total').value =
-        formatRupiah(daftar + totalLain);
-}
-
-// ============================
-// INIT
-// ============================
-
-setupSingleBiaya({
-    selectId : 'kpk_select',
-    hiddenId : 'kpk_hidden',
-    infoId   : 'kpk-info'
 });
 
-setupSingleBiaya({
-    selectId : 'tas_select',
-    hiddenId : 'tas_hidden',
-    infoId   : 'tas-info'
+// Toggle Tanggal Level
+document.addEventListener('DOMContentLoaded', function () {
+    const levelSelect = document.getElementById('level');
+    const tglLevelWrapper = document.getElementById('tgl_level_wrapper');
+
+    function toggleTanggalLevel() {
+        if (!levelSelect || !tglLevelWrapper) return;
+        const value = levelSelect.value;
+        tglLevelWrapper.style.display = value ? 'block' : 'none';
+    }
+
+    if (levelSelect) {
+        levelSelect.addEventListener('change', toggleTanggalLevel);
+        setTimeout(toggleTanggalLevel, 300); // untuk nilai lama
+    }
 });
-
-setupSingleBiaya({
-    selectId : 'sertifikat_select',
-    hiddenId : 'sertifikat_hidden',
-    infoId   : 'sertifikat-info'
-});
-
-setupSingleBiaya({
-    selectId : 'stpb_select',
-    hiddenId : 'stpb_hidden',
-    infoId   : 'stpb-info'
-});
-
-setupSingleBiaya({
-    selectId : 'rbas_select',
-    hiddenId : 'rbas_hidden',
-    infoId   : 'rbas-info'
-});
-
-setupSingleBiaya({
-    selectId : 'bcabs01_select',
-    hiddenId : 'bcabs01_hidden',
-    infoId   : 'bcabs01-info'
-});
-
-setupSingleBiaya({
-    selectId : 'bcabs02_select',
-    hiddenId : 'bcabs02_hidden',
-    infoId   : 'bcabs02-info'
-});
-
-// ============================
-// KAOS PENDEK
-// ============================
-
-// KAOS PENDEK & PANJANG
-setupKaos({
-    containerId : 'kaos-pendek-container',
-    hiddenId    : 'kaos_pendek_hidden',
-    infoId      : 'ukuran-pendek-info',
-    rowClass    : '.kaos-pendek-row'
-});
-
-setupKaos({
-    containerId : 'kaos-panjang-container',
-    hiddenId    : 'kaos_panjang_hidden',
-    infoId      : 'ukuran-panjang-info',
-    rowClass    : '.kaos-panjang-row'
-});
-
-// ============================
-// INPUT EVENT / LAIN
-// ============================
-
-document.querySelectorAll('.biaya-lain').forEach(el => {
-
-    el.addEventListener('input', hitungGrandTotal);
-});
-
-// ============================
-// LOAD
-// ============================
-
-hitungGrandTotal();
-
 </script>
+@endpush
 @endsection

@@ -219,6 +219,29 @@ private function extractUkuran($nama)
                 $selectedStudent->informasi_bimba
                 ?? $trial?->info
                 ?? '';
+            $prefilledTmptLahir = $selectedStudent->tempat_lahir 
+                ?? $trial?->tempat_lahir 
+                ?? '';
+            $prefilledHpAyah = $selectedStudent->hp_ayah 
+                ?? $trial?->hp_ayah 
+                ?? '';
+
+            $prefilledHpIbu  = $selectedStudent->hp_ibu 
+                ?? $trial?->hp_ibu 
+                ?? '';
+            $prefilledAlamat = $selectedStudent->alamat 
+                ?? $trial?->alamat 
+                ?? '';
+            // Detail Alamat
+            $prefilledNoRumah   = $selectedStudent->no_rumah ?? $trial?->no_rumah ?? '';
+            $prefilledRt        = $selectedStudent->rt ?? $trial?->rt ?? '';
+            $prefilledRw        = $selectedStudent->rw ?? $trial?->rw ?? '';
+            $prefilledKelurahan = $selectedStudent->kelurahan ?? $trial?->kelurahan ?? '';
+            $prefilledKecamatan = $selectedStudent->kecamatan ?? $trial?->kecamatan ?? '';
+            $prefilledKodyaKab  = $selectedStudent->kodya_kab ?? $trial?->kodya_kab ?? '';
+            $prefilledProvinsi  = $selectedStudent->provinsi ?? $trial?->provinsi ?? '';
+            $prefilledHari = $selectedStudent->hari ?? $trial?->hari ?? '';
+            $prefilledJam  = $selectedStudent->jam  ?? $trial?->jam  ?? '';
         }
     }
 
@@ -248,6 +271,11 @@ private function extractUkuran($nama)
         '208','209','210','211',
         '308','309','310','311'
     ];
+
+        $levelOptions = ['Level 1', 'Level 2', 'Level 3', 'Level 4'];
+        $jenisKbmOptions = ['Full TM', 'Full DLC', 'Kombinasi TM & DLC'];
+        $infoOptions = ['Brosur', 'Event', 'Humas', 'Internet', 'Spanduk', 'Lainnya'];
+        $asalModulOptions = ['biMBA IM', 'biMBA Unit'];
 
     $penerimaanPrefill = array_fill_keys([
         'kwitansi','via','bulan','tahun','tanggal',
@@ -453,10 +481,27 @@ $bcabs02List = HargaSaptataruna::where('kode', 'BCABS.02')
     'prefilledTmptLahir',
     'prefilledOrangtua',
     'prefilledInfo',
+    'prefilledTmptLahir',
+    'prefilledHpAyah',
+    'prefilledHpIbu',
+    'prefilledAlamat',
+    'prefilledNoRumah',
+    'prefilledRt',
+    'prefilledRw',
+    'prefilledKelurahan',
+    'prefilledKecamatan',
+    'prefilledKodyaKab',
+    'prefilledProvinsi',
+    'prefilledHari',
+    'prefilledJam',
 
     'hargaSaptataruna',
     'kdOptions',
     'sppMapping',
+    'levelOptions',
+    'jenisKbmOptions',
+    'infoOptions',
+    'asalModulOptions',
     'tahapanOptions',
     'kelasOptions',
     'guruOptions',
@@ -482,7 +527,7 @@ $bcabs02List = HargaSaptataruna::where('kode', 'BCABS.02')
 }
 
 
-    // ===== STORE (CREATE) =====
+        // ===== STORE (CREATE) =====
     public function store(Request $request)
 {
     $data = $request->validate([
@@ -550,7 +595,7 @@ $bcabs02List = HargaSaptataruna::where('kode', 'BCABS.02')
         $bi['spp'] = $row ? (int)($row->$col ?? 0) : null;
     }
 
-    // ====================== PENERIMAAN / BIAYA ======================
+    // ====================== DATA BIAYA (untuk prefill penerimaan) ======================
     $pay = [
         'kwitansi'   => $request->kwitansi ?? null,
         'via'        => $request->via ?? null,
@@ -570,7 +615,7 @@ $bcabs02List = HargaSaptataruna::where('kode', 'BCABS.02')
         'lain_lain'  => $this->parseMoney($request->lain_lain ?? 0),
     ];
 
-    // ====================== FINAL DATA ======================
+    // ====================== FINAL DATA REGISTRASI ======================
     $finalData = [
         'student_id'         => $data['student_id'],
         'gelombang'          => $data['gelombang'] ?? null,
@@ -614,7 +659,8 @@ $bcabs02List = HargaSaptataruna::where('kode', 'BCABS.02')
     }
 
     // ====================== SIMPAN ======================
-    DB::transaction(function () use ($finalData, $student, $bi, $pay, $data) {
+    $reg = null;
+    DB::transaction(function () use ($finalData, $student, $bi, $pay, &$reg) {
         $reg = Registration::create($finalData);
 
         if ($reg->status === 'accepted') {
@@ -629,18 +675,38 @@ $bcabs02List = HargaSaptataruna::where('kode', 'BCABS.02')
         }
     });
 
-    return redirect()
-        ->route('registrations.index')
-        ->with('success', 'Registrasi berhasil disimpan!');
+    // ====================== REDIRECT KE PENERIMAAN CREATE ======================
+    $message = 'Registrasi berhasil disimpan!';
+
+    return redirect()->route('penerimaan.create', [
+        'nim' => $student->nim ?? $bi['nim'],           // utama untuk prefill
+        'student_id' => $student->id,
+    ])->with('success', $message . ' Silakan lengkapi data penerimaan.');
+
 }
 
     // ===== EDIT =====
-    public function edit(Registration $registration)
+   public function edit(Registration $registration)
 {
-    $students = \App\Models\Student::orderBy('nama')->get(['id', 'nim', 'nama']);
+    // Eager Loading Relasi
+    $registration->load(['student.bukuInduk', 'muridTrial']);
+
+    // Data Students lengkap
+    $students = \App\Models\Student::orderBy('nama')
+        ->get([
+            'id', 'nim', 'nama',
+            'tempat_lahir', 'tgl_lahir',
+            'orangtua', 'alamat',
+            'hp_ayah', 'hp_ibu',
+            'bimba_unit', 'no_cabang',
+            'hari', 'jam'
+        ]);
 
     $biMaster = optional($registration->student)->bukuInduk;
+    $trial    = $registration->muridTrial;
+    $student  = $registration->student;
 
+    // Data pendukung form
     $hargaSaptataruna = \App\Models\HargaSaptataruna::all();
     $kdOptions = ['A','B','C','D','E','F'];
 
@@ -654,32 +720,30 @@ $bcabs02List = HargaSaptataruna::where('kode', 'BCABS.02')
 
     $tahapanOptions = ['Persiapan', 'Lanjutan'];
     $kelasOptions   = ['biMBA AIUEO', 'English biMBA'];
+    $levelOptions = ['Level 1', 'Level 2', 'Level 3', 'Level 4'];
+    $jenisKbmOptions = ['Full TM', 'Full DLC', 'Kombinasi TM & DLC'];
+    $infoOptions = ['Brosur', 'Event', 'Humas', 'Internet', 'Spanduk', 'Lainnya'];
+    $asalModulOptions = ['biMBA IM', 'biMBA Unit'];
 
-    // === GURU OPTIONS - Perbaikan ===
-    $student = $registration->student;
+    // Guru Options
     $guruOptions = [];
-
-    // Ambil semua guru dulu
     $allGuru = Profile::whereIn('jabatan', ['Guru', 'Pengajar'])
                 ->orderBy('nama')
                 ->pluck('nama')
                 ->toArray();
 
-    // Jika ada bimba_unit, prioritaskan guru di unit tersebut
     if ($student && !empty($student->bimba_unit)) {
         $guruUnit = Profile::where('bimba_unit', $student->bimba_unit)
                     ->whereIn('jabatan', ['Guru', 'Pengajar'])
                     ->orderBy('nama')
                     ->pluck('nama')
                     ->toArray();
-
-        $guruOptions = $guruUnit;
+        $guruOptions = $guruUnit ?: $allGuru;
     } else {
         $guruOptions = $allGuru;
     }
 
-    // Pastikan guru yang sudah tersimpan tetap muncul
-    $savedGuru = $registration->guru ?? $biMaster?->guru;
+    $savedGuru = $registration->guru ?? optional($biMaster)->guru;
     if ($savedGuru && !in_array($savedGuru, $guruOptions)) {
         $guruOptions[] = $savedGuru;
     }
@@ -689,19 +753,33 @@ $bcabs02List = HargaSaptataruna::where('kode', 'BCABS.02')
         '208','209','210','211','308','309','310','311'
     ];
 
+    // Prefill Data
     $biPrefill = [
-        'tahap'       => $registration->tahap ?? ($biMaster->tahap ?? null),
-        'kelas'       => $registration->kelas ?? ($biMaster->kelas ?? null),
-        'gol'         => $registration->gol   ?? ($biMaster->gol   ?? null),
-        'kd'          => $registration->kd    ?? ($biMaster->kd    ?? null),
-        'spp'         => $registration->spp   ?? ($biMaster->spp   ?? null),
-        'guru'        => $registration->guru  ?? ($biMaster->guru ?? null),
-        'kode_jadwal' => $registration->kode_jadwal ?? ($biMaster->kode_jadwal ?? null),
+        'tahap'        => $registration->tahap ?? optional($biMaster)->tahap,
+        'kelas'        => $registration->kelas ?? optional($biMaster)->kelas,
+        'gol'          => $registration->gol   ?? optional($biMaster)->gol,
+        'kd'           => $registration->kd    ?? optional($biMaster)->kd,
+        'spp'          => $registration->spp   ?? optional($biMaster)->spp,
+        'guru'         => $registration->guru  ?? optional($biMaster)->guru,
+        'kode_jadwal'  => $registration->kode_jadwal ?? optional($biMaster)->kode_jadwal,
+        'hari'         => $registration->hari  ?? optional($biMaster)->hari ?? $student?->hari ?? $trial?->hari,
+        'jam'          => $registration->jam   ?? optional($biMaster)->jam  ?? $student?->jam  ?? $trial?->jam,
+
+        'tempat_lahir' => optional($biMaster)->tempat_lahir ?? $student?->tempat_lahir ?? $trial?->tempat_lahir,
+        'tanggal_lahir'=> optional($biMaster)->tgl_lahir   ?? $student?->tgl_lahir   ?? $trial?->tgl_lahir,
+        'orangtua'     => optional($biMaster)->orangtua    ?? $student?->orangtua    ?? $trial?->orangtua,
+        'alamat'       => optional($biMaster)->alamat      ?? $student?->alamat      ?? $trial?->alamat,
+
+        'no_telp'      => optional($biMaster)->no_telp ?? 
+                          trim(implode(' / ', array_filter([
+                              $student?->hp_ayah, 
+                              $student?->hp_ibu
+                          ]))),
     ];
 
     $isAdmin = auth()->check() && (
-        auth::user()->role === 'admin' || 
-        (auth::user()->is_admin ?? false)
+        auth()->user()->role === 'admin' || 
+        (auth()->user()->is_admin ?? false)
     );
 
     return view('registrations.edit', compact(
@@ -712,10 +790,16 @@ $bcabs02List = HargaSaptataruna::where('kode', 'BCABS.02')
         'sppMapping',
         'tahapanOptions',
         'kelasOptions',
+        'levelOptions',
+        'jenisKbmOptions',
+        'infoOptions',
+        'asalModulOptions',
         'biPrefill',
         'guruOptions',
         'kodeJadwalOptions',
-        'isAdmin'
+        'isAdmin',
+        'trial',
+        'student'
     ));
 }
 
@@ -872,30 +956,59 @@ protected function commitBukuIndukWithPayload(
 
     DB::transaction(function () use ($student, $bi, $bimbaUnit, $noCabang, $tanggalDaftar) {
 
-        // ====================== NIM GENERATION (tetap sama) ======================
+                // ====================== NIM GENERATION (PER UNIT) ======================
         if (empty($student->nim)) {
-            $unit = Unit::where('biMBA_unit', $bimbaUnit)
-                        ->where('no_cabang', $noCabang)
-                        ->first();
 
-            if (!$unit) {
-                Log::error("❌ Unit {$bimbaUnit}-{$noCabang} tidak ditemukan!");
-                $student->nim = '990000001';
-            } else {
-                $prefix = str_pad($unit->no_cabang, 5, '0', STR_PAD_LEFT);
-                
+            $noCabangClean = trim($noCabang ?? '');
+            $bimbaUnitClean = trim($bimbaUnit ?? $student->bimba_unit ?? '');
+
+            Log::info('NIM Generation Start', [
+                'no_cabang'  => $noCabangClean,
+                'bimba_unit' => $bimbaUnitClean,
+                'student_id' => $student->id
+            ]);
+
+            // Prefix selalu 5 digit dari no_cabang
+            $prefix = str_pad($noCabangClean, 5, '0', STR_PAD_LEFT);
+
+            // Ambil NIM TERAKHIR berdasarkan prefix saja (paling penting)
+            $lastNIM = BukuInduk::where('nim', 'LIKE', $prefix . '%')
+                ->lockForUpdate()
+                ->orderByRaw('CAST(SUBSTRING(nim, 6) AS UNSIGNED) DESC')
+                ->value('nim');
+
+            // Jika tidak ada, coba cari dengan nama unit juga (fallback)
+            if (!$lastNIM && $bimbaUnitClean) {
                 $lastNIM = BukuInduk::where('nim', 'LIKE', $prefix . '%')
-                    ->where('bimba_unit', $bimbaUnit)
+                    ->where('bimba_unit', 'LIKE', "%{$bimbaUnitClean}%")
                     ->lockForUpdate()
                     ->orderByRaw('CAST(SUBSTRING(nim, 6) AS UNSIGNED) DESC')
                     ->value('nim');
-
-                $nextNumber = $lastNIM ? (int)substr($lastNIM, 5) + 1 : 1;
-                $student->nim = $prefix . str_pad((string)$nextNumber, 4, '0', STR_PAD_LEFT);
             }
-            
+
+            $nextNumber = $lastNIM 
+                ? (int) substr($lastNIM, 5) + 1 
+                : 1;
+
+            $student->nim = $prefix . str_pad((string)$nextNumber, 4, '0', STR_PAD_LEFT);
+
+            // Safety anti-duplikat
+            $attempt = 0;
+            while (BukuInduk::where('nim', $student->nim)->exists() && $attempt < 10) {
+                $nextNumber++;
+                $student->nim = $prefix . str_pad((string)$nextNumber, 4, '0', STR_PAD_LEFT);
+                $attempt++;
+            }
+
             $student->save();
-            Log::info("✅ NIM di-generate: {$student->nim}");
+
+            Log::info("✅ NIM Generated", [
+                'nim'        => $student->nim,
+                'prefix'     => $prefix,
+                'last_nim'   => $lastNIM ?? 'TIDAK ADA',
+                'next_number'=> $nextNumber,
+                'unit'       => $bimbaUnitClean
+            ]);
         }
 
         // ====================== PREPARE DATA ======================
@@ -935,6 +1048,9 @@ protected function commitBukuIndukWithPayload(
             $statusBI = 'Mutasi Baru';
         }
 
+        // ====================== CLEAN BIMBA UNIT ======================
+        $cleanBimbaUnit = $this->cleanUnitName($bimbaUnit ?? $student->bimba_unit ?? '');
+
         // ====================== UPDATE / CREATE BUKU INDUK ======================
         $trial = $student->muridTrial;
 
@@ -942,21 +1058,19 @@ protected function commitBukuIndukWithPayload(
             ['nim' => $student->nim],
             [
                 'nama'           => $biNorm['nama'],
-                'bimba_unit'     => $bimbaUnit,
-                'no_cabang'      => $noCabang,
+                'bimba_unit'     => $cleanBimbaUnit,     // ← Hanya nama unit bersih
+                'no_cabang'      => $noCabang,           // ← No Cabang tetap tersimpan
                 'status'         => $statusBI,
 
-                // === RESET STATUS KELUAR (INI YANG BARU & PENTING) ===
                 'tgl_keluar'       => null,
                 'kategori_keluar'  => null,
                 'alasan'           => null,
                 'status_pindah'    => $statusBI === 'Mutasi Baru' ? 'Pindah Masuk' : null,
                 'tanggal_pindah'   => $statusBI === 'Mutasi Baru' ? $tglDaftarFinal : null,
 
-                // Tanggal masuk
                 'tgl_daftar'     => $tglDaftarFinal,
                 'tgl_masuk'      => $tglMasukFinal,
-                'tanggal_masuk'  => $tglMasukFinal,   // kalau kolom ini ada
+                'tanggal_masuk'  => $tglMasukFinal,
 
                 'tahap'          => $biNorm['tahap'],
                 'kelas'          => $biNorm['kelas'],
@@ -973,7 +1087,7 @@ protected function commitBukuIndukWithPayload(
             ]
         );
 
-        // ====================== PENERIMAAN (tetap sama) ======================
+        // ====================== PENERIMAAN ======================
         if (!empty($pay)) {
             $dt = Carbon::parse($tanggalPenerimaan ?? now());
             
@@ -984,7 +1098,7 @@ protected function commitBukuIndukWithPayload(
                 'tanggal' => $dt->toDateString(),
                 'nim' => $student->nim,
                 'nama_murid' => $student->nama,
-                'bimba_unit' => $bimbaUnit,
+                'bimba_unit' => $cleanBimbaUnit,        // ← Bersih juga di penerimaan
                 'no_cabang' => $noCabang,
                 'status' => $statusBI,
                 'guru' => $biNorm['guru'],
@@ -1016,17 +1130,28 @@ protected function commitBukuIndukWithPayload(
             $kwitansi = $pay['kwitansi'] ?? ('REG-' . $student->nim . '-' . time());
 
             Penerimaan::updateOrCreate(
-                [
-                    'nim' => $student->nim,
-                    'bulan' => strtolower(trim($penerimaanPayload['bulan'])),
-                    'tahun' => $penerimaanPayload['tahun'],
-                ],
+                ['nim' => $student->nim, 'bulan' => strtolower(trim($penerimaanPayload['bulan'])), 'tahun' => $penerimaanPayload['tahun']],
                 array_merge($penerimaanPayload, ['kwitansi' => $kwitansi])
             );
         }
 
-        Log::info("✅ SUKSES Commit Buku Induk (Reactivate jika keluar) | NIM: {$student->nim} | {$student->nama}");
+        Log::info("✅ SUKSES Commit Buku Induk | NIM: {$student->nim} | Unit: {$cleanBimbaUnit} | No Cabang: {$noCabang}");
     });
+}
+
+/**
+ * Bersihkan nama unit (hapus nomor cabang di depan)
+ */
+private function cleanUnitName(?string $unitName): string
+{
+    if (empty($unitName)) {
+        return '';
+    }
+
+    // Hapus pola seperti "05141 | ", "05141|", "05141 - ", dll
+    $clean = trim(preg_replace('/^\s*\d+\s*[\|\-]\s*/', '', $unitName));
+    
+    return $clean ?: trim($unitName);
 }
 
         

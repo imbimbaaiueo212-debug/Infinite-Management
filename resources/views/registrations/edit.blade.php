@@ -22,6 +22,10 @@
 
     @php
         $useOld = $errors->any();
+        $bi = $registration->bi ?? [];
+        if (is_string($bi)) $bi = json_decode($bi, true) ?? [];
+        
+        $trial = $trial ?? null;
     @endphp
 
     <div class="card">
@@ -32,77 +36,109 @@
                 @csrf
                 @method('PUT')
 
-                {{-- MURID --}}
+                {{-- IDENTITAS MURID --}}
+                <h5 class="mb-3">Identitas Murid</h5>
+
                 <div class="mb-3">
                     <label class="form-label fw-bold">Murid</label>
                     <select name="student_id" class="form-select" required>
                         @foreach ($students as $s)
                             <option value="{{ $s->id }}"
-                                {{ ($useOld ? old('student_id', $registration->student_id) : $registration->student_id) == $s->id ? 'selected' : '' }}>
-                                {{ $s->nim ?? '-' }} — {{ $s->nama }}
+                                {{ ($useOld ? old('student_id') : $registration->student_id) == $s->id ? 'selected' : '' }}
+                                data-unit="{{ $s->bimba_unit ?? '' }}"
+                                data-cabang="{{ $s->no_cabang ?? '' }}"
+                                data-nim="{{ $s->nim ?? '' }}"
+                                data-nama="{{ $s->nama ?? '' }}"
+                                data-tgllahir="{{ $s->tgl_lahir ?? '' }}">
+                                {{ $s->nim ?: '—' }} — {{ $s->nama }}
                             </option>
                         @endforeach
                     </select>
                 </div>
 
-                {{-- NIM & NAMA LENGKAP (Readonly + Hidden) - Sesuai Create --}}
                 <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label fw-bold">NIM</label>
-                        <input type="text" 
-                               class="form-control bg-light" 
-                               value="{{ $useOld ? old('bi.nim', $registration->nim ?? $biPrefill['nim'] ?? '') : ($registration->nim ?? $biPrefill['nim'] ?? '') }}"
-                               readonly>
-                        <input type="hidden" 
-                               name="bi[nim]" 
-                               value="{{ $useOld ? old('bi.nim', $registration->nim ?? $biPrefill['nim'] ?? '') : ($registration->nim ?? $biPrefill['nim'] ?? '') }}">
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label fw-bold text-primary">Tempat Lahir</label>
+                        <input type="text" class="form-control bg-light" readonly
+                               value="{{ $useOld ? old('bi[tempat_lahir]') : ($bi['tempat_lahir'] ?? $biPrefill['tempat_lahir'] ?? '') }}">
+                        <input type="hidden" name="bi[tempat_lahir]"
+                               value="{{ $useOld ? old('bi[tempat_lahir]') : ($bi['tempat_lahir'] ?? $biPrefill['tempat_lahir'] ?? '') }}">
+                    </div>
+
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label fw-bold text-primary">Tanggal Lahir</label>
+                        <input type="text" id="displayTglLahir" class="form-control bg-light" readonly
+                               value="{{ $useOld ? old('bi[tanggal_lahir]') : ($bi['tanggal_lahir'] ?? $biPrefill['tanggal_lahir'] ?? '') }}">
+                        <input type="hidden" name="bi[tanggal_lahir]" id="hiddenTglLahir"
+                               value="{{ $useOld ? old('bi[tanggal_lahir]') : ($bi['tanggal_lahir'] ?? $biPrefill['tanggal_lahir'] ?? '') }}">
+                    </div>
+
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label fw-bold text-primary">Usia</label>
+                        <input type="text" id="displayUsia" class="form-control bg-light" readonly>
+                        <input type="hidden" name="bi[usia]" id="hiddenUsia"
+                               value="{{ $useOld ? old('bi[usia]') : ($bi['usia'] ?? '') }}">
                     </div>
 
                     <div class="col-md-6 mb-3">
-                        <label class="form-label fw-bold">Nama Lengkap</label>
-                        <input type="text" 
-                               class="form-control bg-light" 
-                               value="{{ $useOld ? old('bi.nama', $registration->nama ?? $biPrefill['nama'] ?? '') : ($registration->nama ?? $biPrefill['nama'] ?? '') }}"
-                               readonly>
-                        <input type="hidden" 
-                               name="bi[nama]" 
-                               value="{{ $useOld ? old('bi.nama', $registration->nama ?? $biPrefill['nama'] ?? '') : ($registration->nama ?? $biPrefill['nama'] ?? '') }}">
+                        <label class="form-label fw-bold text-primary">Nama Orang Tua</label>
+                        <input type="text" class="form-control bg-light" readonly
+                               value="{{ $useOld ? old('bi[orangtua]') : ($bi['orangtua'] ?? $biPrefill['orangtua'] ?? '') }}">
+                        <input type="hidden" name="bi[orangtua]"
+                               value="{{ $useOld ? old('bi[orangtua]') : ($bi['orangtua'] ?? $biPrefill['orangtua'] ?? '') }}">
+                    </div>
+
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-bold text-primary">Nomor Telepon</label>
+                        <input type="text" class="form-control bg-light" readonly
+                               value="{{ $useOld ? old('bi[no_telp]') : ($bi['no_telp'] ?? $biPrefill['no_telp'] ?? '') }}">
+                        <input type="hidden" name="bi[no_telp]"
+                               value="{{ $useOld ? old('bi[no_telp]') : ($bi['no_telp'] ?? $biPrefill['no_telp'] ?? '') }}">
+                    </div>
+
+                    <div class="col-md-12 mb-3">
+                        <label class="form-label fw-bold text-primary">Alamat Lengkap</label>
+                        <input type="text" class="form-control bg-light" readonly
+                               value="{{ $useOld ? old('bi[alamat]') : ($bi['alamat'] ?? $biPrefill['alamat'] ?? '') }}">
+                        <input type="hidden" name="bi[alamat]"
+                               value="{{ $useOld ? old('bi[alamat]') : ($bi['alamat'] ?? $biPrefill['alamat'] ?? '') }}">
                     </div>
                 </div>
 
-                {{-- STATUS & TANGGAL DAFTAR --}}
+                {{-- UNIT & CABANG --}}
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-bold text-primary">Unit biMBA</label>
+                        <input type="text" id="displayUnit" class="form-control bg-light" readonly
+                               value="{{ $useOld ? old('bimba_unit') : $registration->bimba_unit }}">
+                        <input type="hidden" name="bimba_unit" id="hiddenUnit"
+                               value="{{ $useOld ? old('bimba_unit') : $registration->bimba_unit }}">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-bold text-primary">No Cabang</label>
+                        <input type="text" id="displayCabang" class="form-control bg-light" readonly
+                               value="{{ $useOld ? old('no_cabang') : $registration->no_cabang }}">
+                        <input type="hidden" name="no_cabang" id="hiddenCabang"
+                               value="{{ $useOld ? old('no_cabang') : $registration->no_cabang }}">
+                    </div>
+                </div>
+
+                {{-- STATUS & TANGGAL --}}
                 <div class="row">
                     <div class="col-md-6 mb-3">
                         <label class="form-label fw-bold">Status</label>
                         <select name="status" class="form-select" required>
-                            <option value="pending"  
-                                {{ ($useOld ? old('status') : $registration->status) === 'pending' ? 'selected' : '' }}>
-                                Pending
-                            </option>
-                            <option value="verified" 
-                                {{ ($useOld ? old('status') : $registration->status) === 'verified' ? 'selected' : '' }}>
-                                Verified
-                            </option>
-                            
+                            <option value="pending"  {{ ($useOld ? old('status') : $registration->status) === 'pending' ? 'selected' : '' }}>Pending</option>
+                            <option value="verified" {{ ($useOld ? old('status') : $registration->status) === 'verified' ? 'selected' : '' }}>Verified</option>
                             @if ($isAdmin)
-                                <option value="accepted" 
-                                    {{ ($useOld ? old('status') : $registration->status) === 'accepted' ? 'selected' : '' }}>
-                                    Accepted
-                                </option>
+                                <option value="accepted" {{ ($useOld ? old('status') : $registration->status) === 'accepted' ? 'selected' : '' }}>Accepted</option>
                             @else
-                                @if ($registration->status === 'accepted')
+                                @if (($useOld ? old('status') : $registration->status) === 'accepted')
                                     <option value="accepted" selected>Accepted (Hanya Admin)</option>
                                 @endif
                             @endif
-
-                            <option value="rejected" 
-                                {{ ($useOld ? old('status') : $registration->status) === 'rejected' ? 'selected' : '' }}>
-                                Rejected
-                            </option>
+                            <option value="rejected" {{ ($useOld ? old('status') : $registration->status) === 'rejected' ? 'selected' : '' }}>Rejected</option>
                         </select>
-                        @if (!$isAdmin)
-                            <small class="text-muted">Hanya Admin yang dapat mengubah status menjadi <strong>Accepted</strong>.</small>
-                        @endif
                     </div>
 
                     <div class="col-md-6 mb-3">
@@ -110,34 +146,63 @@
                         <input type="date" name="tanggal_daftar" class="form-control"
                                value="{{ $useOld ? old('tanggal_daftar') : optional($registration->tanggal_daftar)->format('Y-m-d') }}">
                     </div>
+
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-bold">Tanggal Mulai KBM</label>
+                        <input type="date" name="tanggal_penerimaan" class="form-control"
+                               value="{{ $useOld ? old('tanggal_penerimaan') : optional($registration->tanggal_penerimaan)->format('Y-m-d') }}">
+                    </div>
                 </div>
 
                 <hr class="my-4">
-                <h5 class="mb-3">Data Buku Induk</h5>
+
+                {{-- DATA BUKU INDUK & JADWAL --}}
+                <h5 class="mb-3">Data Buku Induk & Jadwal</h5>
 
                 <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Tahapan</label>
-                        <select name="bi[tahap]" class="form-control">
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label fw-bold">Hari</label>
+                        <input type="text" name="bi[hari]" class="form-control"
+                               value="{{ $useOld ? old('bi[hari]') : ($bi['hari'] ?? $biPrefill['hari'] ?? '') }}">
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label fw-bold">Jam</label>
+                        <input type="text" name="bi[jam]" class="form-control"
+                               value="{{ $useOld ? old('bi[jam]') : ($bi['jam'] ?? $biPrefill['jam'] ?? '') }}">
+                    </div>
+
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label fw-bold">Tahapan</label>
+                        <select name="bi[tahap]" class="form-control" id="tahap">
                             <option value="">-- Pilih Tahapan --</option>
                             @foreach ($tahapanOptions as $t)
-                                <option value="{{ $t }}" {{ ($useOld ? old('bi.tahap') : $biPrefill['tahap']) === $t ? 'selected' : '' }}>{{ $t }}</option>
+                                <option value="{{ $t }}" {{ ($useOld ? old('bi.tahap') : ($bi['tahap'] ?? $biPrefill['tahap'] ?? '')) === $t ? 'selected' : '' }}>{{ $t }}</option>
                             @endforeach
                         </select>
                     </div>
+                </div>
 
+                <div class="row">
                     <div class="col-md-6 mb-3">
                         <label class="form-label">Kelas</label>
                         <select name="bi[kelas]" class="form-control">
                             <option value="">-- Pilih Kelas --</option>
                             @foreach ($kelasOptions as $k)
-                                <option value="{{ $k }}" {{ ($useOld ? old('bi.kelas') : $biPrefill['kelas']) === $k ? 'selected' : '' }}>{{ $k }}</option>
+                                <option value="{{ $k }}" {{ ($useOld ? old('bi.kelas') : ($bi['kelas'] ?? $biPrefill['kelas'] ?? '')) === $k ? 'selected' : '' }}>{{ $k }}</option>
                             @endforeach
                         </select>
                     </div>
-                </div>
 
-                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-bold">Guru Pengajar</label>
+                        <select name="bi[guru]" class="form-control">
+                            <option value="">-- Pilih Guru --</option>
+                            @foreach ($guruOptions as $g)
+                                <option value="{{ $g }}" {{ ($useOld ? old('bi.guru') : ($bi['guru'] ?? $biPrefill['guru'] ?? '')) == $g ? 'selected' : '' }}>{{ $g }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
                     <div class="col-md-6 mb-3">
                         <label class="form-label">Gol</label>
                         <select name="bi[gol]" id="bi_gol" class="form-control">
@@ -145,7 +210,7 @@
                             @foreach ($hargaSaptataruna->unique('kode') as $row)
                                 @if ($row->kode)
                                     <option value="{{ $row->kode }}" 
-                                        {{ ($useOld ? old('bi.gol') : $biPrefill['gol']) === $row->kode ? 'selected' : '' }}>
+                                        {{ ($useOld ? old('bi.gol') : ($bi['gol'] ?? $biPrefill['gol'] ?? '')) === $row->kode ? 'selected' : '' }}>
                                         {{ $row->kode }}
                                     </option>
                                 @endif
@@ -159,7 +224,7 @@
                             <option value="">-- Pilih KD --</option>
                             @foreach ($kdOptions as $kd)
                                 <option value="{{ $kd }}" 
-                                    {{ ($useOld ? old('bi.kd') : $biPrefill['kd']) === $kd ? 'selected' : '' }}>
+                                    {{ ($useOld ? old('bi.kd') : ($bi['kd'] ?? $biPrefill['kd'] ?? '')) === $kd ? 'selected' : '' }}>
                                     {{ $kd }}
                                 </option>
                             @endforeach
@@ -168,57 +233,72 @@
 
                     <div class="col-md-6 mb-3">
                         <label class="form-label">SPP (Rp)</label>
-                        <input type="text" id="bi_spp_display" class="form-control"
-                               value="{{ $useOld ? old('bi.spp') : $biPrefill['spp'] }}">
-                        <input type="hidden" name="bi[spp]" id="bi_spp" 
-                               value="{{ $useOld ? old('bi.spp') : $biPrefill['spp'] }}">
+                        <input type="text" id="bi_spp_display" class="form-control bg-light" readonly>
+                        <input type="hidden" name="bi[spp]" id="bi_spp"
+                               value="{{ $useOld ? old('bi.spp') : ($bi['spp'] ?? $biPrefill['spp'] ?? '') }}">
                     </div>
+                </div>
 
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Guru</label>
-                        <select name="bi[guru]" class="form-control">
-                            <option value="">-- Pilih Guru --</option>
-                            @foreach ($guruOptions as $g)
-                                <option value="{{ $g }}" 
-                                    {{ ($useOld ? old('bi.guru') : $biPrefill['guru']) == $g ? 'selected' : '' }}>
-                                    {{ $g }}
-                                </option>
+                {{-- Jenis KBM & Level --}}
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label fw-bold">Jenis KBM</label>
+                        <select name="bi[jenis_kbm]" class="form-control">
+                            <option value="">-- Pilih Jenis KBM --</option>
+                            @foreach($jenisKbmOptions ?? [] as $jk)
+                                <option value="{{ $jk }}" {{ ($useOld ? old('bi.jenis_kbm') : ($bi['jenis_kbm'] ?? '')) === $jk ? 'selected' : '' }}>{{ $jk }}</option>
                             @endforeach
-                            @php
-                                $currentGuru = $useOld ? old('bi.guru') : $biPrefill['guru'];
-                            @endphp
-                            @if ($currentGuru && !in_array($currentGuru, $guruOptions))
-                                <option value="{{ $currentGuru }}" selected>
-                                    {{ $currentGuru }} (Data Lama)
-                                </option>
-                            @endif
                         </select>
                     </div>
 
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Kode Jadwal</label>
-                        <select name="bi[kode_jadwal]" class="form-control">
-                            <option value="">-- Pilih Kode Jadwal --</option>
-                            @foreach ($kodeJadwalOptions as $kj)
-                                <option value="{{ $kj }}" {{ ($useOld ? old('bi.kode_jadwal') : $biPrefill['kode_jadwal']) === $kj ? 'selected' : '' }}>
-                                    {{ $kj }}
-                                </option>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label fw-bold">Level</label>
+                        <select name="bi[level]" id="level" class="form-control">
+                            <option value="">-- Pilih Level --</option>
+                            @foreach($levelOptions ?? [] as $l)
+                                <option value="{{ $l }}" {{ ($useOld ? old('bi.level') : ($bi['level'] ?? '')) === $l ? 'selected' : '' }}>{{ $l }}</option>
                             @endforeach
                         </select>
+                    </div>
+
+                    <div class="col-md-4 mb-3" id="tgl_level_wrapper" style="display: none;">
+                        <label class="form-label fw-bold text-success">Tanggal Level</label>
+                        <input type="date" name="bi[tgl_level]" id="tgl_level" class="form-control"
+                               value="{{ $useOld ? old('bi.tgl_level') : ($bi['tgl_level'] ?? '') }}">
                     </div>
                 </div>
 
                 <hr class="my-4">
+                <h5 class="mb-3">Supply Modul & Keterangan</h5>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-bold">Asal Modul</label>
+                        <select name="bi[asal_modul]" class="form-control">
+                            <option value="">-- Pilih Asal Modul --</option>
+                            @foreach($asalModulOptions ?? [] as $am)
+                                <option value="{{ $am }}" {{ ($useOld ? old('bi.asal_modul') : ($bi['asal_modul'] ?? '')) === $am ? 'selected' : '' }}>{{ $am }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-bold">Keterangan Optional</label>
+                        <input type="text" name="bi[keterangan_optional]" class="form-control"
+                               value="{{ $useOld ? old('bi.keterangan_optional') : ($bi['keterangan_optional'] ?? '') }}">
+                    </div>
+                </div>
+
+                {{-- PENERIMAAN / KWITANSI --}}
+                <hr class="my-4">
                 <h5 class="mb-3">Penerimaan / Kwitansi</h5>
 
                 <div class="row g-3">
-                    <!-- Penerimaan fields tetap sama seperti sebelumnya -->
                     <div class="col-md-4">
                         <label class="form-label">No. Kwitansi</label>
                         <input type="text" name="kwitansi" class="form-control"
                                value="{{ $useOld ? old('kwitansi') : $registration->kwitansi }}">
                     </div>
-
                     <div class="col-md-4">
                         <label class="form-label">Via</label>
                         <select name="via" class="form-select">
@@ -227,7 +307,6 @@
                             <option value="Transfer" {{ ($useOld ? old('via') : $registration->via) === 'Transfer' ? 'selected' : '' }}>Transfer</option>
                         </select>
                     </div>
-
                     <div class="col-md-4">
                         <label class="form-label">Tanggal Penerimaan</label>
                         <input type="date" name="tanggal_penerimaan" class="form-control"
@@ -239,37 +318,31 @@
                         <input type="text" name="daftar" class="form-control money-format"
                                value="{{ $useOld ? old('daftar') : $registration->daftar }}">
                     </div>
-
                     <div class="col-md-4">
                         <label class="form-label">Kaos (Rp)</label>
                         <input type="text" name="kaos" class="form-control money-format"
                                value="{{ $useOld ? old('kaos') : $registration->kaos }}">
                     </div>
-
                     <div class="col-md-4">
                         <label class="form-label">KPK (Rp)</label>
                         <input type="text" name="kpk" class="form-control money-format"
                                value="{{ $useOld ? old('kpk') : $registration->kpk }}">
                     </div>
-
                     <div class="col-md-4">
                         <label class="form-label">Tas (Rp)</label>
                         <input type="text" name="tas" class="form-control money-format"
                                value="{{ $useOld ? old('tas') : $registration->tas }}">
                     </div>
-
                     <div class="col-md-4">
                         <label class="form-label">Sertifikat (Rp)</label>
                         <input type="text" name="sertifikat" class="form-control money-format"
                                value="{{ $useOld ? old('sertifikat') : $registration->sertifikat }}">
                     </div>
-
                     <div class="col-md-4">
                         <label class="form-label">STPB (Rp)</label>
                         <input type="text" name="stpb" class="form-control money-format"
                                value="{{ $useOld ? old('stpb') : $registration->stpb }}">
                     </div>
-
                     <div class="col-md-4">
                         <label class="form-label">Lain-lain (Rp)</label>
                         <input type="text" name="lain_lain" class="form-control money-format"
@@ -277,7 +350,7 @@
                     </div>
                 </div>
 
-                {{-- Attachment --}}
+                {{-- ATTACHMENT --}}
                 <div class="mb-4 mt-4">
                     <label class="form-label">Upload Dokumen Baru (Opsional)</label>
                     @if ($registration->attachment_path)
@@ -299,18 +372,76 @@
     </div>
 </div>
 
-{{-- Script SPP Auto + Money Format --}}
+@push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    const mapping = @json($sppMapping);
+
+    // ==================== AUTO FILL MURID ====================
+    const studentSelect = document.getElementById('studentSelect');
+
+    function fillStudentData(option) {
+        if (!option) return;
+
+        document.getElementById('displayTempatLahir').value = option.dataset.tempatlahir || '';
+        document.getElementById('hiddenTempatLahir').value = option.dataset.tempatlahir || '';
+
+        document.getElementById('displayTglLahir').value = option.dataset.tgllahir || '';
+        document.getElementById('hiddenTglLahir').value = option.dataset.tgllahir || '';
+
+        document.getElementById('displayOrangTua').value = option.dataset.orangtua || '';
+        document.getElementById('hiddenOrangTua').value = option.dataset.orangtua || '';
+
+        document.getElementById('displayNoTelp').value = option.dataset.notelp || '';
+        document.getElementById('hiddenNoTelp').value = option.dataset.notelp || '';
+
+        document.getElementById('displayAlamat').value = option.dataset.alamat || '';
+        document.getElementById('hiddenAlamat').value = option.dataset.alamat || '';
+
+        document.getElementById('displayUnit').value = option.dataset.unit || '';
+        document.getElementById('hiddenUnit').value = option.dataset.unit || '';
+
+        document.getElementById('displayCabang').value = option.dataset.cabang || '';
+        document.getElementById('hiddenCabang').value = option.dataset.cabang || '';
+
+        hitungUsia();
+    }
+
+    if (studentSelect) {
+        studentSelect.addEventListener('change', function() {
+            fillStudentData(this.options[this.selectedIndex]);
+        });
+        // Load data saat pertama kali
+        fillStudentData(studentSelect.options[studentSelect.selectedIndex]);
+    }
+
+    // ==================== HITUNG USIA ====================
+    function hitungUsia() {
+        const tgl = document.getElementById('hiddenTglLahir');
+        const display = document.getElementById('displayUsia');
+        if (!tgl?.value || !display) return;
+
+        let birth = new Date(tgl.value);
+        let today = new Date();
+        let years = today.getFullYear() - birth.getFullYear();
+        let months = today.getMonth() - birth.getMonth();
+
+        if (months < 0 || (months === 0 && today.getDate() < birth.getDate())) {
+            years--; months += 12;
+        }
+
+        display.value = `${years} tahun ${months} bulan`;
+    }
+
+    // ==================== SPP AUTO FILL ====================
+    const mapping = @json($sppMapping ?? []);
     const gol = document.getElementById('bi_gol');
     const kd  = document.getElementById('bi_kd');
     const sppHidden = document.getElementById('bi_spp');
     const sppDisplay = document.getElementById('bi_spp_display');
 
     function updateSPP() {
-        const g = gol.value;
-        const k = kd.value;
+        const g = (gol?.value || '').trim().toUpperCase();
+        const k = (kd?.value || '').trim().toUpperCase();
         if (mapping[g] && mapping[g][k] !== undefined) {
             const val = parseInt(mapping[g][k]);
             sppHidden.value = val;
@@ -318,17 +449,32 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    gol.addEventListener('change', updateSPP);
-    kd.addEventListener('change', updateSPP);
+    if (gol) gol.addEventListener('change', updateSPP);
+    if (kd)  kd.addEventListener('change', updateSPP);
+    setTimeout(updateSPP, 400);
 
+    // ==================== MONEY FORMAT ====================
     document.querySelectorAll('.money-format').forEach(el => {
-        el.addEventListener('input', () => {
-            let val = el.value.replace(/\D/g, '');
-            if (val) el.value = new Intl.NumberFormat('id-ID').format(parseInt(val));
+        el.addEventListener('input', function () {
+            let val = this.value.replace(/\D/g, '');
+            if (val) this.value = new Intl.NumberFormat('id-ID').format(parseInt(val));
         });
     });
 
-    if (!sppDisplay.value) updateSPP();
+    // ==================== TOGGLE TANGGAL ====================
+    const toggle = (selectId, wrapperId) => {
+        const sel = document.getElementById(selectId);
+        const wrap = document.getElementById(wrapperId);
+        if (!sel || !wrap) return;
+        sel.addEventListener('change', () => wrap.style.display = sel.value ? 'block' : 'none');
+        setTimeout(() => wrap.style.display = sel.value ? 'block' : 'none', 300);
+    };
+
+    toggle('tahap', 'tgl_tahapan_wrapper');
+    toggle('level', 'tgl_level_wrapper');
+
+    setTimeout(hitungUsia, 600);
 });
 </script>
+@endpush
 @endsection

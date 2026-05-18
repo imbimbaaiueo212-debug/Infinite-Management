@@ -1326,6 +1326,39 @@ function hitungDaftar() {
         }, 300);
     @endif
 });
+
+    // ==================== AUTO FILL LENGKAP DARI REGISTRASI ====================
+    @if($selectedNim)
+    setTimeout(function() {
+        const $nimSelect = $('#nimSelect');
+        
+        if ($nimSelect.length) {
+            // Set value
+            $nimSelect.val('{{ $selectedNim }}');
+            
+            // Trigger Select2 dengan cara paling kuat
+            $nimSelect.trigger('change');
+            $nimSelect.trigger('change.select2');
+            
+            // Force trigger event handler secara manual
+            const selectedOption = $nimSelect.find('option[value="{{ $selectedNim }}"]');
+            if (selectedOption.length) {
+                const e = $.Event('select2:select', {
+                    params: {
+                        data: {
+                            id: '{{ $selectedNim }}',
+                            text: selectedOption.text(),
+                            element: selectedOption[0]
+                        }
+                    }
+                });
+                $nimSelect.trigger(e);
+            }
+
+            console.log('✅ Auto fill lengkap untuk NIM: {{ $selectedNim }}');
+        }
+    }, 900); // delay lebih panjang agar Select2 benar-benar siap
+    @endif
 </script>
 
 <style>

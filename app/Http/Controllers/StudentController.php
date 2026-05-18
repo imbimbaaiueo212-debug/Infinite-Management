@@ -876,39 +876,65 @@ protected function fixAllNoCabang(): void
     // importFromSheet: panggil command dan lalu buat registrasi otomatis
     // serta pasca-import isi no_cabang secara deterministik
     // -------------------------------------------------------------------------
-       public function importFromSheet(Request $request)
-    {
-        $sheet = $request->input('sheet', 'Registrasi');
-        $user  = Auth::user();
+       // -------------------------------------------------------------------------
+// importFromSheet: panggil command dan lalu buat registrasi otomatis
+// serta pasca-import isi no_cabang secara deterministik
+// -------------------------------------------------------------------------
+public function importFromSheet(Request $request)
+{
+    $sheet = $request->input('sheet', 'Registrasi');
+    $user  = Auth::user();
 
-        Log::info("Mulai import sheet via web", [
-            'sheet' => $sheet,
-            'user'  => $user?->name ?? 'unknown',
-            'role'  => $user?->role ?? 'unknown'
-        ]);
+    Log::info("Mulai import sheet via web", [
+        'sheet' => $sheet,
+        'user'  => $user?->name ?? 'unknown',
+        'role'  => $user?->role ?? 'unknown'
+    ]);
 
-        $unitFilter = null;
-        if ($user && !in_array($user->role ?? '', ['admin', 'superadmin'])) {
-            $unitFilter = $user->bimba_unit;
-        }
-
-        // Jalankan import command
-        $exitCode = Artisan::call('forms:import-students', [
-            'sheet'  => $sheet,
-            '--unit' => $unitFilter,
-        ]);
-
-        // Proses tambahan setelah import
-        $this->createPendingRegistrations();
-        $this->fixAllNoCabang();
-
-        $message = "✅ Import sheet '{$sheet}' selesai!";
-        if ($unitFilter) {
-            $message .= " (Hanya unit: {$unitFilter})";
-        }
-
-        return back()->with('success', $message);
+    $unitFilter = null;
+    if ($user && !in_array($user->role ?? '', ['admin', 'superadmin'])) {
+        $unitFilter = $user->bimba_unit;
     }
+
+    // Jalankan import command
+    $exitCode = Artisan::call('forms:import-students', [
+        'sheet'  => $sheet,
+        '--unit' => $unitFilter,
+    ]);
+
+    // === PERBAIKAN UTAMA: Set default status 'daftar_baru' setelah import ===
+    $this->setDefaultDaftarBaruStatus();
+
+    // Proses tambahan yang sudah ada
+    $this->createPendingRegistrations();
+    $this->fixAllNoCabang();
+
+    $message = "✅ Import sheet '{$sheet}' selesai!";
+    if ($unitFilter) {
+        $message .= " (Hanya unit: {$unitFilter})";
+    }
+
+    return back()->with('success', $message);
+}
+
+    /**
+ * Set default status 'daftar_baru' untuk MuridTrial yang baru diimport
+ * dan belum punya status
+ */
+protected function setDefaultDaftarBaruStatus(): void
+{
+    $updated = MuridTrial::whereNull('status_trial')
+        ->orWhere('status_trial', '')
+        ->orWhere('status_trial', 'baru')           // ubah yang lama 'baru' jadi 'daftar_baru'
+        ->update([
+            'status_trial'       => 'daftar_baru',
+            'tanggal_trial_baru' => DB::raw('COALESCE(tanggal_trial_baru, waktu_submit, created_at)'),
+        ]);
+
+    if ($updated > 0) {
+        Log::info("setDefaultDaftarBaruStatus: {$updated} record MuridTrial diubah menjadi 'daftar_baru'");
+    }
+}
 
 /**
      * Buat Registration otomatis untuk murid Direct (non-trial)
@@ -1049,10 +1075,11 @@ protected function preventDuplicateStudents(): void
     'bimba_unit'   => $student->bimba_unit,
     'no_cabang'    => $student->no_cabang,
 
-    // ambil dari student
     'tanggal_trial_baru' => $student->tanggal_masuk
-        ?? $student->created_at
-        ?? now(),
+    ? Carbon::parse($student->tanggal_masuk)->format('Y-m-d')
+    : ($student->created_at
+        ? Carbon::parse($student->created_at)->format('Y-m-d')
+        : now()->format('Y-m-d')),
 ]);
 
     $student->murid_trial_id = $trial->id;
