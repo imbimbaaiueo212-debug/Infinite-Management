@@ -115,6 +115,49 @@ class BukuIndukImport implements ToCollection, WithHeadingRow, WithStartRow
             /* =====================================================
              * DATA FINAL
              * ===================================================== */
+            /* =====================================================
+            * KONVERSI KODE JADWAL
+            * ===================================================== */
+            $kodeJadwalExcel = trim($row['jadwal'] ?? '');
+
+            $kodeJadwal = $kodeJadwalExcel;
+
+            if (is_numeric($kodeJadwalExcel)) {
+
+                $kode = (int) $kodeJadwalExcel;
+
+                if ($kode >= 108 && $kode <= 116) {
+
+                    $jam = substr($kode, -2);
+
+                    $kodeJadwal = 'SRJ | Senin | Rabu | Jumat | ' . $jam . ':00 WIB';
+
+                } elseif ($kode >= 208 && $kode <= 211) {
+
+                    $jam = substr($kode, -2);
+
+                    $kodeJadwal = 'SKS | Selasa | Kamis | Sabtu | ' . $jam . ':00 WIB';
+
+                } elseif ($kode >= 308 && $kode <= 311) {
+
+                    $jam = substr($kode, -2);
+
+                    $kodeJadwal = 'S6 | Senin | Selasa | Rabu | Kamis | Jumat | Sabtu | ' . $jam . ':00 WIB';
+                }
+            }
+            // =========================
+            // HARI & JAM
+            // =========================
+            $hariJam = trim($row[40] ?? '');
+
+            // Jika kosong ambil dari kode jadwal
+            if (empty($hariJam) && !empty($kodeJadwal)) {
+
+                if (preg_match('/(\d{2}:\d{2}\s*WIB)/i', $kodeJadwal, $matches)) {
+
+                    $hariJam = $matches[1];
+                }
+            }
             $data = [
                 'nim'                  => $nim,
                 'nama'                 => trim($row[3] ?? ''),
@@ -148,8 +191,8 @@ class BukuIndukImport implements ToCollection, WithHeadingRow, WithStartRow
                 'level'                => trim($row[26] ?? ''),
                 'tgl_level'            => $this->convertExcelDate($row[27] ?? null)?->format('Y-m-d'),
                 'jenis_kbm'            => trim($row[28] ?? ''),
-                'kode_jadwal' => trim($row['jadwal'] ?? ''),
-                'hari_jam'             => trim($row[40] ?? ''),
+                'kode_jadwal'          => $kodeJadwal,
+                'hari_jam'             => $hariJam,
                 'periode' => $this->normalizePeriode(
                         $row['masa_aktif_dhuafa_bnf'] ?? ''
                     ),

@@ -317,4 +317,23 @@ public function cutiMurid()
 {
     return $this->hasMany(CutiMurid::class);
 }
+
+public function student()
+{
+    return $this->hasOne(Student::class, 'nim', 'nim');
+}
+
+public function getTanggalAktifAttribute()
+{
+    $tanggalPenerimaan = optional(
+        $this->student?->registrations
+            ?->sortByDesc('tanggal_penerimaan')
+            ?->first()
+    )->tanggal_penerimaan;
+
+    return $tanggalPenerimaan ?? $this->tgl_masuk;
+}
+
+
+
 }

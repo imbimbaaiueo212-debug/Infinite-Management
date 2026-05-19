@@ -6,7 +6,7 @@
     <div class="card card-body">
         <div class="card shadow-sm">
             <div class="card-header d-flex justify-content-between align-items-center bg-primary text-white">
-                <h5 class="mb-0">Data Murid Trial</h5>
+                <h5 class="mb-0 text-dark">Data Murid Trial</h5>
             </div>
 
             {{-- Alerts --}}
@@ -72,9 +72,9 @@
                 {{-- TABLE --}}
                 <div class="table-responsive">
                     <table class="table table-bordered table-striped align-middle">
-                        <thead class="table-primary text-center">
+                        <thead class="table-light text-center">
                             <tr>
-                                <th colspan="16" class="fs-5">DATA MURID TRIAL</th>
+                                <th colspan="16" class="fs-5">DETAIL MURID TRIAL</th>
                             </tr>
                             <tr>
                                 <th width="50">No</th>

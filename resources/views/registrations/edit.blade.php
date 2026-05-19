@@ -289,66 +289,7 @@
                     </div>
                 </div>
 
-                {{-- PENERIMAAN / KWITANSI --}}
-                <hr class="my-4">
-                <h5 class="mb-3">Penerimaan / Kwitansi</h5>
-
-                <div class="row g-3">
-                    <div class="col-md-4">
-                        <label class="form-label">No. Kwitansi</label>
-                        <input type="text" name="kwitansi" class="form-control"
-                               value="{{ $useOld ? old('kwitansi') : $registration->kwitansi }}">
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Via</label>
-                        <select name="via" class="form-select">
-                            <option value="">-- Pilih Via --</option>
-                            <option value="Cash"     {{ ($useOld ? old('via') : $registration->via) === 'Cash' ? 'selected' : '' }}>Cash</option>
-                            <option value="Transfer" {{ ($useOld ? old('via') : $registration->via) === 'Transfer' ? 'selected' : '' }}>Transfer</option>
-                        </select>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Tanggal Penerimaan</label>
-                        <input type="date" name="tanggal_penerimaan" class="form-control"
-                               value="{{ $useOld ? old('tanggal_penerimaan') : optional($registration->tanggal_penerimaan)->format('Y-m-d') }}">
-                    </div>
-
-                    <div class="col-md-4">
-                        <label class="form-label">Daftar (Rp)</label>
-                        <input type="text" name="daftar" class="form-control money-format"
-                               value="{{ $useOld ? old('daftar') : $registration->daftar }}">
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Kaos (Rp)</label>
-                        <input type="text" name="kaos" class="form-control money-format"
-                               value="{{ $useOld ? old('kaos') : $registration->kaos }}">
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">KPK (Rp)</label>
-                        <input type="text" name="kpk" class="form-control money-format"
-                               value="{{ $useOld ? old('kpk') : $registration->kpk }}">
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Tas (Rp)</label>
-                        <input type="text" name="tas" class="form-control money-format"
-                               value="{{ $useOld ? old('tas') : $registration->tas }}">
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Sertifikat (Rp)</label>
-                        <input type="text" name="sertifikat" class="form-control money-format"
-                               value="{{ $useOld ? old('sertifikat') : $registration->sertifikat }}">
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">STPB (Rp)</label>
-                        <input type="text" name="stpb" class="form-control money-format"
-                               value="{{ $useOld ? old('stpb') : $registration->stpb }}">
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Lain-lain (Rp)</label>
-                        <input type="text" name="lain_lain" class="form-control money-format"
-                               value="{{ $useOld ? old('lain_lain') : $registration->lain_lain }}">
-                    </div>
-                </div>
+                
 
                 {{-- ATTACHMENT --}}
                 <div class="mb-4 mt-4">
