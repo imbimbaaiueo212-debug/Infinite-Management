@@ -785,7 +785,7 @@ if (array_key_exists('installment_id', $fields)) {
     $updated = 0;
     $errors  = [];
 
-    $labelBulan = trim($labelBulan);
+    $labelBulan = trim(preg_replace('/\s+/', ' ', $labelBulan));
 
     $normalize = fn($str) => strtoupper(preg_replace('/\s+/', '', $str ?? ''));
 
@@ -810,9 +810,11 @@ if (array_key_exists('installment_id', $fields)) {
     try {
         app(\App\Http\Controllers\PotonganTunjanganController::class)
             ->runSyncFromAbsensi($bulanFormatYm);
-    } catch (\Throwable $e) {}
+    } catch (\Throwable $e) {
+        Log::warning("Gagal sync potongan: " . $e->getMessage());
+    }
 
-    // ==================== AMBIL PROFILE (LEBIH LONGGAR) ====================
+    // ==================== AMBIL PROFILE ====================
     $profiles = Profile::where(function ($q) {
             $q->whereNull('status_karyawan')
               ->orWhere('status_karyawan', '')
@@ -820,21 +822,20 @@ if (array_key_exists('installment_id', $fields)) {
               ->orWhere('status_karyawan', 'aktif')
               ->orWhere('status_karyawan', 'Magang')
               ->orWhere('status_karyawan', 'magang')
-              ->orWhere('status_karyawan', 'Kepala Unit')   // tambahan
-              ->orWhere('status_karyawan', 'Kepala');       // tambahan
+              ->orWhere('status_karyawan', 'Kepala Unit')
+              ->orWhere('status_karyawan', 'Kepala');
         })
         ->orderBy('nama')
         ->get();
 
-    // Debug: berapa profile yang diambil
-    Log::info("Generate Rekap {$labelBulan} - Jumlah Profile Aktif: " . $profiles->count());
+    Log::info("Generate Rekap {$labelBulan} - Jumlah Profile: " . $profiles->count());
 
     if ($profiles->isEmpty()) {
         return [
             'created' => 0,
             'updated' => 0,
             'total'   => 0,
-            'errors'  => ['Tidak ada profile aktif ditemukan. Cek data status_karyawan di tabel profiles.']
+            'errors'  => ['Tidak ada profile aktif ditemukan.']
         ];
     }
 
@@ -858,17 +859,18 @@ if (array_key_exists('installment_id', $fields)) {
 
     foreach ($profiles as $p) {
         try {
+            // === firstOrNew dengan profile_id + bulan ===
             $rekap = ImbalanRekap::firstOrNew([
-                'nama'  => $p->nama,
-                'bulan' => $labelBulan
+                'profile_id' => $p->id,
+                'bulan'      => $labelBulan
             ]);
 
             $isNew = !$rekap->exists;
             $isMagang = strtolower(trim($p->status_karyawan ?? '')) === 'magang';
 
             // RB Awal
-            $rbAwal = ($p->jabatan === 'Kepala Unit' || str_contains(strtolower($p->jabatan ?? ''), 'kepala')) ? 40 : 30;
-            $rbAwal = $extractRbNumber($p->rb ?? $p->rb_tambahan, $rbAwal);
+            $rbAwal = (str_contains(strtolower($p->jabatan ?? ''), 'kepala')) ? 40 : 30;
+            $rbAwal = $extractRbNumber($p->rb ?? $p->rb_tambahan ?? '', $rbAwal);
 
             $ktrInput = trim($p->ktr ?? $p->ktr_tambahan ?? '');
 
@@ -970,7 +972,7 @@ if (array_key_exists('installment_id', $fields)) {
 
         } catch (\Throwable $e) {
             $errors[] = $p->nama . ' => ' . $e->getMessage();
-            Log::error("Gagal generate rekap {$p->nama}", ['error' => $e->getMessage()]);
+            Log::error("Gagal generate rekap {$p->nama} untuk {$labelBulan}", ['error' => $e->getMessage()]);
         }
     }
 
