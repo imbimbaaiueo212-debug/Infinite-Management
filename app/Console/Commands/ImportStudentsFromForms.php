@@ -306,13 +306,34 @@ class ImportStudentsFromForms extends Command
     };
 
     $normHari = function ($v) use ($normStr) {
-        $v = $normStr($v);
-        if (!$v) return null;
-        if (str_contains($v, ',')) $v = trim(strtok($v, ','));
-        $map = ['seini'=>'Senin','senin'=>'Senin','selasa'=>'Selasa','rabu'=>'Rabu','kamis'=>'Kamis','jumat'=>'Jumat',"jum'at"=>'Jumat','sabtu'=>'Sabtu','minggu'=>'Minggu'];
-        $x = strtolower($v);
-        return $map[$x] ?? ucwords($x);
-    };
+    $v = $normStr($v);
+    if (!$v) return null;
+
+    // Ambil bagian sebelum koma (kalau ada)
+    if (str_contains($v, ',')) {
+        $v = trim(strtok($v, ','));
+    }
+
+    $v = trim($v);
+
+    $map = [
+        'senin'     => 'SENIN',
+        'seini'     => 'SENIN',
+        'selasa'    => 'SELASA',
+        'rabu'      => 'RABU',
+        'kamis'     => 'KAMIS',
+        'jumat'     => 'JUMAT',
+        "jum'at"    => 'JUMAT',
+        'sabtu'     => 'SABTU',
+        'minggu'    => 'MINGGU',
+        'srj'       => 'SRJ',     // tambahkan ini
+        's.r.j'     => 'SRJ',
+        's r j'     => 'SRJ',
+    ];
+
+    $key = strtolower($v);
+    return $map[$key] ?? strtoupper($v);   // Gunakan strtoupper() untuk kapital semua
+};
 
     $normJam = function ($v) use ($normStr) {
         $v = $normStr($v);

@@ -127,14 +127,14 @@
                         @forelse ($bukuInduk as $index => $item)
                             <tr 
                             @class([
-                            'table-danger'  => $item->tgl_keluar && strtolower($item->status ?? '') === 'keluar',
+    'table-danger'  => $item->tgl_keluar && strtolower($item->status ?? '') === 'keluar',
 
-                            'table-primary' => strtolower($item->status ?? '') === 'baru',
+    'table-primary' => strtolower($item->status ?? '') === 'baru',
 
-                            'table-warning' => strtolower($item->status ?? '') === 'cuti',
+    'table-warning' => strtolower($item->status ?? '') === 'cuti',
 
-                            'card-body',
-                        ])>
+    'card-body',
+])>
 
                                 <!-- NIM -->
                                 <td>{{ $item->nim ?? '-' }}</td>
@@ -146,189 +146,56 @@
                                     Tahap: {{ $item->tahap ?? '-' }}<br>
                                     Gol: {{ $item->gol ?? '-' }} | KD: {{ $item->kd ?? '-' }}<br>
                                     SPP: Rp {{ number_format((int) str_replace('.', '', $item->spp ?? '0'), 0, ',', '.') }}<br>
-                                    @php
-                                        $tanggalAktif = optional(
-                                            $item->student?->registrations()
-                                                ->latest('tanggal_penerimaan')
-                                                ->first()
-                                        )->tanggal_penerimaan ?? $item->tgl_masuk;
-
-                                        $bulanAktif = $tanggalAktif
-                                            ? \Carbon\Carbon::parse($tanggalAktif)->translatedFormat('F Y')
-                                            : '-';
-                                    @endphp
-
-                                    Bulan: {{ $bulanAktif }}<br>
-                                    
-                                    @php
-                                            $jadwalText = '-';
-
-                                            // ====================== PRIORITAS 1: DARI IMPORT (kode_jadwal) ======================
-                                            if (!empty($item->kode_jadwal)) {
-
-                                                $kode = trim($item->kode_jadwal);
-
-                                                // Jika hasil import format lengkap
-                                                if (str_contains($kode, '|')) {
-
-                                                    $jadwalText = trim(explode('|', $kode)[0]);
-
-                                                } else {
-
-                                                    // Format numeric lama
-                                                    $num = (int) $kode;
-
-                                                    if ($num >= 108 && $num <= 116) {
-
-                                                        $jadwalText = 'SRJ';
-
-                                                    } elseif ($num >= 208 && $num <= 211) {
-
-                                                        $jadwalText = 'SKS';
-
-                                                    } elseif ($num >= 308 && $num <= 311) {
-
-                                                        $jadwalText = 'S6';
-                                                    }
-                                                }
-                                            }
-
-                                            // ====================== PRIORITAS 2: DARI STUDENT ======================
-                                            else {
-
-                                                $student = \App\Models\Student::where('nim', $item->nim)->first();
-
-                                                if ($student && !empty($student->hari)) {
-
-                                                    $hariRaw = strtoupper(trim(strip_tags($student->hari)));
-
-                                                    if (
-                                                        str_contains($hariRaw, 'SENIN') &&
-                                                        str_contains($hariRaw, 'RABU') &&
-                                                        str_contains($hariRaw, 'JUMAT')
-                                                    ) {
-
-                                                        $jadwalText = 'SRJ';
-
-                                                    } elseif (
-                                                        str_contains($hariRaw, 'SELASA') &&
-                                                        str_contains($hariRaw, 'KAMIS') &&
-                                                        str_contains($hariRaw, 'SABTU')
-                                                    ) {
-
-                                                        $jadwalText = 'SKS';
-
-                                                    } elseif (
-                                                        str_contains($hariRaw, 'SENIN') &&
-                                                        str_contains($hariRaw, 'SELASA') &&
-                                                        str_contains($hariRaw, 'RABU') &&
-                                                        str_contains($hariRaw, 'KAMIS') &&
-                                                        str_contains($hariRaw, 'JUMAT') &&
-                                                        str_contains($hariRaw, 'SABTU')
-                                                    ) {
-
-                                                        $jadwalText = 'S6';
-                                                    }
-                                                }
-                                            }
-                                        @endphp
-
-                                        <strong>Jadwal:</strong> {{ $jadwalText }}<br>
-
-
+                                    Bulan: {{ $item->info_jadwal['bulan_tampil'] }}<br>
+                                    Jadwal: {{ $item->kode_jadwal ? substr($item->kode_jadwal, 1) . ':00' : '-' }}<br>
                                     Guru: {{ $item->guru ?? '-' }}<br>
                                     <!-- misalnya di kolom INFO atau kolom Jadwal -->
                                     Hari: 
                                     @php
-                                        $jadwalText = '-';
+                                        $shift = '-';
+                                        $hariList = [];
 
-                                        // =====================================
-                                        // PRIORITAS DARI kode_jadwal IMPORT
-                                        // =====================================
-                                        if (!empty($item->kode_jadwal)) {
+                                        $kode = (int) ($item->kode_jadwal ?? 0);
 
-                                            // ambil bagian sebelum jam
-                                            $jadwalText = preg_replace(
-                                                '/\|\s*\d{2}:\d{2}\s*WIB/i',
-                                                '',
-                                                $item->kode_jadwal
-                                            );
-
-                                            $jadwalText = trim($jadwalText);
-
-                                        } else {
-
-                                            // =====================================
-                                            // FALLBACK DARI STUDENT
-                                            // =====================================
-                                            $student = \App\Models\Student::where('nim', $item->nim)->first();
-
-                                            if (!empty($student?->hari)) {
-
-                                                $hariText = strip_tags($student->hari);
-
-                                                $hariList = array_filter(
-                                                    array_map('trim', preg_split('/[\|\n\r]+/', $hariText))
-                                                );
-
-                                                $jadwalText = implode(' | ', $hariList);
-                                            }
+                                        if ($kode >= 108 && $kode <= 116) {
+                                            $shift = 'SRJ';
+                                            $hariList = ['Senin', 'Rabu', 'Jumat'];
+                                        } elseif ($kode >= 208 && $kode <= 211) {
+                                            $shift = 'SKS';
+                                            $hariList = ['Selasa', 'Kamis', 'Sabtu'];
+                                        } elseif ($kode >= 308 && $kode <= 311) {
+                                            $shift = 'S6';
+                                            $hariList = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
                                         }
                                     @endphp
 
-                                    {{ $jadwalText }}
+                                    @if ($shift !== '-')
+                                        <strong>{{ $shift }}</strong> ({{ implode(' | ', $hariList) }})
+                                    @else
+                                        -
+                                    @endif
                                 </td>
                                 <td>{{ $item->status }}</td>
 
                                 <!-- KETERANGAN -->
                                 <td>
-                                    @php
-                                        $tanggalAktif = optional(
-                                            $item->student?->registrations()
-                                                ->latest('tanggal_penerimaan')
-                                                ->first()
-                                        )->tanggal_penerimaan ?? $item->tgl_masuk;
-                                    @endphp
-
                                     @if (strtolower($item->status ?? '') === 'keluar')
-
                                         @if ($item->tgl_keluar)
-
-                                            Tanggal Aktif:
-                                            {{ \Carbon\Carbon::parse($tanggalAktif)->format('d/m/Y') }}
-
-                                            <br>Tanggal Keluar:
-                                            {{ \Carbon\Carbon::parse($item->tgl_keluar)->format('d/m/Y') }}
-
+                                            Tanggal Aktif: {{ \Carbon\Carbon::parse($item->tgl_masuk)->format('d/m/Y') }}
+                                            <br>Tanggal Keluar: {{ \Carbon\Carbon::parse($item->tgl_keluar)->format('d/m/Y') }}
                                             @if ($item->alasan || $item->keterangan)
-
-                                                <br>Ketegori:
-                                                <small class="text-danger">
-                                                    {{ trim($item->kategori_keluar) }}
-                                                </small>
-
-                                                <br>Alasan:
-                                                <small class="text-danger">
-                                                    {{ trim($item->alasan) }}
-                                                </small>
-
+                                                <br>Ketegori: <small class="text-danger">{{ trim($item->kategori_keluar) }}</small>
+                                                <br>Alasan: <small class="text-danger">{{ trim($item->alasan) }}</small> 
                                             @endif
-
                                         @else
                                             -
                                         @endif
-
                                     @else
-
-                                        @if ($tanggalAktif)
-
-                                            Tanggal Aktif:
-                                            {{ \Carbon\Carbon::parse($tanggalAktif)->format('d/m/Y') }}
-
+                                        @if ($item->tgl_masuk)
+                                            Tanggal Aktif: {{ \Carbon\Carbon::parse($item->tgl_masuk)->format('d/m/Y') }}
                                         @else
                                             belum ada tgl masuk
                                         @endif
-
                                     @endif
                                 </td>
 
@@ -537,36 +404,25 @@
                                                     }
                                                 @endphp
                                                 <dd class="col-sm-8">: {{ $usiaText }}</dd>
-                                                
+                                                 <dt class="col-sm-4">Tempat Lahir</dt>
+                                                <dd class="col-sm-8">: {{ $item->tmpt_lahir }}</dd>
+                                                <dt class="col-sm-4">Usia</dt>
+                                                @php
+                                                    $usiaText = '-';
+                                                    if ($item->tgl_lahir) {
+                                                        $diff = \Carbon\Carbon::parse($item->tgl_lahir)->diff(now());
+                                                        $usiaText = $diff->y . ' tahun ' . $diff->m . ' bulan';
+                                                    }
+                                                @endphp
+                                                <dd class="col-sm-8">: {{ $usiaText }}</dd>
                                                 <dt class="col-sm-4">Tanggal Daftar</dt>
                                                 <dd class="col-sm-8">: {{ $item->tgl_daftar?->format('d-m-Y') }}</dd>
 
-                                                @php
-                                                    $tanggalAktif = optional(
-                                                        $item->student?->registrations()
-                                                            ->latest('tanggal_penerimaan')
-                                                            ->first()
-                                                    )->tanggal_penerimaan ?? $item->tgl_masuk;
-
-                                                    $lamaBelajar = '-';
-
-                                                    if ($tanggalAktif) {
-                                                        $diff = \Carbon\Carbon::parse($tanggalAktif)->diff(now());
-
-                                                        $lamaBelajar = $diff->y . ' tahun ' . $diff->m . ' bulan';
-                                                    }
-                                                @endphp
-
                                                 <dt class="col-sm-4">Tanggal Masuk</dt>
-                                                <dd class="col-sm-8">
-                                                    :
-                                                    {{ $tanggalAktif
-                                                        ? \Carbon\Carbon::parse($tanggalAktif)->format('d-m-Y')
-                                                        : '-' }}
-                                                </dd>
+                                                <dd class="col-sm-8">: {{ $item->tgl_masuk_formatted }}</dd>
 
                                                 <dt class="col-sm-4">Lama Belajar</dt>
-                                                <dd class="col-sm-8">: {{ $lamaBelajar }}</dd>
+                                                <dd class="col-sm-8">: {{ $item->lama_bljr }}</dd>
 
                                                 <dt class="col-sm-4">Tahap</dt>
                                                 <dd class="col-sm-8">: {{ $item->tahap }}</dd>
@@ -584,37 +440,22 @@
                                                 <dd class="col-sm-8">: {{ $item->keterangan_level }}</dd>
                                                 <dt class="col-sm-4">Tanggal Perubahan Level</dt>
                                                 <dd class="col-sm-8">: {{ $item->tgl_level_formatted }}</dd>
-                                                @php
-                                                    $tanggalAktif = optional(
-                                                        $item->student?->registrations()
-                                                            ->latest('tanggal_penerimaan')
-                                                            ->first()
-                                                    )->tanggal_penerimaan ?? $item->tgl_masuk;
-
-                                                    $bulanAktif = $tanggalAktif
-                                                        ? \Carbon\Carbon::parse($tanggalAktif)->translatedFormat('F Y')
-                                                        : '-';
-                                                @endphp
-
                                                 <dt class="col-sm-4">Bulan Aktif</dt>
                                                 <dd class="col-sm-8">
                                                     :
-                                                    <span class="text-primary fw-semibold">
-                                                        {{ $bulanAktif }}
-                                                    </span>
+                                                    @if($item->info_jadwal['status'] === 'ok')
+                                                        <span class="text-primary fw-semibold">
+                                                            {{ $item->info_jadwal['bulan_tampil'] }}
+                                                        </span>
+                                                    @else
+                                                        -
+                                                    @endif
                                                 </dd>
                                                 <dt class="col-sm-4">Orangtua</dt>
                                                 <dd class="col-sm-8">: {{ $item->orangtua }}</dd>
 
-                                                @php
-                                                    $noHp = $item->no_telp_hp
-                                                        ?? $item->student?->hp_ayah
-                                                        ?? $item->student?->hp_ibu
-                                                        ?? '-';
-                                                @endphp
-
                                                 <dt class="col-sm-4">No HP</dt>
-                                                <dd class="col-sm-8">: {{ $noHp }}</dd>
+                                                <dd class="col-sm-8">: {{ $item->no_telp_hp }}</dd>
 
                                                 <dt class="col-sm-4">Alamat</dt>
                                                 <dd class="col-sm-8">: {{ $item->alamat_murid }}</dd>
@@ -654,48 +495,55 @@
                                             📊 JADWAL & AKTIVITAS
                                         ========================= --}}
                                         <div class="border rounded p-3 mb-3">
-    <h6 class="fw-bold text-info mb-3">📊 Jadwal biMBA</h6>
-    <dl class="row mb-0">
+                                            <h6 class="fw-bold text-info mb-3">📊 Jadwal biMBA</h6>
+                                            <dl class="row mb-0">
 
-        <dt class="col-sm-4">Kode Jadwal</dt>
-        <dd class="col-sm-8">: {{ $item->kode_jadwal ?? '-' }}</dd>
+                                                <dt class="col-sm-4">Kode Jadwal</dt>
+                                                <dd class="col-sm-8">: {{ $item->kode_jadwal }}</dd>
+                                                <dt class="col-sm-4">Hari & Jam</dt>
+                                                <dd class="col-sm-8">
+                                                    :
+                                                    @php
+                                                        $shift = '-';
+                                                        $hariList = [];
+                                                        $jam = '-';
 
-        <dt class="col-sm-4">Hari & Jam</dt>
-        <dd class="col-sm-8">
-            :
-            @php
-                $hariJamText = '-';
+                                                        $kode = (int) ($item->kode_jadwal ?? 0);
 
-                // Prioritas 1: Dari hari_jam
-                if (!empty($item->hari_jam)) {
-                    $hariJamText = trim($item->hari_jam);
-                }
-                // Prioritas 2: Dari kode_jadwal (import)
-                elseif (!empty($item->kode_jadwal)) {
-                    if (preg_match('/(\d{2}:\d{2}\s*WIB)/i', $item->kode_jadwal, $matches)) {
-                        $hariJamText = $matches[1];
-                    } else {
-                        // Jika tidak ada jam, tampilkan shift saja
-                        $shift = strtoupper(trim(explode('|', $item->kode_jadwal)[0]));
-                        $hariJamText = $shift;
-                    }
-                }
-                // Prioritas 3: Dari Student
-                else {
-                    $student = \App\Models\Student::where('nim', $item->nim)->first();
-                    if ($student) {
-                        if (!empty($student->jam)) {
-                            $hariJamText = trim($student->jam);
-                        } elseif (!empty($student->hari)) {
-                            $hariJamText = trim(strip_tags($student->hari));
-                        }
-                    }
-                }
-            @endphp
-            <span class="fw-bold text-primary">{{ $hariJamText }}</span>
-        </dd>
-    </dl>
-</div>
+                                                        // =====================
+                                                        // SHIFT + HARI
+                                                        // =====================
+                                                        if ($kode >= 108 && $kode <= 116) {
+                                                            $shift = 'SRJ';
+                                                            $hariList = ['Senin', 'Rabu', 'Jumat'];
+                                                        } elseif ($kode >= 208 && $kode <= 211) {
+                                                            $shift = 'SKS';
+                                                            $hariList = ['Selasa', 'Kamis', 'Sabtu'];
+                                                        } elseif ($kode >= 308 && $kode <= 311) {
+                                                            $shift = 'S6';
+                                                            $hariList = ['Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
+                                                        }
+
+                                                        // =====================
+                                                        // JAM
+                                                        // =====================
+                                                        if ($kode > 0) {
+                                                            $jamAngka = substr($kode, -2);
+                                                            $jam = str_pad($jamAngka, 2, '0', STR_PAD_LEFT) . ':00';
+                                                        }
+                                                    @endphp
+
+                                                    @if ($shift !== '-')
+                                                        <strong>{{ $shift }}</strong>
+                                                        <span class="text-muted">({{ implode(' | ', $hariList) }})</span>
+                                                        -
+                                                        <span class="fw-bold text-primary">{{ $jam }}</span>
+                                                    @else
+                                                        -
+                                                    @endif
+                                                </dd>
+                                            </dl>
+                                        </div>
 
                                         {{-- =========================
                                             📦 BNF dan DU'AFA

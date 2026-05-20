@@ -82,6 +82,7 @@ foreach ($cutiSelesai as $cuti) {
             END
         ")
         ->orderBy('nim', 'asc');
+        
 
     // ========================================================
     // FILTERS
@@ -274,6 +275,7 @@ foreach ($cutiSelesai as $cuti) {
         'sppMapping'
     ));
 }
+
 
     public function create()
 {
@@ -1166,25 +1168,41 @@ public function show($id)
  * @param BukuInduk $murid
  * @return array
  */
- private function hitungPertemuanTerlewatDiBulanMasuk($murid)
+ /**
+ * Menghitung pertemuan terlewat dan bulan tampil
+ * Prioritas: tanggal_penerimaan (registrasi) > tanggal_aktif > tgl_masuk
+ */
+/**
+ * Menghitung pertemuan terlewat dan bulan tampil
+ * Prioritas: tanggal_penerimaan > tanggal_aktif > tgl_masuk
+ */
+private function hitungPertemuanTerlewatDiBulanMasuk($murid)
 {
-    if (!$murid->tgl_masuk) {
+    // === PRIORITAS TANGGAL ===
+    $tanggalPenerimaan = $murid->tanggal_penerimaan;
+    $tanggalAktif      = $murid->tanggal_aktif;
+    $tglMasuk          = $murid->tgl_masuk ?? null;
+
+    $tanggal = $tanggalPenerimaan ?? $tanggalAktif ?? $tglMasuk;
+
+    if (!$tanggal) {
         return [
             'status'            => 'error',
-            'pesan'             => 'Tanggal masuk kosong',
-            'pertemuan_diambil' => 0,
-            'sisa'              => null,
-            'total_hardcode'    => 0,
+            'pesan'             => 'Tidak ada tanggal (penerimaan/aktif/masuk)',
             'bulan_tampil'      => '-',
             'shift'             => '-',
-            'catatan'           => null,
+            'pertemuan_diambil' => 0,
+            'sisa'              => 0,
+            'total_hardcode'    => 0,
+            'catatan'           => 'Semua tanggal kosong',
+            'sumber_tanggal'    => null,
         ];
     }
 
-    $masuk = \Carbon\Carbon::parse($murid->tgl_masuk);
+    $masuk = \Carbon\Carbon::parse($tanggal);
     $kode  = (int) ($murid->kode_jadwal ?? 0);
 
-    // Mapping shift, total hardcode, dan hari jadwal
+    // Mapping Shift
     $namaShift     = '-';
     $totalHardcode = 0;
     $hariJadwal    = [];
@@ -1192,71 +1210,71 @@ public function show($id)
     if ($kode >= 108 && $kode <= 116) {
         $namaShift     = 'SRJ';
         $totalHardcode = 12;
-        $hariJadwal    = [0, 2, 4]; // Senin, Rabu, Jumat
+        $hariJadwal    = [0, 2, 4];
     } elseif ($kode >= 208 && $kode <= 211) {
         $namaShift     = 'SKS';
         $totalHardcode = 12;
-        $hariJadwal    = [1, 3, 5]; // Selasa, Kamis, Sabtu
+        $hariJadwal    = [1, 3, 5];
     } elseif ($kode >= 308 && $kode <= 311) {
         $namaShift     = 'S6';
         $totalHardcode = 24;
-        $hariJadwal    = [0, 1, 2, 3, 4, 5]; // Senin–Sabtu
+        $hariJadwal    = [0, 1, 2, 3, 4, 5];
     }
 
     if ($totalHardcode === 0) {
         return [
             'status'            => 'error',
             'pesan'             => 'Kode jadwal tidak dikenali',
-            'pertemuan_diambil' => 0,
-            'sisa'              => null,
-            'total_hardcode'    => 0,
             'bulan_tampil'      => '-',
             'shift'             => '-',
+            'pertemuan_diambil' => 0,
+            'sisa'              => 0,
+            'total_hardcode'    => 0,
             'catatan'           => null,
+            'sumber_tanggal'    => null,
         ];
     }
 
-    // Threshold: jika masuk >= tanggal 21 → aktif mulai bulan depan
+    // Logika Bulan Efektif
     $thresholdHari = 21;
     $bulanAktif    = $masuk->copy();
-    $catatan       = null;
     $pertemuanDiambil = 0;
+    $catatan       = null;
+
+    $sumber = $tanggalPenerimaan ? 'tanggal_penerimaan' 
+            : ($tanggalAktif ? 'tanggal_aktif' : 'tgl_masuk');
 
     if ($masuk->day >= $thresholdHari) {
         $bulanAktif->addMonthNoOverflow()->startOfMonth();
-        $catatan = "Masuk akhir bulan → aktif mulai {$bulanAktif->translatedFormat('F Y')}";
-        // Karena aktif full bulan depan → pertemuan_diambil = 0, sisa = total full
-        $pertemuanDiambil = 0;
+        $catatan = "Masuk akhir bulan → efektif mulai bulan depan";
     } else {
-        // Masuk di bulan yang sama → hitung pertemuan dari tanggal masuk sampai akhir bulan
-        $start = $masuk->copy();
-        $end   = $masuk->copy()->endOfMonth();
+        $current = $masuk->copy();
+        $end     = $masuk->copy()->endOfMonth();
 
-        $current = $start->copy();
         while ($current->lte($end)) {
             if (in_array($current->weekday(), $hariJadwal)) {
                 $pertemuanDiambil++;
             }
             $current->addDay();
         }
+        $catatan = "Dihitung sejak tanggal masuk";
     }
-
-    // Sisa = total_hardcode - pertemuan_diambil
-    $sisa = $totalHardcode - $pertemuanDiambil;
-    $sisa = max(0, $sisa); // jaga-jaga kalau negatif
 
     return [
         'status'            => 'ok',
         'shift'             => $namaShift,
-        'bulan_tampil'      => $bulanAktif->translatedFormat('F Y'),
+        'bulan_tampil'      => $bulanAktif->translatedFormat('F Y'), // contoh: Juni 2026
         'tanggal_masuk'     => $masuk->translatedFormat('d F Y'),
         'hari_masuk'        => $masuk->translatedFormat('l, d F Y'),
         'pertemuan_diambil' => $pertemuanDiambil,
-        'sisa'              => $sisa,
+        'sisa'              => max(0, $totalHardcode - $pertemuanDiambil),
         'total_hardcode'    => $totalHardcode,
         'catatan'           => $catatan,
+        'sumber_tanggal'    => $sumber,
     ];
 }
+
+
 public function nextSuffix(Request $request)
 {
     $bimbaUnit = $request->query('bimba_unit');
@@ -1833,5 +1851,56 @@ private function createPindahGolonganFromBukuInduk(BukuInduk $bukuInduk, array $
             'spp' => $newSpp,
         ],
     ]);
+}
+
+/**
+ * Konversi teks jadwal (SRJ, SKS, S6, dll) + jam menjadi kode_jadwal numerik
+ */
+protected function convertJadwalToKode(?string $hariJam, ?string $jam = null): ?string
+{
+    if (empty($hariJam)) {
+        return null;
+    }
+
+    $text = strtoupper(trim($hariJam));
+
+    // Bersihkan format panjang seperti "SRJ (SENIN | RABU | JUMAT)"
+    $text = preg_replace('/\s*\(.+\)/', '', $text);
+    $text = trim($text);
+
+    // Mapping dasar
+    $baseMap = [
+        'SRJ' => 100,
+        'SKS' => 200,
+        'S6'  => 300,
+        'S3'  => 300,   // kalau ada variasi
+    ];
+
+    $base = null;
+    foreach ($baseMap as $key => $value) {
+        if (str_contains($text, $key)) {
+            $base = $value;
+            break;
+        }
+    }
+
+    if ($base === null) {
+        return null;
+    }
+
+    // Tentukan shift berdasarkan jam
+    $jamText = $jam ? strtoupper(trim($jam)) : '';
+
+    if (empty($jamText) && str_contains($text, '08:') || str_contains($text, '09:') || str_contains($text, 'PAGI')) {
+        return (string)($base + 8);   // 108, 208, 308
+    }
+
+    if (str_contains($jamText, '11:') || str_contains($jamText, '10:') || 
+        str_contains($text, '11:') || empty($jamText)) {
+        return (string)($base + 9);   // 109, 209, 309 (default SRJ)
+    }
+
+    // Fallback
+    return (string)($base + 9);
 }
 }

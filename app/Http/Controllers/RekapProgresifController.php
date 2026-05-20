@@ -436,5 +436,96 @@ public function destroy($id)
     ]);
 }
 
+    /**
+     * Generate Rekap Progresif Otomatis (dipanggil dari Command)
+     */
+    public function autoGenerateForPreviousMonth($profile, $bulan, $tahun)
+    {
+        try {
+            $bimbaUnit = $profile->biMBA_unit ?? $profile->bimba_unit ?? $profile->unit ?? null;
+            
+            $unit = Unit::whereRaw('LOWER(TRIM(biMBA_unit)) = ?', 
+                [strtolower(trim($bimbaUnit))]
+            )->first();
+
+            $isKepalaUnit = strtolower(trim($profile->jabatan)) === 'kepala unit';
+
+            // Query penerimaan SPP
+            $paidQuery = Penerimaan::whereRaw('LOWER(bulan) = ?', [$bulan])
+                ->where('tahun', $tahun)
+                ->where('spp', '>', 0);
+
+            if ($isKepalaUnit) {
+                $paidQuery->where('bimba_unit', 'LIKE', '%' . $bimbaUnit . '%');
+            } else {
+                $paidQuery->where('guru', $profile->nama);
+            }
+
+            $paidNims = $paidQuery->distinct()->pluck('nim');
+
+            $totalMuridBayar = $paidNims->count();
+
+            $totalSPP = Penerimaan::whereIn('nim', $paidNims)
+                ->whereRaw('LOWER(bulan) = ?', [$bulan])
+                ->where('tahun', $tahun)
+                ->sum('spp');
+
+            // Total murid aktif
+            if ($isKepalaUnit) {
+                $totalMurid = BukuInduk::where('bimba_unit', 'LIKE', '%' . $bimbaUnit . '%')
+                    ->where('status', 'aktif')
+                    ->count();
+            } else {
+                $totalMurid = BukuInduk::where('guru', $profile->nama)
+                    ->where('status', 'aktif')
+                    ->count();
+            }
+
+            $hargaS3 = HargaSaptataruna::whereRaw("LOWER(nama)='s3'")
+                ->value('harga') ?? 300000;
+
+            $totalFM = round(($totalSPP / $hargaS3) * 1.17, 2);
+
+            $progresif = $this->calculateProgresifTariff($totalFM, $profile->jabatan);
+
+            $data = [
+                'nama'          => $profile->nama,
+                'jabatan'       => $profile->jabatan,
+                'status'        => $profile->status_karyawan ?? 'Aktif',
+                'departemen'    => $profile->departemen,
+                'masa_kerja'    => $this->formatMasaKerja($profile->masa_kerja),
+
+                'bulan'         => $bulan,
+                'tahun'         => $tahun,
+
+                'spp_bimba'     => $totalSPP,
+                'am1'           => $totalMurid,
+                'am2'           => $totalMuridBayar,
+
+                'total_fm'      => $totalFM,
+                'progresif'     => $progresif,
+
+                'spp_english'   => 0,
+                'komisi'        => 0,
+                'dibayarkan'    => $progresif,
+
+                'bimba_unit'    => $bimbaUnit,
+                'no_cabang'     => $unit->no_cabang ?? null,
+            ];
+
+            RekapProgresif::updateOrCreate(
+                [
+                    'nama'  => $profile->nama,
+                    'bulan' => $bulan,
+                    'tahun' => $tahun,
+                ],
+                $data
+            );
+
+        } catch (\Throwable $e) {
+            throw $e; // biar ditangkap di command
+        }
+    }
+
 
 }

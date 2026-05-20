@@ -15,20 +15,62 @@ class Registration extends Model
     public const STATUSES = ['pending','verified','accepted','rejected'];
 
     protected $fillable = [
-        'student_id','gelombang','program','status','tanggal_daftar',
-        'tahun_ajaran','attachment_path',
-        'tahap','kelas','gol','kd','spp',
-        'guru','kode_jadwal','hari_jam',
-        'bimba_unit','no_cabang',
-        'kwitansi','via','bulan','tahun','tanggal_penerimaan',
-        'daftar','voucher','spp_rp','spp_keterangan',
-        'kaos','kpk','sertifikat','stpb','tas','event','lain_lain',
+        'student_id', 
+        'gelombang', 
+        'program', 
+        'status', 
+        'tanggal_daftar',
+        'tahun_ajaran', 
+        'attachment_path',
+
+        // Data Akademik
+        'tahap', 
+        'tgl_tahapan', 
+        'level',           // ← BARU
+        'tgl_level',       // ← BARU
+        'kelas', 
+        'gol', 
+        'kd', 
+        'spp',
+        'guru', 
+        'kode_jadwal', 
+        'hari_jam',
+        'jenis_kbm',
+
+        // Data Tambahan Murid
+        'no_telp_hp',      // ← BARU
+        'alamat_murid',    // ← BARU
+        'asal_modul',      // ← BARU
+
+        // Unit & Cabang
+        'bimba_unit', 
+        'no_cabang',
+
+        // Data Penerimaan
+        'kwitansi', 
+        'via', 
+        'bulan', 
+        'tahun', 
+        'tanggal_penerimaan',
+        'daftar', 
+        'voucher', 
+        'spp_rp', 
+        'spp_keterangan',
+        'kaos', 
+        'kpk', 
+        'sertifikat', 
+        'stpb', 
+        'tas', 
+        'event', 
+        'lain_lain',
         'total',
     ];
 
     protected $casts = [
         'tanggal_daftar'     => 'date',
         'tanggal_penerimaan' => 'date',
+        'tgl_tahapan'        => 'date',
+        'tgl_level'          => 'date',        // ← BARU
         'tahun'              => 'integer',
         'spp'                => 'integer',
         'spp_rp'             => 'integer',
@@ -39,7 +81,6 @@ class Registration extends Model
         return $this->belongsTo(Student::class);
     }
 
-    // GLOBAL SCOPE: Hanya user biasa yang dibatasi unitnya
     public static function currentAcademicYear(): string
     {
         $now   = now();
@@ -60,42 +101,40 @@ class Registration extends Model
     }
 
     protected static function booted()
-{
-    static::addGlobalScope('unit', function (Builder $builder) {
-        if (!Auth::check()) return;
+    {
+        static::addGlobalScope('unit', function (Builder $builder) {
+            if (!Auth::check()) return;
 
-        $user = Auth::user();
+            $user = Auth::user();
 
-        if ($user->is_admin ?? false || in_array($user->role ?? '', ['admin', 'superadmin'])) {
-            return;
-        }
-
-        $userUnit     = trim($user->bimba_unit ?? '');
-        $userNoCabang = trim($user->no_cabang ?? '');
-
-        $builder->where(function ($q) use ($userUnit, $userNoCabang) {
-            if ($userUnit) {
-                $q->where('bimba_unit', 'LIKE', "%{$userUnit}%");
-            }
-            if ($userNoCabang) {
-                $q->orWhere('no_cabang', $userNoCabang);
+            if ($user->is_admin ?? false || in_array($user->role ?? '', ['admin', 'superadmin'])) {
+                return;
             }
 
-            $q->orWhere('bimba_unit', 'LIKE', '%VILLA BEKASI INDAH 2%')
-              ->orWhere('no_cabang', '00340')
-              ->orWhere('bimba_unit', 'LIKE', '%GRIYA PESONA MADANI%')
-              ->orWhere('no_cabang', '05141')
-              ->orWhere('bimba_unit', 'LIKE', '%SAPTA TARUNA IV%')
-              ->orWhere('bimba_unit', 'LIKE', '%SAPTA TARUNA 4%')
-              ->orWhere('no_cabang', '01045');
+            $userUnit     = trim($user->bimba_unit ?? '');
+            $userNoCabang = trim($user->no_cabang ?? '');
+
+            $builder->where(function ($q) use ($userUnit, $userNoCabang) {
+                if ($userUnit) {
+                    $q->where('bimba_unit', 'LIKE', "%{$userUnit}%");
+                }
+                if ($userNoCabang) {
+                    $q->orWhere('no_cabang', $userNoCabang);
+                }
+
+                $q->orWhere('bimba_unit', 'LIKE', '%VILLA BEKASI INDAH 2%')
+                  ->orWhere('no_cabang', '00340')
+                  ->orWhere('bimba_unit', 'LIKE', '%GRIYA PESONA MADANI%')
+                  ->orWhere('no_cabang', '05141')
+                  ->orWhere('bimba_unit', 'LIKE', '%SAPTA TARUNA IV%')
+                  ->orWhere('bimba_unit', 'LIKE', '%SAPTA TARUNA 4%')
+                  ->orWhere('no_cabang', '01045');
+            });
         });
-    });
-}
+    }
 
-public function muridTrial()
-{
-    return $this->belongsTo(\App\Models\MuridTrial::class, 'murid_trial_id'); 
-    // Sesuaikan foreign key jika nama kolomnya berbeda
-}
-
+    public function muridTrial()
+    {
+        return $this->belongsTo(\App\Models\MuridTrial::class, 'murid_trial_id');
+    }
 }

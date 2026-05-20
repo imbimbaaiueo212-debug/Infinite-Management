@@ -116,47 +116,43 @@
             </div>
 
             <div class="col-md-4 mb-3">
-            <label class="form-label fw-bold text-primary">Nomor Telepon</label>
-            <input type="text"
-                class="form-control bg-light"
-                value="{{ old('bi[no_telp]', 
-                    trim(implode(' / ', array_filter([
-                        $prefilledHpAyah ?? '', 
-                        $prefilledHpIbu ?? ''
-                    ]))) ?: ($prefilledNoTelp ?? '')
-                ) }}"
-                readonly>
-            <input type="hidden"
-                name="bi[no_telp]"
-                value="{{ old('bi[no_telp]', 
-                    trim(implode(' / ', array_filter([
-                        $prefilledHpAyah ?? '', 
-                        $prefilledHpIbu ?? ''
-                    ]))) ?: ($prefilledNoTelp ?? '')
-                ) }}">
-        </div>
+    <label class="form-label fw-bold text-primary">Nomor Telepon / HP</label>
+    <input type="text" 
+           class="form-control bg-light" 
+           value="{{ old('bi[no_telp_hp]', 
+               trim(implode(' / ', array_filter([$prefilledHpAyah ?? '', $prefilledHpIbu ?? ''])))
+           ) }}" 
+           readonly>
+    
+    <input type="hidden" 
+           name="bi[no_telp_hp]" 
+           value="{{ old('bi[no_telp_hp]', 
+               trim(implode(' / ', array_filter([$prefilledHpAyah ?? '', $prefilledHpIbu ?? ''])))
+           ) }}">
+</div>
 
-        <div class="col-md-12 mb-3">
-            <label class="form-label fw-bold text-primary">Alamat Lengkap</label>
-            <input type="text"
-                class="form-control bg-light"
-                readonly
-                value="{{ old('bi[alamat]', 
-                    trim(implode(', ', array_filter([
-                        $prefilledAlamat,
-                        $prefilledNoRumah,
-                        ($prefilledRt && $prefilledRw) ? "RT/RW {$prefilledRt}/{$prefilledRw}" : null,
-                        $prefilledKelurahan,
-                        $prefilledKecamatan,
-                        $prefilledKodyaKab,
-                        $prefilledProvinsi
-                    ])))
-                ) }}">
-            
-            <input type="hidden" 
-                name="bi[alamat]"
-                value="{{ old('bi[alamat]', $prefilledAlamat ?? '') }}">
-        </div>
+        <!-- Alamat Lengkap -->
+<div class="col-md-12 mb-3">
+    <label class="form-label fw-bold text-primary">Alamat Lengkap Murid</label>
+    <input type="text" 
+           class="form-control bg-light" 
+           readonly
+           value="{{ old('bi[alamat_murid]', 
+               trim(implode(', ', array_filter([
+                   $prefilledAlamat ?? '',
+                   $prefilledNoRumah ?? '',
+                   ($prefilledRt && $prefilledRw) ? "RT/RW {$prefilledRt}/{$prefilledRw}" : null,
+                   $prefilledKelurahan ?? '',
+                   $prefilledKecamatan ?? '',
+                   $prefilledKodyaKab ?? '',
+                   $prefilledProvinsi ?? ''
+               ])))
+           ) }}">
+    
+    <input type="hidden" 
+           name="bi[alamat_murid]" 
+           value="{{ old('bi[alamat_murid]', $prefilledAlamat ?? '') }}">
+</div>
         </div>
 
                 {{-- UNIT & CABANG (OTOMATIS DARI MURID) --}}
