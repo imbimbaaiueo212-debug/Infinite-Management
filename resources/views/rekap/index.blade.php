@@ -28,7 +28,7 @@
                         @if (auth()->check() && (auth()->user()->is_admin ?? false))
                             <div class="col-md-4 col-lg-3">
                                 <label class="form-label fw-bold small">Unit & Cabang</label>
-                                <select id="filterUnitCabang" class="form-select text-center">
+                                <select id="filterUnitCabang" class="form-select text-start">
                                     <option value="">— Semua Unit —</option>
                                     @foreach($rekap->unique(fn($r) => ($r->bimba_unit ?? '').'|'.($r->no_cabang ?? ''))->sortBy(['bimba_unit', 'no_cabang']) as $row)
                                         <option value="{{ ($row->bimba_unit ?? '').'|'.($row->no_cabang ?? '') }}">

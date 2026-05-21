@@ -1250,16 +1250,24 @@ public function update(Request $request, Penerimaan $penerimaan)
     }
 
     public function import(Request $request)
-    {
-        $request->validate([
-            'file' => 'required|mimes:xlsx,csv'
-        ]);
+{
+    $request->validate([
+        'file' => 'required|mimes:xlsx,xls,csv'
+    ]);
 
-        Excel::import(new PenerimaanImport, $request->file('file'));
+    ini_set('max_execution_time', 300);
+    ini_set('memory_limit', '1024M');
 
-        return redirect()->route('penerimaan.index')
-            ->with('success', 'Data berhasil diimport!');
-    }
+    Excel::import(
+        new PenerimaanImport,
+        $request->file('file')
+    );
+
+    return back()->with(
+        'success',
+        'Import penerimaan berhasil'
+    );
+}
     public function updateBulanTahun(Request $request, $id)
     {
         $request->validate([
