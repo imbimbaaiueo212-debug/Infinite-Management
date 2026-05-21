@@ -46,6 +46,27 @@ class Registration extends Model
         'bimba_unit', 
         'no_cabang',
 
+        // ==================== FIELD BARU DITAMBAHKAN ====================
+
+        // Dhuafa & BNF
+        'periode',
+        'tgl_mulai',
+        'tgl_akhir',
+        'alert',                    // contoh: "aktif" / null
+
+        // Paket 72
+        'tgl_bayar',
+        'tgl_selesai',
+        'alert2',                   // contoh: "aktif" / null
+
+        // Surat Garansi BCA
+        'tgl_surat_garansi',        // ← BARU
+        'tgl_pengajuan_garansi',
+        'tgl_selesai_garansi',
+        'masa_aktif_garansi',
+        'perpanjang_garansi',       // boolean atau "ya"/"tidak"
+        'alasan_garansi',
+
         // Data Penerimaan
         'kwitansi', 
         'via', 

@@ -182,48 +182,31 @@
                 </div>
 
                 {{-- STATUS & TANGGAL DAFTAR --}}
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label fw-bold">Status</label>
-                        @php
-                            $st = old('status', 'pending');
-                            $isAdmin = auth()->check() &&
-                                       (auth()->user()->role === 'admin' || (auth()->user()->is_admin ?? false));
-                        @endphp
-                        <select name="status" class="form-select" required>
-                            <option value="pending"  {{ $st === 'pending'  ? 'selected' : '' }}>Pending</option>
-                            <option value="verified" {{ $st === 'verified' ? 'selected' : '' }}>Verified</option>
-                            @if ($isAdmin)
-                                <option value="accepted" {{ $st === 'accepted' ? 'selected' : '' }}>Accepted</option>
-                            @else
-                                <option value="accepted" disabled>Accepted (admin only)</option>
-                            @endif
-                            <option value="rejected" {{ $st === 'rejected' ? 'selected' : '' }}>Rejected</option>
-                        </select>
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label fw-bold">Tanggal Daftar</label>
-                        <input type="date"
-                            name="tanggal_daftar"
-                            class="form-control"
-                            value="{{ old('tanggal_daftar') }}">
-                        @error('tanggal_daftar')
-                            <div class="text-danger small mt-1">{{ $message }}</div>
-                        @enderror
-                    </div>
-                </div>
                 <div class="row mb-4">
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label fw-bold">Tanggal Mulai KBM</label>
-                        <input type="date"
-                            name="tanggal_penerimaan"
-                            class="form-control"
-                            value="{{ old('tanggal_penerimaan') }}">
-                        @error('tanggal_penerimaan')
-                            <div class="text-danger small mt-1">{{ $message }}</div>
-                        @enderror
-                    </div>
+                <!-- Tanggal Daftar -->
+                <div class="col-md-6 mb-3">
+                    <label class="form-label fw-bold">Tanggal Daftar</label>
+                    <input type="date"
+                        name="tanggal_daftar"
+                        class="form-control"
+                        value="{{ old('tanggal_daftar') }}">
+                    @error('tanggal_daftar')
+                        <div class="text-danger small mt-1">{{ $message }}</div>
+                    @enderror
                 </div>
+
+                <!-- Tanggal Mulai KBM -->
+                <div class="col-md-6 mb-3">
+                    <label class="form-label fw-bold">Tanggal Mulai KBM</label>
+                    <input type="date"
+                        name="tanggal_penerimaan"
+                        class="form-control"
+                        value="{{ old('tanggal_penerimaan') }}">
+                    @error('tanggal_penerimaan')
+                        <div class="text-danger small mt-1">{{ $message }}</div>
+                    @enderror
+                </div>
+            </div>
 
                 <div class="row">
                     <div class="col-md-4 mb-3">
@@ -295,8 +278,8 @@
                     </div>
 
                     <div class="col-md-6 mb-3">
-                        <label class="form-label">Gol</label>
-                        <select class="form-control" name="bi[gol]" id="bi_gol">
+                        <label class="form-label fw-bold">Gol <span class="text-danger">*</span></label>
+                        <select class="form-control" name="bi[gol]" id="bi_gol" required>
                             <option value="">-- Pilih Gol --</option>
                             @foreach ($hargaSaptataruna->unique('kode') as $row)
                                 @if ($row->kode)
@@ -308,25 +291,21 @@
                         </select>
                     </div>
 
+                    <!-- KD -->
                     <div class="col-md-6 mb-3">
-                        <label class="form-label">KD</label>
-                        <select class="form-control" name="bi[kd]" id="bi_kd">
+                        <label class="form-label fw-bold">KD <span class="text-danger">*</span></label>
+                        <select class="form-control" name="bi[kd]" id="bi_kd" required>
                             <option value="">-- Pilih KD --</option>
-                            @foreach ($kdOptions as $kd)
-                                <option value="{{ $kd }}" {{ old('bi.kd') === $kd ? 'selected' : '' }}>
-                                    {{ $kd }}
-                                </option>
+                            @foreach (['A','B','C','D','E','F'] as $kd)
+                                <option value="{{ $kd }}" {{ old('bi.kd') === $kd ? 'selected' : '' }}>{{ $kd }}</option>
                             @endforeach
                         </select>
                     </div>
 
+                    <!-- SPP -->
                     <div class="col-md-6 mb-3">
-                        <label class="form-label">SPP</label>
-                        <input type="text"
-                               class="form-control"
-                               id="bi_spp_display"
-                               readonly
-                               placeholder="Otomatis terisi">
+                        <label class="form-label fw-bold">SPP</label>
+                        <input type="text" class="form-control bg-light" id="bi_spp_display" readonly placeholder="Otomatis terisi">
                         <input type="hidden" name="bi[spp]" id="bi_spp" value="{{ old('bi.spp') }}">
                     </div>
                 </div>
@@ -366,6 +345,35 @@
                 </div>
             </div>
 
+            <!-- === BAGIAN DUafa & BNF (mirip Buku Induk) === -->
+                <div id="duafa-bnf-section" style="display: none;">
+                    <hr>
+                    <h5 class="text-success">🗓️ Masa Aktif (Dhuafa & BNF)</h5>
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label>Periode</label>
+                            <select name="bi[periode]" id="periode" class="form-control">
+                                <option value="">-- Pilih --</option>
+                                @for ($i = 1; $i <= 10; $i++)
+                                    <option value="Ke-{{ $i }}">Ke-{{ $i }}</option>
+                                @endfor
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label>Tanggal Mulai</label>
+                            <input type="date" name="bi[tgl_mulai]" id="tgl_mulai" class="form-control">
+                        </div>
+                        <div class="col-md-3">
+                            <label>Tanggal Akhir</label>
+                            <input type="date" name="bi[tgl_akhir]" id="tgl_akhir" class="form-control">
+                        </div>
+                        <div class="col-md-3">
+                            <label>Jumlah Beasiswa</label>
+                            <input type="number" name="bi[jumlah_beasiswa]" id="jumlah_beasiswa" class="form-control">
+                        </div>
+                    </div>
+                </div>
+
             <hr class="my-4">
 
             <h5 class="mb-3 text-primary">Supply Modul</h5>
@@ -379,6 +387,39 @@
                             <option value="{{ $am }}">{{ $am }}</option>
                         @endforeach
                     </select>
+                </div>
+
+                                <hr class="my-4">
+
+                <!-- SURAT GARANSI BCA 372 BEBAS -->
+                <h4 class="col-12 mb-3">📝 SURAT GARANSI BCA 372 BEBAS</h4>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3 fw-bold">
+                        <label for="tgl_surat_garansi">Tanggal Diberikan Surat</label>
+                        <input type="text" 
+                               name="bi[tgl_surat_garansi]" 
+                               id="tgl_surat_garansi" 
+                               class="form-control" 
+                               placeholder="DD-MM-YYYY"
+                               value="{{ old('bi.tgl_surat_garansi') }}">
+                        @error('bi.tgl_surat_garansi')
+                            <div class="text-danger small mt-1">{{ $message }}</div>
+                        @enderror
+                    </div>
+
+                    <!-- Note Garansi -->
+                    <div class="col-md-6 mb-3 fw-bold">
+                        <label for="note_garansi">Note Garansi</label>
+                        <select name="bi[note_garansi]" id="note_garansi" class="form-control">
+                            <option value="">-- Pilih Note Garansi --</option>
+                            @foreach($noteGaransiOptions as $ng)
+                                <option value="{{ $ng }}" {{ old('bi.note_garansi') == $ng ? 'selected' : '' }}>
+                                    {{ $ng }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
                 </div>
 
                 <div class="col-md-6 mb-3">
@@ -409,19 +450,36 @@
                             @endforeach
                         </select>
                     </div>
+               <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Upload Bukti Pembayaran <span class="text-danger">*</span></label>
+                        <input type="file" 
+                            id="attachment"
+                            name="attachment"
+                            class="form-control"
+                            accept=".pdf,.jpg,.jpeg,.png,.webp"
+                            required>
+                        <small class="text-muted">Maks 3MB (PDF, JPG, PNG, WebP)</small>
+                    </div>
 
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label fw-bold">Status</label>
+                        
+                        @php
+                            $st = old('status', 'pending');
+                        @endphp
+                        
+                        <select name="status" id="status" class="form-select" required>
+                            <option value="pending"  {{ $st === 'pending'  ? 'selected' : '' }}>Pending</option>
+                            <option value="verified" {{ $st === 'verified' ? 'selected' : '' }}>Verified</option>
+                            <option value="accepted" id="opt-accepted" 
+                                    {{ $st === 'accepted' ? 'selected' : '' }}>Accepted</option>
+                            <option value="rejected" {{ $st === 'rejected' ? 'selected' : '' }}>Rejected</option>
+                        </select>
+                    </div>
                 </div>
-
-                {{-- ATTACHMENT --}}
-                <div class="mb-3">
-                    <label class="form-label">Upload Dokumen (PDF/JPG/PNG) - opsional</label>
-                    <input type="file"
-                           name="attachment"
-                           class="form-control"
-                           accept=".pdf,.jpg,.jpeg,.png,.webp">
-                    <small class="text-muted">Maks 3MB</small>
                 </div>
-
+               
                 {{-- TOMBOL AKSI --}}
                 <div class="d-flex gap-2 mt-4">
                     <button type="submit"
@@ -558,6 +616,114 @@ document.addEventListener('DOMContentLoaded', function () {
         levelSelect.addEventListener('change', toggleTanggalLevel);
         setTimeout(toggleTanggalLevel, 300); // untuk nilai lama
     }
+});
+
+
+document.addEventListener('DOMContentLoaded', function() {
+    const attachmentInput = document.getElementById('attachment');
+    const statusSelect    = document.getElementById('status');
+    const acceptedOption  = document.getElementById('opt-accepted');
+
+    const normalText   = 'Accepted';
+    const disabledText = 'Accepted (Upload Bukti Pembayaran Terlebih Dahulu)';
+
+    function toggleAcceptedOption() {
+        const hasFile = attachmentInput.files.length > 0;
+
+        if (hasFile) {
+            acceptedOption.disabled = false;
+            acceptedOption.textContent = normalText;
+        } else {
+            acceptedOption.disabled = true;
+            acceptedOption.textContent = disabledText;
+
+            // Jika sedang memilih Accepted tapi belum ada file, pindah ke Verified
+            if (statusSelect.value === 'accepted') {
+                statusSelect.value = 'verified';
+            }
+        }
+    }
+
+    // Event listener
+    attachmentInput.addEventListener('change', toggleAcceptedOption);
+    
+    // Jalankan saat pertama kali load (penting untuk Edit form)
+    toggleAcceptedOption();
+});
+
+document.addEventListener('DOMContentLoaded', function () {
+
+    // ==================== SPP MAPPING ====================
+    const sppMapping = @json($sppMapping);
+    const golSelect = document.getElementById('bi_gol');
+    const kdSelect  = document.getElementById('bi_kd');
+    const sppDisplay = document.getElementById('bi_spp_display');
+    const sppHidden  = document.getElementById('bi_spp');
+
+    function updateSPP() {
+        const gol = golSelect.value?.trim().toUpperCase();
+        const kd  = kdSelect.value?.trim().toUpperCase();
+
+        if (gol && kd && sppMapping[gol] && sppMapping[gol][kd] !== undefined) {
+            const nilai = sppMapping[gol][kd];
+            sppHidden.value = nilai;
+            sppDisplay.value = 'Rp ' + new Intl.NumberFormat('id-ID').format(nilai);
+        } else {
+            sppHidden.value = '';
+            sppDisplay.value = '';
+        }
+    }
+
+    golSelect?.addEventListener('change', updateSPP);
+    kdSelect?.addEventListener('change', updateSPP);
+    setTimeout(updateSPP, 500);
+
+    // ==================== DUafa / BNF LOGIC (S3B1, S3B2, S3B3) ====================
+    const duafaSection = document.getElementById('duafa-bnf-section');
+
+    function toggleDuafaBNF() {
+        const gol = golSelect.value?.trim().toUpperCase();
+        const trigger = ['S3B1', 'S3B2', 'S3B3', 'D'];
+
+        if (trigger.includes(gol)) {
+            duafaSection.style.display = 'block';
+
+            // Auto isi (mirip Buku Induk)
+            document.getElementById('periode').value = 'Ke-1';
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('tgl_mulai').value = today;
+
+            const end = new Date();
+            end.setMonth(end.getMonth() + 6);
+            document.getElementById('tgl_akhir').value = end.toISOString().split('T')[0];
+
+            const mappingBeasiswa = { 'S3B1': 100000, 'S3B2': 200000, 'S3B3': 50000, 'D': 300000 };
+            const nominal = mappingBeasiswa[gol] || 0;
+            if (nominal) {
+                document.getElementById('jumlah_beasiswa').value = nominal * 6;
+            }
+        } else {
+            duafaSection.style.display = 'none';
+        }
+    }
+
+    golSelect?.addEventListener('change', toggleDuafaBNF);
+    setTimeout(toggleDuafaBNF, 600);
+
+    // ==================== TAHAPAN & LEVEL ====================
+    const tahapSelect = document.getElementById('tahap');
+    const tglTahapanWrapper = document.getElementById('tgl_tahapan_wrapper');
+
+    tahapSelect?.addEventListener('change', function() {
+        tglTahapanWrapper.style.display = (this.value === 'Persiapan' || this.value === 'Lanjutan') ? 'block' : 'none';
+    });
+
+    const levelSelect = document.getElementById('level');
+    const tglLevelWrapper = document.getElementById('tgl_level_wrapper');
+
+    levelSelect?.addEventListener('change', function() {
+        tglLevelWrapper.style.display = this.value ? 'block' : 'none';
+    });
 });
 </script>
 @endpush

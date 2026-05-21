@@ -182,7 +182,7 @@
                                     @if (strtolower($item->status ?? '') === 'keluar')
                                         @if ($item->tgl_keluar)
                                             Tanggal Aktif: {{ \Carbon\Carbon::parse($item->tgl_masuk)->format('d/m/Y') }}
-                                            <br>Tanggal Keluar: {{ \Carbon\Carbon::parse($item->tgl_keluar)->format('d/m/Y') }}
+                                            <br>Tanggal Mulai KBM: {{ \Carbon\Carbon::parse($item->tgl_keluar)->format('d/m/Y') }}
                                             @if ($item->alasan || $item->keterangan)
                                                 <br>Ketegori: <small class="text-danger">{{ trim($item->kategori_keluar) }}</small>
                                                 <br>Alasan: <small class="text-danger">{{ trim($item->alasan) }}</small> 
@@ -192,7 +192,7 @@
                                         @endif
                                     @else
                                         @if ($item->tgl_masuk)
-                                            Tanggal Aktif: {{ \Carbon\Carbon::parse($item->tgl_masuk)->format('d/m/Y') }}
+                                            Tanggal Mulai KBM: {{ \Carbon\Carbon::parse($item->tgl_masuk)->format('d/m/Y') }}
                                         @else
                                             belum ada tgl masuk
                                         @endif
