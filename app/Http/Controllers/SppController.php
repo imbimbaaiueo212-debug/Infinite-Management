@@ -8,46 +8,47 @@ use App\Models\Spp;
 use App\Models\Unit;
 use App\Services\GoogleFormService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Collection;
 
 class SppController extends Controller
 {
             public function index(Request $request, GoogleFormService $googleForm)
-        {
-            // Inisialisasi default semua variabel yang akan di-compact
-            $sudahBayar    = collect();
-            $belumBayar    = collect();
-            $bayarDouble   = collect();
-            $tahapMapping  = [];
-            $guruMapping   = [];
-            $units         = collect();
-            $filterUnit    = $request->input('bimba_unit');
+{
+    // Inisialisasi default semua variabel yang akan di-compact
+    $sudahBayar    = collect();
+    $belumBayar    = collect();
+    $bayarDouble   = collect();
+    $tahapMapping  = [];
+    $guruMapping   = [];
+    $units         = collect();
+    $filterUnit    = $request->input('bimba_unit');
 
-            try {
-                // 1. Dropdown unit
-                $unitsQuery = Unit::withoutGlobalScopes()->orderBy('biMBA_unit');
+    try {
+        // 1. Dropdown unit
+        $unitsQuery = Unit::withoutGlobalScopes()->orderBy('biMBA_unit');
 
-                $user = auth()->user();
-                $isPrivileged = $user?->can('view-all-units') ||
-                                in_array($user?->role ?? '', ['admin', 'super-admin', 'keuangan', 'keuangan-pusat']);
+        $user = auth()->user();
+        $isPrivileged = $user?->can('view-all-units') ||
+                        in_array($user?->role ?? '', ['admin', 'super-admin', 'keuangan', 'keuangan-pusat']);
 
-                if (!$isPrivileged) {
-                    $unitsQuery->where('biMBA_unit', $user->bimba_unit ?? null);
-                }
+        if (!$isPrivileged) {
+            $unitsQuery->where('biMBA_unit', $user->bimba_unit ?? null);
+        }
 
-                $units = $unitsQuery->get(['id', 'biMBA_unit', 'no_cabang']);
+        $units = $unitsQuery->get(['id', 'biMBA_unit', 'no_cabang']);
 
-                $allOption = collect([
-                    (object) [
-                        'biMBA_unit' => 'semua',
-                        'no_cabang'  => '',
-                        'label'      => 'Semua Unit',
-                    ]
-                ]);
+        $allOption = collect([
+            (object) [
+                'biMBA_unit' => 'semua',
+                'no_cabang'  => '',
+                'label'      => 'Semua Unit',
+            ]
+        ]);
 
-                $units = $allOption->merge($units);
+        $units = $allOption->merge($units);
 
-                // 2. Filter bulan & tahun
+        // 2. Filter bulan & tahun
         $bulanAwalRaw  = $request->input('bulan_awal', '-- Semua --');
         $bulanAkhirRaw = $request->input('bulan_akhir', '-- Semua --');
 
@@ -68,32 +69,18 @@ class SppController extends Controller
         $indexAwal  = $isAllMonths ? 0 : ($indexAwalTemp !== false ? $indexAwalTemp : 0);
         $indexAkhir = $isAllMonths ? 11 : ($indexAkhirTemp !== false ? $indexAkhirTemp : $indexAwal);
 
-        // Paksa satu bulan jika awal & akhir sama
         if (!$isAllMonths && $bulanAwal === $bulanAkhir && $indexAwal !== false) {
             $indexAkhir = $indexAwal;
         }
 
-        // Tentukan rentang tahun (untuk kasus lintas tahun)
         $tahunAwal  = $tahun;
         $tahunAkhir = $tahun;
 
-        // Jika bulan akhir < bulan awal → lintas tahun (Desember → Januari)
         if (!$isAllMonths && $indexAkhir < $indexAwal) {
             $tahunAkhir = $tahun + 1;
         }
 
-        // Log untuk debug
-        \Log::info('Filter Periode Final', [
-            'bulan_filter' => $bulanAwal . ' - ' . $bulanAkhir,
-            'tahun_filter' => $tahun,
-            'tahunAwal'    => $tahunAwal,
-            'tahunAkhir'   => $tahunAkhir,
-            'indexAwal'    => $indexAwal,
-            'indexAkhir'   => $indexAkhir,
-            'isAllMonths'  => $isAllMonths,
-        ]);
-
-        // Tentukan akhir periode (untuk filter murid wajib)
+        // Tentukan akhir periode
         $endOfPeriod = null;
         if ($isAllMonths) {
             $endOfPeriod = \Carbon\Carbon::create($tahunAkhir, 12, 31)->toDateString();
@@ -104,112 +91,140 @@ class SppController extends Controller
                 ->toDateString();
         }
 
-                // 3. Murid yang AKTIF pada periode filter (tgl_masuk <= akhir periode DAN (tgl_keluar IS NULL atau tgl_keluar > akhir periode))
-$endOfPeriodCarbon = \Carbon\Carbon::parse($endOfPeriod);
+        // 3. Murid yang AKTIF pada periode filter
+        $endOfPeriodCarbon = \Carbon\Carbon::parse($endOfPeriod);
 
-$allMuridQuery = BukuInduk::query()
-    ->where('status', 'Aktif') // tetap pakai jika ada
-    ->where(function ($q) use ($endOfPeriodCarbon) {
-        $q->whereNull('tgl_keluar')
-          ->orWhere('tgl_keluar', '>', $endOfPeriodCarbon);
-    })
-    ->where('tgl_masuk', '<=', $endOfPeriodCarbon);
+        $allMuridQuery = BukuInduk::query()
+            ->where('status', 'Aktif')
+            ->where(function ($q) use ($endOfPeriodCarbon) {
+                $q->whereNull('tgl_keluar')
+                  ->orWhere('tgl_keluar', '>', $endOfPeriodCarbon);
+            })
+            ->where('tgl_masuk', '<=', $endOfPeriodCarbon);
 
-if ($filterUnit && $filterUnit !== 'semua' && $filterUnit !== '') {
-    $allMuridQuery->where('bimba_unit', $filterUnit);
-}
-
-$allMurid = $allMuridQuery->get()
-    ->mapWithKeys(fn($item) => [str_pad($item->nim ?? '', 5, '0', STR_PAD_LEFT) => $item]);
-
-                // 4. Murid yang WAJIB bayar di periode ini
-$wajibBayar = $allMurid->filter(function ($m) use ($endOfPeriodCarbon, $indexAwal, $tahun, $tahunAwal, $tahunAkhir) {
-    $tglMasuk = $m->tgl_masuk;
-    $tglKeluar = $m->tgl_keluar;
-
-    if (is_null($tglMasuk) || trim($tglMasuk) === '') {
-        return false;
-    }
-
-    try {
-        $tglMasukCarbon = \Carbon\Carbon::parse($tglMasuk);
-
-        // Harus sudah masuk sebelum/sampai akhir periode
-        if ($tglMasukCarbon->gt($endOfPeriodCarbon)) {
-            return false;
+        if ($filterUnit && $filterUnit !== 'semua' && $filterUnit !== '') {
+            $allMuridQuery->where('bimba_unit', $filterUnit);
         }
 
-        // Jika sudah punya tgl_keluar, cek apakah keluar sebelum periode
-        if ($tglKeluar) {
-            $tglKeluarCarbon = \Carbon\Carbon::parse($tglKeluar);
-            if ($tglKeluarCarbon->lte($endOfPeriodCarbon)) {
-                return false; // sudah keluar sebelum/sampai akhir periode → tidak wajib
-            }
-        }
+        $allMurid = $allMuridQuery->get()
+            ->mapWithKeys(fn($item) => [str_pad($item->nim ?? '', 5, '0', STR_PAD_LEFT) => $item]);
 
-        // Cutoff tanggal masuk di bulan yang sama
-        $cutoffTanggal = 15;
-        $bulanMasuk = $tglMasukCarbon->month;
-        $tahunMasuk = $tglMasukCarbon->year;
+        // 4. Murid yang WAJIB bayar di periode ini (DENGAN FILTER GOL D & DHUAFA)
+        $wajibBayar = $allMurid->filter(function ($m) use ($endOfPeriodCarbon, $indexAwal, $tahun, $tahunAwal, $tahunAkhir) {
+            $tglMasuk = $m->tgl_masuk;
+            $tglKeluar = $m->tgl_keluar;
 
-        if ($tahunMasuk == $tahun && $bulanMasuk == ($indexAwal + 1)) {
-            if ($tglMasukCarbon->day > $cutoffTanggal) {
+            if (is_null($tglMasuk) || trim($tglMasuk) === '') {
                 return false;
             }
-        }
 
-        return true;
-    } catch (\Exception $e) {
-        return false;
-    }
-});
+            // === FILTER GRATIS: Gol D & Dhuafa ===
+            $gol = strtolower(trim($m->gol ?? ''));
+            if (in_array($gol, ['d', 'dhuafa', 'dh'])) {
+                return false; // Tidak wajib bayar
+            }
 
-                // 5. Penerimaan & filter pembayaran sesuai periode
-                $penerimaanQuery = Penerimaan::query();
+            try {
+                $tglMasukCarbon = \Carbon\Carbon::parse($tglMasuk);
 
-                if ($filterUnit && $filterUnit !== 'semua' && $filterUnit !== '') {
-                    $penerimaanQuery->where('bimba_unit', $filterUnit);
+                if ($tglMasukCarbon->gt($endOfPeriodCarbon)) {
+                    return false;
                 }
 
-                $penerimaan = $penerimaanQuery->get()->map(function ($item) {
-                    $nimPad = str_pad($item->nim ?? '', 5, '0', STR_PAD_LEFT);
-                    $item->nim_padded   = $nimPad;
-                    $item->bulan_pakai  = strtolower(trim($item->bulan ?? ''));
-                    $item->tahun_pakai  = (int) ($item->tahun ?? now()->year);
-                    $item->nilai_bayar  = $this->getPaidAmount($item);
-                    return $item;
-                });
-
-                $filtered = $penerimaan->filter(function ($item) use ($tahun, $indexAwal, $indexAkhir, $bulanList, $isAllMonths) {
-                    if ((int) $item->tahun_pakai !== (int) $tahun) return false;
-
-                    if ($isAllMonths) return true;
-
-                    $bulanLower = $item->bulan_pakai;
-                    if (empty($bulanLower)) return false;
-
-                    $idx = array_search($bulanLower, $bulanList, true);
-                    if ($idx === false) return false;
-
-                    if ($indexAwal === $indexAkhir) {
-                        return $idx === $indexAwal;
+                if ($tglKeluar) {
+                    $tglKeluarCarbon = \Carbon\Carbon::parse($tglKeluar);
+                    if ($tglKeluarCarbon->lte($endOfPeriodCarbon)) {
+                        return false;
                     }
+                }
 
-                    if ($indexAwal < $indexAkhir) {
-                        return $idx >= $indexAwal && $idx <= $indexAkhir;
+                $cutoffTanggal = 15;
+                $bulanMasuk = $tglMasukCarbon->month;
+                $tahunMasuk = $tglMasukCarbon->year;
+
+                if ($tahunMasuk == $tahun && $bulanMasuk == ($indexAwal + 1)) {
+                    if ($tglMasukCarbon->day > $cutoffTanggal) {
+                        return false;
                     }
+                }
 
-                    return $idx >= $indexAwal || $idx <= $indexAkhir;
-                });
+                return true;
+            } catch (\Exception $e) {
+                return false;
+            }
+        });
 
-                $filteredPositive = $filtered->filter(fn($i) => (float) $i->nilai_bayar > 0);
+        // 5. Penerimaan & filter pembayaran
+        $penerimaanQuery = Penerimaan::query();
 
-                $paidByNim = $filteredPositive
-                    ->groupBy('nim_padded')
-                    ->map(fn($rows) => $rows->sum('nilai_bayar'))
-                    ->filter(fn($sum) => $sum > 0);
+        if ($filterUnit && $filterUnit !== 'semua' && $filterUnit !== '') {
+            $penerimaanQuery->where('bimba_unit', $filterUnit);
+        }
 
-                $sudahBayar = $filteredPositive->values();
+        $penerimaan = $penerimaanQuery->get()->map(function ($item) {
+            $nimPad = str_pad($item->nim ?? '', 5, '0', STR_PAD_LEFT);
+            $item->nim_padded   = $nimPad;
+            $item->bulan_pakai  = strtolower(trim($item->bulan ?? ''));
+            $item->tahun_pakai  = (int) ($item->tahun ?? now()->year);
+            $item->nilai_bayar  = $this->getPaidAmount($item);
+            return $item;
+        });
+
+        $filtered = $penerimaan->filter(function ($item) use ($tahun, $indexAwal, $indexAkhir, $bulanList, $isAllMonths) {
+            if ((int) $item->tahun_pakai !== (int) $tahun) return false;
+
+            if ($isAllMonths) return true;
+
+            $bulanLower = $item->bulan_pakai;
+            if (empty($bulanLower)) return false;
+
+            $idx = array_search($bulanLower, $bulanList, true);
+            if ($idx === false) return false;
+
+            if ($indexAwal === $indexAkhir) {
+                return $idx === $indexAwal;
+            }
+
+            if ($indexAwal < $indexAkhir) {
+                return $idx >= $indexAwal && $idx <= $indexAkhir;
+            }
+
+            return $idx >= $indexAwal || $idx <= $indexAkhir;
+        });
+
+        $filteredPositive = $filtered->filter(fn($i) => (float) $i->nilai_bayar > 0);
+
+        $paidByNim = $filteredPositive
+            ->groupBy('nim_padded')
+            ->map(fn($rows) => $rows->sum('nilai_bayar'))
+            ->filter(fn($sum) => $sum > 0);
+
+        $sudahBayar = $filteredPositive->values();
+
+        // 6. Mapping guru, tahap, spp (tetap sama)
+        $baseMuridQuery = BukuInduk::where('status', 'Aktif')
+            ->when($filterUnit && $filterUnit !== 'semua' && $filterUnit !== '', fn($q) => $q->where('bimba_unit', $filterUnit));
+
+        $guruMapping = (clone $baseMuridQuery)->get()
+            ->mapWithKeys(fn($i) => [str_pad($i->nim ?? '', 5, '0', STR_PAD_LEFT) => $i->guru ?? '-'])
+            ->toArray();
+
+        $tahapMapping = (clone $baseMuridQuery)->get()
+            ->mapWithKeys(fn($i) => [str_pad($i->nim ?? '', 5, '0', STR_PAD_LEFT) => $i->tahap ?? '-'])
+            ->toArray();
+
+        $sppMapping = Spp::query()
+            ->get()
+            ->mapWithKeys(fn($i) => [str_pad($i->nim ?? '', 5, '0', STR_PAD_LEFT) => $i->keterangan ?? '-'])
+            ->toArray();
+
+        $sudahBayar = $sudahBayar->map(function ($p) use ($guruMapping, $sppMapping) {
+            $nimPad = $p->nim_padded ?? '';
+            $p->guru           = $guruMapping[$nimPad] ?? '-';
+            $p->keterangan_spp = $sppMapping[$nimPad] ?? '-';
+            $p->note           = $p->note ?? '-';
+            return $p;
+        });
 
                 // 6. Mapping guru, tahap, spp
 // Biarkan mapping ini ambil semua murid aktif (tanpa filter tgl_keluar ketat), supaya guru tetap muncul
@@ -243,170 +258,140 @@ $sudahBayar = $sudahBayar->map(function ($p) {
     $nimPad = $p->nim_padded ?? $p->nim ?? '';
 
     $deposit_keterangan = '-';
+if ($nimPad && !empty($p->tanggal) && !empty($p->bulan_pakai)) {
+                try {
+                    $tglBayar = \Carbon\Carbon::parse($p->tanggal);
+                    $bulanBayarNama = strtolower(trim($p->bulan_pakai));
 
-    if ($nimPad && !empty($p->tanggal) && !empty($p->bulan_pakai)) {
-        try {
-            $tglBayar = \Carbon\Carbon::parse($p->tanggal);
-            $bulanBayarNama = strtolower(trim($p->bulan_pakai));
+                    $bulanMap = [
+                        'januari'=>1,'februari'=>2,'maret'=>3,'april'=>4,'mei'=>5,'juni'=>6,
+                        'juli'=>7,'agustus'=>8,'september'=>9,'oktober'=>10,'november'=>11,'desember'=>12
+                    ];
 
-            // Mapping bulan
-            $bulanMap = [
-                'januari'   => 1, 'februari'  => 2, 'maret'     => 3, 'april'     => 4,
-                'mei'       => 5, 'juni'      => 6, 'juli'      => 7, 'agustus'   => 8,
-                'september' => 9, 'oktober'   => 10,'november'  => 11,'desember'  => 12
-            ];
+                    $bulanTarget = $bulanMap[$bulanBayarNama] ?? null;
+                    if ($bulanTarget === null) {
+                        $p->deposit_keterangan = '-';
+                        return $p;
+                    }
 
-            $bulanTarget = $bulanMap[$bulanBayarNama] ?? null;
+                    $tahunTarget = (int) ($p->tahun_pakai ?? $tglBayar->year);
 
-            if ($bulanTarget === null) {
-                // Bulan tidak dikenali → skip
-                $p->deposit_keterangan = '-';
-                return $p;
+                    if ($bulanTarget === 1 && $tglBayar->month === 12 && $tglBayar->year === $tahunTarget - 1) {
+                        $tahunTarget = $tglBayar->year + 1;
+                    }
+
+                    $awalBulanTarget = \Carbon\Carbon::create($tahunTarget, $bulanTarget, 1);
+
+                    if ($tglBayar->lt($awalBulanTarget)) {
+                        $deposit_keterangan = 'Deposit bulan ' . ucfirst($bulanBayarNama) . ' ' . $tahunTarget;
+                    }
+                } catch (\Exception $e) {}
             }
 
-            // Tahun target: prioritaskan $p->tahun_pakai jika ada
-            $tahunTarget = (int) ($p->tahun_pakai ?? $tglBayar->year);
+            $p->deposit_keterangan = $deposit_keterangan;
+            return $p;
+        });
 
-            // Jika bulan target = Januari tapi bayar di Desember tahun sebelumnya → lintas tahun
-            if ($bulanTarget === 1 && $tglBayar->month === 12 && $tglBayar->year === $tahunTarget - 1) {
-                $tahunTarget = $tglBayar->year + 1;
+        // Filter ketat sudah keluar
+        $sudahBayar = $sudahBayar->filter(function ($p) use ($allMurid, $endOfPeriodCarbon) {
+            $nimPad = $p->nim_padded ?? '';
+            if (!$allMurid->has($nimPad)) return false;
+
+            $murid = $allMurid[$nimPad];
+            if ($murid->tgl_keluar) {
+                $tglKeluar = \Carbon\Carbon::parse($murid->tgl_keluar);
+                if ($tglKeluar->lte($endOfPeriodCarbon)) return false;
             }
+            return true;
+        })->values();
 
-            // Buat tanggal awal bulan target untuk perbandingan
-            $awalBulanTarget = \Carbon\Carbon::create($tahunTarget, $bulanTarget, 1);
+        // 7. Belum Bayar (DENGAN FILTER GOL D & DHUAFA)
+        $nimSudahBayar = $paidByNim->keys();
 
-            // Jika tanggal bayar < awal bulan target → dianggap deposit untuk bulan target
-            if ($tglBayar->lt($awalBulanTarget)) {
-                $deposit_keterangan = 'Deposit bulan ' . ucfirst($bulanBayarNama) . ' ' . $tahunTarget;
+        $belumBayar = $wajibBayar->reject(function ($m) use ($nimSudahBayar) {
+            $nimPad = str_pad($m->nim ?? '', 5, '0', STR_PAD_LEFT);
+            return $nimSudahBayar->contains($nimPad);
+        });
+
+        // Double protection
+        $belumBayar = $belumBayar->reject(function ($m) {
+            $gol = strtolower(trim($m->gol ?? ''));
+            return in_array($gol, ['d', 'dhuafa', 'dh']);
+        });
+
+        // Hitung total belum bayar
+        $totalBelumBayar = $belumBayar->sum(function ($m) {
+            return (float) ($m->spp ?? $m->nilai_spp ?? $m->spp_bulan_ini ?? $m->biaya_spp ?? 0);
+        });
+
+        // 8. Status Pernyataan
+        $sppStatusMapping = Spp::query()->get()->mapWithKeys(function ($row) {
+            return [str_pad($row->nim ?? '', 5, '0', STR_PAD_LEFT) => $row];
+        });
+
+        $belumBayar = $belumBayar->map(function ($m) use ($sppStatusMapping) {
+            $nimPad = str_pad($m->nim ?? '', 5, '0', STR_PAD_LEFT);
+            $sppData = $sppStatusMapping[$nimPad] ?? null;
+
+            if ($sppData) {
+                $m->sudahIsiForm = $sppData->status_pernyataan === 'Sudah Mengisi Form'
+                    || $sppData->status_pernyataan === 'Sudah Membuat Pernyataan';
+                $m->file_pernyataan = $sppData->file_pernyataan;
+                $m->tanggalIsiForm = $sppData->updated_at;
+            } else {
+                $m->sudahIsiForm = false;
+                $m->file_pernyataan = null;
+                $m->tanggalIsiForm = null;
             }
-        } catch (\Exception $e) {
-            // Parsing gagal → tetap default
-        }
-    }
+            return $m;
+        });
 
-    $p->deposit_keterangan = $deposit_keterangan;
+        // 9. Data tambahan
+        $bayarDouble = $sudahBayar->groupBy('nim_padded')->filter(fn($g) => $g->count() > 1);
+        $tahapanOptions = ['Persiapan', 'Lanjutan'];
 
-    return $p;
-});
-// Filter ketat: buang murid yang sudah keluar (berdasarkan $allMurid yang sudah difilter tgl_keluar)
-$sudahBayar = $sudahBayar->filter(function ($p) use ($allMurid, $endOfPeriodCarbon) {
-    $nimPad = $p->nim_padded ?? '';
+    } catch (\Exception $e) {
+        \Log::error('Error di SppController@index', [
+            'message' => $e->getMessage(),
+            'trace'   => $e->getTraceAsString(),
+        ]);
 
-    // Jika NIM tidak ada di daftar murid aktif periode ini → buang
-    if (!$allMurid->has($nimPad)) {
-        return false;
-    }
-
-    // Cek tambahan tgl_keluar (pengaman ekstra)
-    $murid = $allMurid[$nimPad];
-    if ($murid->tgl_keluar) {
-        $tglKeluar = \Carbon\Carbon::parse($murid->tgl_keluar);
-        if ($tglKeluar->lte($endOfPeriodCarbon)) {
-            return false;
-        }
-    }
-
-    return true;
-})->values();  // reset index array
-
-                // 7. Belum bayar: hanya murid WAJIB yang belum bayar
-                $nimSudahBayar = $paidByNim->keys();
-
-                $belumBayar = $wajibBayar->reject(function ($m) use ($nimSudahBayar) {
-                    $nimPad = str_pad($m->nim ?? '', 5, '0', STR_PAD_LEFT);
-                    return $nimSudahBayar->contains($nimPad);
-                });
-                // Hitung total nominal SPP yang belum dibayar oleh murid-murid di $belumBayar
-$totalBelumBayar = $belumBayar->sum(function ($m) {
-    // Sesuaikan field/nilai SPP yang benar di model BukuInduk
-    // Contoh kemungkinan nama field (pilih satu yang sesuai):
-    return (float) ($m->spp ?? $m->nilai_spp ?? $m->spp_bulan_ini ?? $m->biaya_spp ?? 0);
-});
-
-               // 8. Ambil status pernyataan dari tabel spp (lebih stabil)
-$sppStatusMapping = Spp::query()
-    ->get()
-    ->mapWithKeys(function ($row) {
-        return [
-            str_pad($row->nim ?? '', 5, '0', STR_PAD_LEFT) => $row
-        ];
-    });
-
-$belumBayar = $belumBayar->map(function ($m) use ($sppStatusMapping) {
-
-    $nimPad = str_pad($m->nim ?? '', 5, '0', STR_PAD_LEFT);
-
-    $sppData = $sppStatusMapping[$nimPad] ?? null;
-
-    if ($sppData) {
-        $m->sudahIsiForm = $sppData->status_pernyataan === 'Sudah Mengisi Form'
-            || $sppData->status_pernyataan === 'Sudah Membuat Pernyataan';
-
-        $m->file_pernyataan = $sppData->file_pernyataan;
-        $m->tanggalIsiForm = $sppData->updated_at;
-    } else {
-        $m->sudahIsiForm = false;
-        $m->file_pernyataan = null;
-        $m->tanggalIsiForm = null;
-    }
-
-    return $m;
-});
-
-                // 9. Data tambahan
-                $bayarDouble = $sudahBayar->groupBy('nim_padded')->filter(fn($g) => $g->count() > 1);
-                $tahapanOptions = ['Persiapan', 'Lanjutan'];
-
-            } catch (\Exception $e) {
-                \Log::error('Error di SppController@index', [
-                    'message' => $e->getMessage(),
-                    'trace'   => $e->getTraceAsString(),
-                ]);
-
-                return view('spp.index', compact(
-                    'sudahBayar',
-                    'belumBayar',
-                    'bayarDouble',
-                    'bulanAwal',
-                    'bulanAkhir',
-                    'tahun',
-                    'tahapanOptions',
-                    'tahapMapping',
-                    'units',
-                    'filterUnit',
-                ))->with('error', 'Terjadi kesalahan saat memuat data. Silakan coba lagi.');
-            }
-
-        //Grouping untuk breakdown per bulan (hanya untuk tampilan ringkasan)
-        $breakdownPerBulan = $sudahBayar
-            ->groupBy('bulan_pakai')
-            ->map(function ($group) {
-                return [
-                    'bulan' => ucfirst($group->first()->bulan_pakai ?? '-'),
-                    'jumlah_murid' => $group->unique('nim_padded')->count(),
-                    'total_spp' => $group->sum('nilai_bayar'),
-                ];
-            })
-            ->sortBy(function ($item) use ($bulanList) {
-                return array_search(strtolower($item['bulan']), $bulanList);
-            });
-
-        // Pass ke view
         return view('spp.index', compact(
-            'sudahBayar',
-            'belumBayar',
-            'bayarDouble',
-            'bulanAwal',
-            'bulanAkhir',
-            'tahun',
-            'tahapanOptions',
-            'tahapMapping',
-            'units',
-            'filterUnit',
-            'breakdownPerBulan',   // tambahkan ini
-            'totalBelumBayar'
-        ));
-        }
+            'sudahBayar','belumBayar','bayarDouble',
+            'bulanAwal','bulanAkhir','tahun',
+            'tahapanOptions','tahapMapping','units','filterUnit'
+        ))->with('error', 'Terjadi kesalahan saat memuat data.');
+    }
+
+    // Breakdown per bulan
+    $breakdownPerBulan = $sudahBayar
+        ->groupBy('bulan_pakai')
+        ->map(function ($group) {
+            return [
+                'bulan' => ucfirst($group->first()->bulan_pakai ?? '-'),
+                'jumlah_murid' => $group->unique('nim_padded')->count(),
+                'total_spp' => $group->sum('nilai_bayar'),
+            ];
+        })
+        ->sortBy(function ($item) use ($bulanList) {
+            return array_search(strtolower($item['bulan']), $bulanList);
+        });
+
+    return view('spp.index', compact(
+        'sudahBayar',
+        'belumBayar',
+        'bayarDouble',
+        'bulanAwal',
+        'bulanAkhir',
+        'tahun',
+        'tahapanOptions',
+        'tahapMapping',
+        'units',
+        'filterUnit',
+        'breakdownPerBulan',
+        'totalBelumBayar'
+    ));
+}
 
     public function create()
 {
@@ -552,7 +537,7 @@ public function suratKeterlambatan($nim, Request $request, GoogleFormService $go
     $responses = $googleForm->getResponses();
 
     // Log sederhana untuk debug (lihat di storage/logs/laravel.log)
-    \Log::info('suratKeterlambatan called', [
+    Log::info('suratKeterlambatan called', [
         'nim_input' => $nim,
         'nim_clean' => $nimClean,
         'responses_count' => count($responses),
@@ -566,12 +551,12 @@ public function suratKeterlambatan($nim, Request $request, GoogleFormService $go
 
     // Debug: log apakah dataForm ditemukan dan key apa saja
     if ($dataForm) {
-        \Log::info('Data form ditemukan untuk NIM ' . $nimClean, [
+        Log::info('Data form ditemukan untuk NIM ' . $nimClean, [
             'keys' => array_keys($dataForm),
             'sample' => $dataForm['Golongan'] ?? $dataForm['golongan'] ?? 'tidak ada Golongan',
         ]);
     } else {
-        \Log::warning('Data form TIDAK ditemukan untuk NIM ' . $nimClean, [
+        Log::warning('Data form TIDAK ditemukan untuk NIM ' . $nimClean, [
             'nim_sheet_sample' => collect($responses)->pluck('NIM')->take(3)->toArray(),
         ]);
     }
@@ -764,7 +749,7 @@ public function syncGoogleForm(Request $request, GoogleFormService $googleForm)
         $responses = collect($googleForm->getResponses());
 
         // ─── LOG PENTING #1 ───
-        \Log::info('SYNC GOOGLE FORM - Mulai', [
+        Log::info('SYNC GOOGLE FORM - Mulai', [
             'total_responses' => $responses->count(),
             'sample_keys'     => $responses->isNotEmpty() ? array_keys($responses->first()) : 'kosong',
             'filter_unit'     => $filterUnit,
@@ -786,7 +771,7 @@ public function syncGoogleForm(Request $request, GoogleFormService $googleForm)
 
             // ─── LOG PENTING #2 ─── (hanya log 5 pertama biar log tidak banjir)
             if ($index < 5) {
-                \Log::info('Processing row #' . $index, [
+                Log::info('Processing row #' . $index, [
                     'nim_raw' => $nimRaw,
                     'nim_padded' => $nim,
                     'nama' => $row['Nama Murid'] ?? '(kosong)',
@@ -797,7 +782,7 @@ public function syncGoogleForm(Request $request, GoogleFormService $googleForm)
             $murid = BukuInduk::where('nim', $nim)->first();
             if (!$murid) {
                 $skippedReasons['murid_not_found']++;
-                \Log::warning('Murid tidak ditemukan untuk NIM', ['nim' => $nim]);
+                Log::warning('Murid tidak ditemukan untuk NIM', ['nim' => $nim]);
                 continue;
             }
 
@@ -819,17 +804,17 @@ $oldStatus = $existingSpp ? $existingSpp->status_pernyataan : 'belum ada record'
 
             if ($spp->wasRecentlyCreated) {
                 $updatedCount++;
-                \Log::info('Record BARU dibuat', ['nim' => $nim, 'status' => $newStatus]);
+                Log::info('Record BARU dibuat', ['nim' => $nim, 'status' => $newStatus]);
             } elseif ($spp->wasChanged() || $oldStatus !== $newStatus) {
                 $updatedCount++;
-                \Log::info('Record DI-UPDATE', ['nim' => $nim, 'old' => $oldStatus, 'new' => $newStatus]);
+                Log::info('Record DI-UPDATE', ['nim' => $nim, 'old' => $oldStatus, 'new' => $newStatus]);
             } else {
                 $skippedReasons['no_change']++;
             }
         }
 
         // ─── LOG RINGKASAN AKHIR ───
-        \Log::info('SYNC GOOGLE FORM - Selesai', [
+        Log::info('SYNC GOOGLE FORM - Selesai', [
             'updated_count'     => $updatedCount,
             'skipped_empty_nim' => $skippedReasons['empty_nim'],
             'skipped_no_murid'  => $skippedReasons['murid_not_found'],
@@ -845,7 +830,7 @@ $oldStatus = $existingSpp ? $existingSpp->status_pernyataan : 'belum ada record'
         ]);
 
     } catch (\Exception $e) {
-        \Log::error('Gagal sync Google Form', [
+        Log::error('Gagal sync Google Form', [
             'error' => $e->getMessage(),
             'trace' => $e->getTraceAsString(),
         ]);

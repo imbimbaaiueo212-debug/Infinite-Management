@@ -158,18 +158,9 @@ class KartuSppController extends Controller
        CARI BULAN AKHIR (AMAN)
     =============================== */
     $mapBulan = [
-        'januari' => 1,
-        'februari' => 2,
-        'maret' => 3,
-        'april' => 4,
-        'mei' => 5,
-        'juni' => 6,
-        'juli' => 7,
-        'agustus' => 8,
-        'september' => 9,
-        'oktober' => 10,
-        'november' => 11,
-        'desember' => 12,
+        'januari' => 1, 'februari' => 2, 'maret' => 3, 'april' => 4,
+        'mei' => 5, 'juni' => 6, 'juli' => 7, 'agustus' => 8,
+        'september' => 9, 'oktober' => 10, 'november' => 11, 'desember' => 12,
     ];
 
     $lastPembayaranDate = null;
@@ -200,6 +191,10 @@ class KartuSppController extends Controller
     $bulan = $tglMasuk->copy();
     $nominalPerVoucher = 50000;
 
+    // === LOGIKA GRATIS (Gol D & Dhuafa) ===
+    $gol = strtolower(trim($murid->gol ?? ''));
+    $isGratis = in_array($gol, ['d', 'dhuafa']);
+
     while ($bulan->lte($bulanAkhir)) {
 
         $bulanNama  = $bulan->translatedFormat('F');
@@ -207,10 +202,15 @@ class KartuSppController extends Controller
         $akhirBulan = $bulan->copy()->endOfMonth();
 
         // pembayaran
-        $pembayaran = $penerimaan->first(fn ($p) =>
-            strtolower(trim($p->bulan)) === strtolower($bulanNama)
-            && (int)$p->tahun === $tahun
-        );
+        $pembayaran = $penerimaan
+            ->filter(fn ($p) =>
+                strtolower(trim($p->bulan)) === strtolower($bulanNama)
+                && (int)$p->tahun === $tahun
+            )
+            ->sortByDesc(function ($p) {
+                return (int)($p->spp ?? 0);
+            })
+            ->first();
 
         $jumlahSpp = $pembayaran ? (int)($pembayaran->spp ?? 0) : 0;
 
@@ -225,10 +225,14 @@ class KartuSppController extends Controller
 
         $voucherSisa = max(0, $voucherJumlah - $voucherDipakai);
 
-        // status
-        $statusBulan = ($jumlahSpp > 0 || $voucherDipakai > 0)
-            ? 'Sudah bayar'
-            : 'Belum bayar';
+        // STATUS - Khusus Gol D & Dhuafa
+        if ($isGratis) {
+            $statusBulan = 'Sudah bayar';
+        } else {
+            $statusBulan = ($jumlahSpp > 0 || $voucherDipakai > 0)
+                ? 'Sudah bayar'
+                : 'Belum bayar';
+        }
 
         // tanggal transaksi
         $tanggalTransaksi = '-';
@@ -278,18 +282,22 @@ class KartuSppController extends Controller
     $bulanSekarang = now()->locale('id')->translatedFormat('F');
     $tahunSekarang = now()->year;
 
-    $statusBayar = (
-        $penerimaan->first(fn ($p) =>
-            strtolower(trim($p->bulan)) === strtolower($bulanSekarang)
-            && (int)$p->tahun === $tahunSekarang
-            && (int)($p->spp ?? 0) > 0
+    if ($isGratis) {
+        $statusBayar = 'Khusus Golongan (' . strtoupper($gol) . ')';
+    } else {
+        $statusBayar = (
+            $penerimaan->first(fn ($p) =>
+                strtolower(trim($p->bulan)) === strtolower($bulanSekarang)
+                && (int)$p->tahun === $tahunSekarang
+                && (int)($p->spp ?? 0) > 0
+            )
+            || VoucherHistori::whereYear('tanggal_pemakaian', $tahunSekarang)
+                ->whereMonth('tanggal_pemakaian', now()->month)
+                ->exists()
         )
-        || VoucherHistori::whereYear('tanggal_pemakaian', $tahunSekarang)
-            ->whereMonth('tanggal_pemakaian', now()->month)
-            ->exists()
-    )
-        ? 'Sudah bayar SPP bulan ' . ucfirst($bulanSekarang)
-        : 'Belum bayar SPP bulan ' . ucfirst($bulanSekarang);
+            ? 'Sudah bayar SPP bulan ' . ucfirst($bulanSekarang)
+            : 'Belum bayar SPP bulan ' . ucfirst($bulanSekarang);
+    }
 
     /* ===============================
        RINGKASAN HEADER

@@ -611,25 +611,20 @@ public function inlineUpdateKtr(Request $request, Profile $profile)
     $profile->total_murid          = $jumlahMurid;
     $profile->jumlah_rombim        = $this->resolveSlotRombimFromCount($jumlahMurid);
 
-    if ($jumlahMurid <= 0) {
-        $profile->rb  = 'RB30';
-        $profile->ktr = 'KTR 1A';
-    } else {
-        $rb = $this->resolveRbFromCount($jumlahMurid);
-        $profile->rb = $rb ? 'RB' . $rb : 'RB30';
+    // Tetap set RB30 & KTR 1A meski 0 murid
+    $profile->rb           = 'RB30';
+    $profile->ktr          = 'KTR 1A';
+    $profile->rb_tambahan  = 'RB30';
+    $profile->ktr_tambahan = 'KTR 1A';
 
-        $ktr = $this->formatKtrFromCountForGuru($jumlahMurid);
-        $profile->ktr = $ktr ?: 'KTR 1A';
-    }
-
-    $profile->rb_tambahan  = $profile->rb;
-    $profile->ktr_tambahan = $profile->ktr;
-
+    // <<< INI YANG DIPERBAIKI >>>
     $profile->rp = $this->resolveRpFromJumlahMuridWithKtr(
-        $jumlahMurid,
-        $profile->ktr,
-        $profile->rb
+        $jumlahMurid,           // tetap kirim 0
+        $profile->ktr,          // 'KTR 1A'
+        $profile->rb            // 'RB30'
     );
+
+    $profile->saveQuietly();
 }
 
    private function calculateKepalaUnitData(Profile $profile): void
@@ -719,7 +714,7 @@ public function inlineUpdateKtr(Request $request, Profile $profile)
     $murid          = (int) ($data['jumlah_murid_jadwal'] ?? $data['jumlah_murid_mba'] ?? 0);
     $total          = (int) ($data['total_murid'] ?? $data['total_murid_bawahan'] ?? 0);
     $masaKerjaBulan = (int) ($data['masa_kerja'] ?? 0);
-    $status         = $data['status_karyawan'] ?? 'Aktif'; // default Aktif jika kosong
+    $status         = $data['status_karyawan'] ?? 'Aktif';
 
     $hasManualRb           = !empty(trim($data['rb'] ?? ''));
     $hasManualKtr          = !empty(trim($data['ktr'] ?? ''));
@@ -733,19 +728,36 @@ public function inlineUpdateKtr(Request $request, Profile $profile)
     $data['rb']            = null;
     $data['jumlah_rombim'] = null;
 
-    // Logika khusus Guru & Kepala Unit (tetap seperti semula)
     if ($jabatan === 'Guru') {
+        
+        // ==================== KASUS 0 MURID ====================
         if ($murid <= 0) {
-            $data['ktr']           = $hasManualKtr ? $data['ktr'] : null;
-            $data['ktr_tambahan']  = $hasManualKtrTambahan ? $data['ktr_tambahan'] : null;
-            $data['rp']            = $hasManualRp ? floatval($data['rp']) : null;
-        } else {
+            $data['rb']            = 'RB30';
+            $data['ktr']           = 'KTR 1A';
+            $data['ktr_tambahan']  = 'KTR 1A';
+            $data['jumlah_rombim'] = 0;
+
+            // Tetap ambil RP dari tabel KTR
+            $data['rp'] = $this->resolveRpFromJumlahMuridWithKtr(
+                0,
+                'KTR 1A',
+                'RB30'
+            );
+
+            // Jika ada manual RP, prioritaskan
+            if ($hasManualRp) {
+                $data['rp'] = floatval($data['rp']);
+            }
+        } 
+        // ==================== KASUS ADA MURID ====================
+        else {
             if (!$hasManualRb) {
                 $rb = $this->resolveRbFromCount($murid);
-                $data['rb'] = $rb ? 'RB' . $rb : null;
+                $data['rb'] = $rb ? 'RB' . $rb : 'RB30';
             }
 
             $rbNormalized = $this->normalizeRbValue($data['rb']);
+
             if (!$hasManualKtr) {
                 $data['ktr'] = $rbNormalized
                     ? $this->resolveKtrFromRb("RB{$rbNormalized}")
@@ -766,7 +778,8 @@ public function inlineUpdateKtr(Request $request, Profile $profile)
 
             $data['jumlah_rombim'] = $this->resolveSlotRombimFromCount($murid);
         }
-    } elseif ($jabatan === 'Kepala Unit') {
+    } 
+    elseif ($jabatan === 'Kepala Unit') {
         $jumlahEfektif = $total > 0 ? $total : $murid;
 
         if (!$hasManualRb) {
@@ -784,20 +797,17 @@ public function inlineUpdateKtr(Request $request, Profile $profile)
                 $data['rb']
             );
         }
-    } else {
-        // Jabatan lain: ambil RP dari tabel skim berdasarkan jabatan + masa_kerja + status
-
-        // Tentukan range masa kerja
+    } 
+    else {
+        // Jabatan lain (Staff, dll)
         $range = $masaKerjaBulan >= 24 ? '>= 24 Bulan' : '< 24 Bulan';
 
-        // Query skim utama (pakai status asli, termasuk Magang)
         $skim = DB::table('skim')
             ->where('jabatan', $jabatan)
             ->where('masa_kerja', $range)
             ->where('status', $status)
             ->first();
 
-        // Jika tidak ditemukan skim khusus untuk status ini, fallback ke status 'Aktif'
         if (!$skim) {
             $skim = DB::table('skim')
                 ->where('jabatan', $jabatan)
@@ -806,10 +816,8 @@ public function inlineUpdateKtr(Request $request, Profile $profile)
                 ->first();
         }
 
-        // Ambil nilai RP dari kolom 'thp' (nilai utama skim kamu)
         $data['rp'] = $skim ? (float) $skim->thp : 0;
 
-        // Jika manual RP ada → prioritaskan
         if ($hasManualRp) {
             $data['rp'] = floatval($data['rp']);
         }
@@ -930,65 +938,73 @@ public function inlineUpdateKtr(Request $request, Profile $profile)
 }
 
     private function resolveRpFromJumlahMuridWithKtr(
-        int $jumlahMurid,
-        ?string $forcedKtr = null,
-        ?string $forcedRbLabel = null
-    ): ?float {
-        if (!class_exists(Ktr::class)) return null;
+    int $jumlahMurid,
+    ?string $forcedKtr = null,
+    ?string $forcedRbLabel = null
+): ?float {
+    if (!class_exists(Ktr::class)) return null;
 
+    // === LOGIKA BARU UNTUK 0 MURID ===
+    if ($jumlahMurid <= 0) {
+        $rbLabel = $forcedRbLabel ?? 'RB30';
+        $ktrPriority = $forcedKtr ?? 'KTR 1A';
+    } else {
         $rbLabel = $forcedRbLabel
-            ?? ($jumlahMurid > 0
-                ? ($this->resolveRbFromCount($jumlahMurid)
-                    ? 'RB' . $this->resolveRbFromCount($jumlahMurid)
-                    : null)
-                : null);
+            ?? ($this->resolveRbFromCount($jumlahMurid)
+                ? 'RB' . $this->resolveRbFromCount($jumlahMurid)
+                : 'RB30');
 
-        $ktrPriority = $forcedKtr ?? ($rbLabel ? $this->resolveKtrFromRb($rbLabel) : null);
+        $ktrPriority = $forcedKtr ?? ($rbLabel ? $this->resolveKtrFromRb($rbLabel) : 'KTR 1A');
+    }
 
-        if ($rbLabel) {
-            $rbNumber = (int) preg_replace('/\D/', '', $rbLabel);
-            $likeKey = "%RB" . ltrim((string) $rbNumber, '0') . "%";
-            $rows = Ktr::where('waktu', 'like', $likeKey)->orderBy('id')->get();
+    // === CARI DI TABEL KTR ===
+    if ($rbLabel) {
+        $rbNumber = (int) preg_replace('/\D/', '', $rbLabel);
+        $likeKey = "%RB" . ltrim((string) $rbNumber, '0') . "%";
+        
+        $rows = Ktr::where('waktu', 'like', $likeKey)->orderBy('id')->get();
 
-            if ($rows->isNotEmpty()) {
-                $norm = fn($s) => $s ? preg_replace('/[^A-Z0-9]/', '', strtoupper(trim($s))) : null;
-                $targetNorm = $norm($ktrPriority);
-                $targetShort = $targetNorm && preg_match('/(\d+[A-Z]?)$/', $targetNorm, $m) ? $m[1] : null;
+        if ($rows->isNotEmpty()) {
+            $norm = fn($s) => $s ? preg_replace('/[^A-Z0-9]/', '', strtoupper(trim($s))) : null;
+            $targetNorm = $norm($ktrPriority);
+            $targetShort = $targetNorm && preg_match('/(\d+[A-Z]?)$/', $targetNorm, $m) ? $m[1] : null;
 
-                foreach ($rows as $r) {
-                    if ($norm($r->kategori ?? '') === $targetNorm) {
-                        $v = $this->extractRpFromRow($r);
-                        if ($v !== null) return $v;
-                    }
-                }
-
-                if ($targetShort) {
-                    foreach ($rows as $r) {
-                        if (stripos($norm($r->kategori ?? ''), $targetShort) !== false) {
-                            $v = $this->extractRpFromRow($r);
-                            if ($v !== null) return $v;
-                        }
-                    }
-                }
-
-                foreach ($rows as $r) {
+            foreach ($rows as $r) {
+                if ($norm($r->kategori ?? '') === $targetNorm) {
                     $v = $this->extractRpFromRow($r);
                     if ($v !== null) return $v;
                 }
             }
+
+            if ($targetShort) {
+                foreach ($rows as $r) {
+                    if (stripos($norm($r->kategori ?? ''), $targetShort) !== false) {
+                        $v = $this->extractRpFromRow($r);
+                        if ($v !== null) return $v;
+                    }
+                }
+            }
+
+            // Fallback ambil baris pertama
+            foreach ($rows as $r) {
+                $v = $this->extractRpFromRow($r);
+                if ($v !== null) return $v;
+            }
         }
+    }
 
-        $mappings = Ktr::orderBy('id')->get();
-        if ($mappings->isEmpty()) return null;
-
+    // Fallback range mapping (untuk kasus lain)
+    $mappings = Ktr::orderBy('id')->get();
+    if ($mappings->isNotEmpty()) {
         foreach ($this->parseRangeMappings($mappings, 'waktu') as $p) {
             if ($jumlahMurid >= $p['min'] && $jumlahMurid <= $p['max']) {
                 return $this->extractRpFromRow($p['map']);
             }
         }
-
-        return null;
     }
+
+    return null;
+}
 
     private function parseRangeString(?string $s): ?array
     {
@@ -1235,11 +1251,11 @@ public function export(Request $request)
 public function recalculateMuridDanKtr(Profile $profile): void
 {
     if (
-    in_array($profile->jabatan, ['Guru', 'Kepala Unit']) &&
-    $profile->status_karyawan === 'Resign'
-) {
-    return;
-}
+        in_array($profile->jabatan, ['Guru', 'Kepala Unit']) &&
+        $profile->status_karyawan === 'Resign'
+    ) {
+        return;
+    }
 
     if ($profile->jabatan === 'Guru') {
         $totalMurid = BukuInduk::where('guru', $profile->nama)
@@ -1249,16 +1265,32 @@ public function recalculateMuridDanKtr(Profile $profile): void
         $profile->jumlah_murid_mba     = $totalMurid;
         $profile->jumlah_murid_jadwal  = $totalMurid;
         $profile->total_murid          = $totalMurid;
-        $profile->jumlah_rombim        = $totalMurid > 0 ? $this->resolveSlotRombimFromCount($totalMurid) : null;
+        $profile->jumlah_rombim        = $totalMurid > 0 ? $this->resolveSlotRombimFromCount($totalMurid) : 0;
 
         if ($totalMurid <= 0) {
             $profile->rb           = 'RB30';
             $profile->ktr          = 'KTR 1A';
             $profile->rb_tambahan  = 'RB30';
             $profile->ktr_tambahan = 'KTR 1A';
-            $profile->rp           = 0;           // atau nilai default sesuai skim
+            
+            $profile->rp = $this->resolveRpFromJumlahMuridWithKtr(0, 'KTR 1A', 'RB30');
         } else {
-            // ... logika RB KTR existing kamu ...
+            // Logika untuk murid > 0
+            $rb = $this->resolveRbFromCount($totalMurid);
+            $profile->rb = $rb ? 'RB' . $rb : 'RB30';
+            
+            // 🔥 PERBAIKAN KRITIS
+            $profile->rb_tambahan = $profile->rb;
+
+            $ktr = $this->formatKtrFromCountForGuru($totalMurid) ?: 'KTR 1A';
+            $profile->ktr          = $ktr;
+            $profile->ktr_tambahan = $ktr;
+
+            $profile->rp = $this->resolveRpFromJumlahMuridWithKtr(
+                $totalMurid,
+                $ktr,
+                $profile->rb
+            );
         }
 
         $profile->saveQuietly();
@@ -1280,9 +1312,32 @@ public function recalculateMuridDanKtr(Profile $profile): void
             $profile->ktr          = 'KTR 1B';
             $profile->rb_tambahan  = 'RB40';
             $profile->ktr_tambahan = 'KTR 1B';
-            $profile->rp           = 1350000;   // sesuaikan
+            
+            $profile->rp = $this->resolveRpFromJumlahMuridWithKtr(0, 'KTR 1B', 'RB40');
         } else {
-            // logika existing...
+            if (empty(trim($profile->rb ?? ''))) {
+                $profile->rb = 'RB40';
+            }
+
+            $profile->rb_tambahan = $profile->rb;   // ← Tambahkan ini juga
+
+            $ktrOtomatis = $this->formatKtrFromCountForKepala($totalMurid);
+
+            if (!empty(trim($profile->ktr_tambahan ?? ''))) {
+                $profile->ktr = $profile->ktr_tambahan;
+            } else {
+                $profile->ktr = $ktrOtomatis ?? 'KTR 1B';
+            }
+
+            $finalKtr = !empty(trim($profile->ktr_tambahan ?? '')) 
+                ? $profile->ktr_tambahan 
+                : $profile->ktr;
+
+            $profile->rp = $this->resolveRpFromJumlahMuridWithKtr(
+                $totalMurid,
+                $finalKtr,
+                $profile->rb
+            );
         }
 
         $profile->saveQuietly();

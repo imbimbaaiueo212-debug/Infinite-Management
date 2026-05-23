@@ -42,6 +42,58 @@
                             </div>
                         </div>
 
+                        <form action="{{ route('data_produk.store') }}" method="POST">
+    @csrf
+
+    <div class="row mb-4">
+    <!-- UNIT -->
+    <div class="col-md-5">
+        <label class="form-label fw-bold">
+            Unit biMBA <span class="text-danger">*</span>
+        </label>
+
+        @if(!$isAdmin && $userUnit)
+
+            <!-- USER BIASA -->
+            <input type="text"
+                   class="form-control bg-light fw-bold text-primary"
+                   value="{{ $userUnit->no_cabang }} - {{ $userUnit->biMBA_unit ?? $userUnit->nama }}"
+                   readonly>
+
+            <input type="hidden"
+                   name="unit_id"
+                   value="{{ $userUnit->id }}">
+
+        @else
+
+            <!-- ADMIN / USER TANPA UNIT -->
+            <select name="unit_id"
+                    class="form-select @error('unit_id') is-invalid @enderror"
+                    required>
+
+                <option value="">-- Pilih Unit biMBA --</option>
+
+                @foreach($units as $unit)
+                    <option value="{{ $unit->id }}"
+                        {{ old('unit_id') == $unit->id ? 'selected' : '' }}>
+                        {{ $unit->no_cabang }} - {{ $unit->biMBA_unit ?? $unit->nama }}
+                    </option>
+                @endforeach
+            </select>
+
+        @endif
+
+        @error('unit_id')
+            <small class="text-danger">{{ $message }}</small>
+        @enderror
+    </div>
+</div>
+
+    <!-- Sisanya (tabel produk) tetap sama -->
+    <div class="table-responsive">
+        ... (kode tabel Anda tetap)
+    </div>
+
                         <div class="table-responsive">
                             <table class="table table-bordered table-hover align-middle text-center">
                                 <thead class="table-primary">

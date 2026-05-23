@@ -273,7 +273,12 @@ class PenerimaanImport implements ToCollection, WithHeadingRow, WithChunkReading
 
                 $daftar      = $this->parseInt($this->getValue($row, ['daftar']));
                 $voucher     = $this->parseInt($this->getValue($row, ['voucher']));
-                $spp         = $this->parseInt($this->getValue($row, ['spp']));
+                $spp = $this->parseInt(
+    $this->getValue($row, [
+        'spp',
+        'nilai_spp'
+    ])
+);
                 $kaos        = $this->parseInt($this->getValue($row, ['kaos']));
                 $kpk         = $this->parseInt($this->getValue($row, ['kpk']));
                 $tas         = $this->parseInt($this->getValue($row, ['tas']));
@@ -358,37 +363,7 @@ class PenerimaanImport implements ToCollection, WithHeadingRow, WithChunkReading
 
         if (!empty($insertData)) {
 
-            Penerimaan::upsert(
-                $insertData,
-                ['kwitansi'],
-                [
-                    'via',
-                    'tanggal',
-                    'bulan',
-                    'tahun',
-                    'nim',
-                    'nama_murid',
-                    'kelas',
-                    'gol',
-                    'kd',
-                    'guru',
-                    'status',
-                    'bimba_unit',
-                    'no_cabang',
-                    'daftar',
-                    'voucher',
-                    'spp',
-                    'kaos',
-                    'kpk',
-                    'tas',
-                    'sertifikat',
-                    'stpb',
-                    'event',
-                    'lain_lain',
-                    'total',
-                    'updated_at'
-                ]
-            );
+           Penerimaan::insert($insertData);
 
             Log::info('IMPORT SUCCESS', [
                 'total_insert' => count($insertData)

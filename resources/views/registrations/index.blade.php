@@ -160,7 +160,7 @@
                                 </td>
                                 <td>
                                     @if($r->attachment_path)
-                                        <a href="{{ asset('storage/'.$r->attachment_path) }}" target="_blank"
+                                        <a href="{{ asset('public/storage/'.$r->attachment_path) }}" target="_blank"
                                            class="btn btn-sm btn-outline-primary" title="Lihat Bukti">
                                             Lihat
                                         </a>

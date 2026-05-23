@@ -296,7 +296,7 @@
                     <label class="form-label">Upload Dokumen Baru (Opsional)</label>
                     @if ($registration->attachment_path)
                         <div class="mb-2">
-                            <a href="{{ asset('storage/' . $registration->attachment_path) }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                            <a href="{{ asset('public/storage/' . $registration->attachment_path) }}" target="_blank" class="btn btn-sm btn-outline-primary">
                                 Lihat File Saat Ini
                             </a>
                         </div>

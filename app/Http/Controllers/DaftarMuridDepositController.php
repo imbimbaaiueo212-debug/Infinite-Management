@@ -23,13 +23,20 @@ class DaftarMuridDepositController extends Controller
     // Siapkan opsi unit (hanya admin)
     $unitOptions = [];
     if (auth()->check() && auth()->user()->is_admin) {
-        $unitOptions = Penerimaan::whereNotNull('bimba_unit')
-            ->where('bimba_unit', '!=', '')
-            ->distinct()
-            ->orderBy('bimba_unit')
-            ->pluck('bimba_unit', 'bimba_unit')
-            ->toArray();
-    }
+    $unitOptions = Penerimaan::whereNotNull('bimba_unit')
+        ->where('bimba_unit', '!=', '')
+        ->pluck('bimba_unit')
+        ->map(function ($unit) {
+            $unit = trim($unit);
+            return str_contains($unit, '|') 
+                    ? trim(explode('|', $unit)[1]) 
+                    : $unit;
+        })
+        ->unique()
+        ->sort()
+        ->values()
+        ->toArray();
+}
 
     // Query dengan filter
     $query = Penerimaan::whereMonth('tanggal', $bulan)

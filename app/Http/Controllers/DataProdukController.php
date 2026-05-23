@@ -126,54 +126,79 @@ class DataProdukController extends Controller
      * ==============================
      */
     public function create()
-    {
-        $units = Unit::orderBy('no_cabang')->get();
+{
+    $units = Unit::orderBy('no_cabang')->get();
 
-        $produks = Produk::where('pendataan', 1)
-            ->orderBy('kode')
-            ->get(['kode', 'label', 'jenis', 'satuan', 'harga']);
+    $currentMonth = now()->format('Y-m');
+    $periodes = collect();
 
-        return view('data_produk.create', compact('produks', 'units'));
+    for ($i = 0; $i < 6; $i++) {
+        $periodes->push(now()->subMonths($i)->format('Y-m'));
     }
 
-    /**
-     * ==============================
-     * STORE
-     * ==============================
-     */
+    $produks = Produk::where('pendataan', 1)
+        ->orderBy('kode')
+        ->get(['kode', 'label', 'jenis', 'satuan', 'harga']);
+
+    $user = auth()->user();
+
+    // cek admin
+    $isAdmin = in_array($user->role ?? '', ['admin', 'superadmin']);
+
+    // cari unit user
+    $userUnit = null;
+
+    if (!$isAdmin && $user) {
+        $userUnit = Unit::where('id', $user->unit_id)
+            ->orWhere('no_cabang', $user->no_cabang)
+            ->orWhere('biMBA_unit', $user->bimba_unit)
+            ->first();
+    }
+
+    return view('data_produk.create', compact(
+        'produks',
+        'units',
+        'periodes',
+        'currentMonth',
+        'userUnit',
+        'isAdmin'
+    ));
+}
+
     public function store(Request $request)
-    {
-        $request->validate([
-            'unit_id'  => 'required|exists:units,id',
-            'periode'  => 'required|date_format:Y-m',
-            'kode'     => 'required|string|unique:data_produk,kode,NULL,id,periode,'.$request->periode.',unit_id,'.$request->unit_id,
-            'jenis'    => 'required|string',
-            'label'    => 'required|string',
-            'satuan'   => 'required|string',
-            'harga'    => 'required|numeric|min:0',
-            'min_stok' => 'required|integer|min:0',
-            'sld_awal' => 'required|integer|min:0',
-            'opname'   => 'required|integer|min:0',
-        ]);
+{
+    $request->validate([
+        'unit_id'  => 'required|exists:units,id',
+        'periode'  => 'required|date_format:Y-m',
+        'kode'     => 'required|string|unique:data_produk,kode,NULL,id,periode,'.$request->periode.',unit_id,'.$request->unit_id,
+        'jenis'    => 'required|string',
+        'label'    => 'required|string',
+        'satuan'   => 'required|string',
+        'harga'    => 'required|numeric|min:0',
+        'min_stok' => 'required|integer|min:0',
+        'sld_awal' => 'required|integer|min:0',
+        'opname'   => 'required|integer|min:0',
+    ]);
 
-        $data = $request->only([
-            'unit_id','periode','kode','jenis','label','satuan','harga',
-            'min_stok','sld_awal','opname'
-        ]);
+    $data = $request->only([
+        'unit_id', 'periode', 'kode', 'jenis', 'label', 'satuan', 'harga',
+        'min_stok', 'sld_awal', 'opname'
+    ]);
 
-        $data['terima'] = 0;
-        $data['pakai']  = 0;
+    $data['terima'] = 0;
+    $data['pakai']  = 0;
 
-        DataProduk::create($data);
+    DataProduk::create($data);
 
-        $this->syncPakaiFromPemakaian($request->periode, $request->unit_id);
-        $this->syncTerimaFromPenerimaan($request->periode, $request->unit_id);
+    // Sync otomatis
+    $this->syncPakaiFromPemakaian($request->periode, $request->unit_id);
+    $this->syncTerimaFromPenerimaan($request->periode, $request->unit_id);
 
-        return redirect()->route('data_produk.index', [
-            'periode' => $request->periode,
-            'unit_id' => $request->unit_id
-        ])->with('success', 'Data rekap stok berhasil disimpan!');
-    }
+    return redirect()->route('data_produk.index', [
+        'periode' => $request->periode,
+        'unit_id' => $request->unit_id
+    ])->with('success', 'Data rekap stok berhasil disimpan!');
+}
 
     /**
      * ==============================
