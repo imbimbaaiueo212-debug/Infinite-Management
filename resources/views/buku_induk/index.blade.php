@@ -7,15 +7,23 @@
                 <h2 class="mb-4">Data Buku Induk</h2>
 
                 <div class="d-flex flex-wrap gap-2 mb-4">
-                    <a href="{{ route('buku_induk.create') }}" class="btn btn-primary">+ Tambah Data</a>
-                    <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#importModal">
-                        Unggah Data Excel
-                    </button>
-                    <a href="{{ route('buku_induk.export') . '?' . http_build_query(request()->query()) }}"
-                        class="btn btn-info">
-                        <i class="fas fa-file-excel"></i> Unduh Data Excel
-                    </a>
-                </div>
+
+    @if(auth()->check() && auth()->user()->role == 'admin')
+        <a href="{{ route('buku_induk.create') }}" class="btn btn-primary">
+            + Tambah Data
+        </a>
+    @endif
+
+    <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#importModal">
+        Unggah Data Excel
+    </button>
+
+    <a href="{{ route('buku_induk.export') . '?' . http_build_query(request()->query()) }}"
+        class="btn btn-info">
+        <i class="fas fa-file-excel"></i> Unduh Data Excel
+    </a>
+
+</div>
 
                 {{-- MODAL IMPORT --}}
                 <div class="modal fade" id="importModal" tabindex="-1" aria-labelledby="importModalLabel"

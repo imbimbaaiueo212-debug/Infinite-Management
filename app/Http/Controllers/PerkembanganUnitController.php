@@ -76,11 +76,11 @@ class PerkembanganUnitController extends Controller
 
         $mb  = array_fill(0, 12, 0);
         $mk  = array_fill(0, 12, 0);
-        $ma  = array_fill(0, 12, 0); // default 0
+        $ma  = array_fill(0, 12, 0);
         $bnf = array_fill(0, 12, 0);
         $d   = array_fill(0, 12, 0);
 
-        // 1. MURID BARU (MB) - berdasarkan tgl_masuk saja
+        // 1. MURID BARU (MB)
         $queryBaru = $base->clone()
             ->whereYear('tgl_masuk', $tahunMulai);
 
@@ -113,131 +113,122 @@ class PerkembanganUnitController extends Controller
             $mk[$bln - 1] = (int) $jumlah;
         }
 
-        // 3. BEASISWA BNF & D
-        if (\Schema::hasColumn('buku_induk', 'status_beasiswa')) {
-            $beasiswaQuery = $base->clone()
-                ->whereYear('tgl_masuk', $tahunMulai)
-                ->whereIn(DB::raw('UPPER(status_beasiswa)'), ['BNF', 'D']);
+        // 3. BNF & DHUAFA (menggunakan GOL dari Buku Induk)
+        $beasiswaQuery = $base->clone()
+            ->whereYear('tgl_masuk', $tahunMulai)
+            ->whereNotNull('gol');
 
-            if ($bulan !== null) {
-                $beasiswaQuery->whereMonth('tgl_masuk', $bulan);
+        if ($bulan !== null) {
+            $beasiswaQuery->whereMonth('tgl_masuk', $bulan);
+        }
+
+        $beasiswa = $beasiswaQuery->selectRaw(
+                "TRIM(UPPER(gol)) as jenis, 
+                 MONTH(tgl_masuk) as bulan, 
+                 COUNT(*) as jumlah"
+            )
+            ->groupBy('jenis', 'bulan')
+            ->get();
+
+        foreach ($beasiswa as $row) {
+            $i = $row->bulan - 1;
+            if (in_array($row->jenis, ['S3B1', 'S3B2', 'S3B3'])) {
+                $bnf[$i] = (int) $row->jumlah;
             }
-
-            $beasiswa = $beasiswaQuery->selectRaw('UPPER(status_beasiswa) as jenis, MONTH(tgl_masuk) as bulan, COUNT(*) as jumlah')
-                                      ->groupBy('jenis', 'bulan')
-                                      ->get();
-
-            foreach ($beasiswa as $row) {
-                $i = $row->bulan - 1;
-                if ($row->jenis === 'BNF') $bnf[$i] = (int) $row->jumlah;
-                if ($row->jenis === 'D')   $d[$i]   = (int) $row->jumlah;
+            if ($row->jenis === 'D') {
+                $d[$i] = (int) $row->jumlah;
             }
         }
 
-       // MA = saldo aktif per akhir bulan
-$ma = array_fill(0, 12, 0);
+        // 4. MA = Murid Aktif per akhir bulan
+        $bulanLoop = $bulan !== null ? [$bulan] : range(1, 12);
 
-$bulanLoop = $bulan !== null ? [$bulan] : range(1, 12);
+        foreach ($bulanLoop as $m) {
+            $cutoff = Carbon::create($tahunMulai, $m, 1)
+                ->endOfMonth()
+                ->endOfDay();
 
-foreach ($bulanLoop as $m) {
-    $cutoff = Carbon::create($tahunMulai, $m, 1)
-        ->endOfMonth()
-        ->endOfDay();
+            $ma[$m - 1] = $base->clone()
+                ->where('status', 'aktif')
+                ->where('tgl_masuk', '<=', $cutoff)
+                ->where(function ($q) use ($cutoff) {
+                    $q->whereNull('tgl_keluar')
+                      ->orWhere('tgl_keluar', '>', $cutoff);
+                })
+                ->count();
+        }
 
-    $ma[$m - 1] = $base->clone()
-        ->where('status', 'aktif')
-        ->where('tgl_masuk', '<=', $cutoff)
-        ->where(function ($q) use ($cutoff) {
-            $q->whereNull('tgl_keluar')
-              ->orWhere('tgl_keluar', '>', $cutoff);
-        })
-        ->count();
-}
-// --- Tambahan: Breakdown jumlah murid bayar SPP & total nominal per bulan ---
+        // 5. SPP PER BULAN dari tabel penerimaan
+        $sppPerBulan = $this->getSppPerBulan($tahunMulai, $bulan, $bimba_unit_norm);
 
-$sppPerBulan = [];
+        // 6. TOTAL BNF & DHUAFA SEMUA TAHUN
+        $totalBnfAllTime = $base->clone()
+            ->whereNotNull('gol')
+            ->whereIn(DB::raw('TRIM(UPPER(gol))'), ['S3B1', 'S3B2', 'S3B3'])
+            ->count();
 
-if ($unitTerpilih) {  // hanya jika unit sudah dipilih
-    $tahun = $tahunMulai;
-
-    // Tentukan akhir periode untuk cek status aktif
-    $endOfPeriod = null;
-    if ($bulan !== null) {
-        // Jika filter per bulan, gunakan akhir bulan tersebut
-        $endOfPeriod = Carbon::create($tahunMulai, $bulan, 1)->endOfMonth()->endOfDay();
-    } else {
-        // Jika tahun penuh, gunakan akhir tahun
-        $endOfPeriod = Carbon::create($tahunMulai, 12, 31)->endOfDay();
-    }
-
-    $penerimaan = \App\Models\Penerimaan::query()
-    ->where('penerimaan.tahun', $tahun)  // spesifik tabel
-    ->when($bulan !== null, function ($q) use ($bulan) {
-        $bulanNama = strtolower(Carbon::create()->month($bulan)->translatedFormat('F'));
-        $q->whereRaw('LOWER(TRIM(penerimaan.bulan)) = ?', [$bulanNama]); // spesifik tabel
-    })
-    ->when($bimba_unit_norm, function ($q) use ($bimba_unit_norm) {
-        $q->whereRaw('TRIM(UPPER(penerimaan.bimba_unit)) = ?', [$bimba_unit_norm]); // tambahkan penerimaan.
-    })
-    // JOIN ke buku_induk
-    ->join('buku_induk', 'penerimaan.nim', '=', 'buku_induk.nim')
-    ->where('buku_induk.status', 'Aktif')
-    ->where(function ($q) use ($endOfPeriod) {
-        $q->whereNull('buku_induk.tgl_keluar')
-          ->orWhere('buku_induk.tgl_keluar', '>', $endOfPeriod);
-    })
-    ->where('buku_induk.tgl_masuk', '<=', $endOfPeriod)
-    ->select('penerimaan.*') // pastikan hanya ambil kolom dari penerimaan
-    ->get();
-
-    // Grup per bulan (lowercase → ucfirst untuk tampilan)
-    $grouped = $penerimaan
-        ->groupBy(function ($item) {
-            $bln = strtolower(trim($item->bulan ?? ''));
-            return $bln;
-        })
-        ->map(function ($group, $bulanLower) use ($tahun) {
-            // Jumlah murid unik (sudah pasti aktif karena difilter join)
-            $jumlahMurid = $group->unique('nim')->count();
-
-            $totalNominal = $group->sum(function ($item) {
-                return (float) ($item->spp ?? $item->jumlah ?? $item->nominal ?? $item->total ?? $item->bayar ?? 0);
-            });
-
-            return [
-                'bulan'        => ucfirst($bulanLower),
-                'jumlah_murid' => $jumlahMurid,
-                'total_spp'    => $totalNominal,
-            ];
-        });
-
-    // Ubah ke array ber-index 0–11 (sesuai urutan bulan)
-    $bulanList = [
-        'januari', 'februari', 'maret', 'april', 'mei', 'juni',
-        'juli', 'agustus', 'september', 'oktober', 'november', 'desember'
-    ];
-
-    foreach ($bulanList as $idx => $bln) {
-        $data = $grouped->firstWhere('bulan', ucfirst($bln));
-        $sppPerBulan[$idx] = $data ? $data : ['jumlah_murid' => 0, 'total_spp' => 0];
-    }
-} else {
-    $sppPerBulan = array_fill(0, 12, ['jumlah_murid' => 0, 'total_spp' => 0]);
-}
-
+        $totalDhuafaAllTime = $base->clone()
+            ->whereNotNull('gol')
+            ->where(DB::raw('TRIM(UPPER(gol))'), 'D')
+            ->count();
 
         return view('perkembangan_units.index', [
-            'unitTerpilih'      => $unitTerpilih,
-            'bimba_unit'        => $bimba_unit_input,
-            'no_cabang'         => $no_cabang,
-            'tahunMulai'        => $tahunMulai,
-            'bulan'             => $bulan,
-            'mb'                => $mb,
-            'mk'                => $mk,
-            'ma'                => $ma,
-            'bnf'               => $bnf,
-            'd'                 => $d,
-            'sppPerBulan'       => $sppPerBulan,   // <-- tambahkan ini
+            'unitTerpilih'          => $unitTerpilih,
+            'bimba_unit'            => $bimba_unit_input,
+            'no_cabang'             => $no_cabang,
+            'tahunMulai'            => $tahunMulai,
+            'bulan'                 => $bulan,
+            'mb'                    => $mb,
+            'mk'                    => $mk,
+            'ma'                    => $ma,
+            'bnf'                   => $bnf,
+            'd'                     => $d,
+            'sppPerBulan'           => $sppPerBulan,
+            'totalBnfAllTime'       => $totalBnfAllTime,
+            'totalDhuafaAllTime'    => $totalDhuafaAllTime,
         ]);
+    }
+
+    /**
+     * Ambil data SPP per bulan dari tabel penerimaan
+     */
+    private function getSppPerBulan($tahun, $bulanFilter = null, $bimba_unit_norm = null)
+    {
+        $query = \App\Models\Penerimaan::query()
+            ->where('tahun', $tahun)
+            ->when($bimba_unit_norm, function ($q) use ($bimba_unit_norm) {
+                $q->whereRaw('TRIM(UPPER(bimba_unit)) = ?', [$bimba_unit_norm]);
+            });
+
+        if ($bulanFilter !== null) {
+            $bulanNama = strtolower(Carbon::create()->month($bulanFilter)->translatedFormat('F'));
+            $query->whereRaw('LOWER(TRIM(bulan)) = ?', [$bulanNama]);
+        }
+
+        $penerimaan = $query->get();
+
+        $grouped = $penerimaan
+            ->groupBy(function ($item) {
+                return strtolower(trim($item->bulan ?? ''));
+            })
+            ->map(function ($group) {
+                return [
+                    'bulan'        => ucfirst(strtolower(trim($group->first()->bulan ?? ''))),
+                    'jumlah_murid' => $group->unique('nim')->count(),
+                    'total_spp'    => $group->sum(function ($item) {
+                        return (float) ($item->spp ?? $item->jumlah ?? $item->nominal ?? $item->total ?? 0);
+                    }),
+                ];
+            });
+
+        $bulanList = ['januari','februari','maret','april','mei','juni','juli','agustus','september','oktober','november','desember'];
+        $result = [];
+
+        foreach ($bulanList as $idx => $bln) {
+            $data = $grouped->firstWhere('bulan', ucfirst($bln));
+            $result[$idx] = $data ?? ['jumlah_murid' => 0, 'total_spp' => 0];
+        }
+
+        return $result;
     }
 }

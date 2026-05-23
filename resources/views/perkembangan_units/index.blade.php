@@ -212,6 +212,27 @@
         </div>
     </div>
 
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm bg-light border-warning">
+                <div class="card-body text-center">
+                    <h6 class="text-muted mb-1">Total Murid BNF Aktif <small>(Semua Tahun)</small></h6>
+                    <h3 class="mb-0 text-success fw-bold">{{ number_format($totalBnfAllTime ?? 0) }}</h3>
+                    <small class="text-muted">Murid</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm bg-light border-warning">
+                <div class="card-body text-center">
+                    <h6 class="text-muted mb-1">Total Murid Dhuafa Aktif <small>(Semua Tahun)</small></h6>
+                    <h3 class="mb-0 text-success fw-bold">{{ number_format($totalDhuafaAllTime ?? 0) }}</h3>
+                    <small class="text-muted">Murid</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
     {{-- ================= GRAFIK ================= --}}
     <div class="card border-0 shadow">
         <div class="card-header bg-white text-center border-bottom border-primary border-4">
