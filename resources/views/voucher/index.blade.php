@@ -56,43 +56,117 @@
   </a>
 
   {{-- Modal Upload Bukti by NIM --}}
-  <div class="modal fade" id="uploadBuktiModal" tabindex="-1" aria-labelledby="uploadBuktiModalLabel" aria-hidden="true">
+  <div class="modal fade" id="uploadBuktiModal" tabindex="-1"
+     aria-labelledby="uploadBuktiModalLabel" aria-hidden="true">
+
     <div class="modal-dialog modal-dialog-centered">
-      <form id="uploadBuktiForm" class="modal-content" enctype="multipart/form-data">
-        @csrf
-        <div class="modal-header">
-          <h5 class="modal-title" id="uploadBuktiModalLabel">Unggah Bukti Penyerahan (per NIM Murid Baru)</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body">
-          <div id="uploadBuktiAlert" class="alert d-none" role="alert"></div>
 
-          <div class="mb-3">
-            <label for="nim_murid_baru_input" class="form-label">NIM Murid Baru</label>
-            <input type="text" name="nim_murid_baru" id="nim_murid_baru_input" class="form-control"
-              placeholder="Isi NIM atau klik tombol 'Upload Bukti' pada baris">
-          </div>
+        <form id="uploadBuktiForm"
+              class="modal-content"
+              enctype="multipart/form-data">
 
-          <div class="mb-3">
-            <label for="tanggal_penyerahan_input" class="form-label">Tanggal Penyerahan (opsional)</label>
-            <input type="date" name="tanggal_penyerahan" id="tanggal_penyerahan_input" class="form-control">
-          </div>
+            @csrf
 
-          <div class="mb-3">
-            <label for="bukti_penyerahan_input" class="form-label">File Bukti (jpg/png/pdf, max 5MB)</label>
-            <input type="file" name="bukti_penyerahan" id="bukti_penyerahan_input" class="form-control"
-              accept=".jpg,.jpeg,.png,.pdf" required>
-          </div>
+            <div class="modal-header">
+                <h5 class="modal-title" id="uploadBuktiModalLabel">
+                    Unggah Bukti Penyerahan
+                </h5>
 
-          <small class="text-muted">Unggah satu file yang akan dipakai untuk semua voucher dengan NIM Murid Baru tersebut.</small>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
-          <button type="submit" class="btn btn-primary" id="uploadBuktiSubmitBtn">Unggah dan Terapkan</button>
-        </div>
-      </form>
+                <button type="button"
+                        class="btn-close"
+                        data-bs-dismiss="modal"
+                        aria-label="Close"></button>
+            </div>
+
+            <div class="modal-body">
+
+                <div id="uploadBuktiAlert"
+                     class="alert d-none"
+                     role="alert"></div>
+
+                {{-- NOMOR VOUCHER --}}
+                <div class="mb-3">
+                    <label for="no_voucher_input"
+                           class="form-label">
+                        No Voucher
+                    </label>
+
+                    <input type="text"
+                           name="no_voucher"
+                           id="no_voucher_input"
+                           class="form-control"
+                           placeholder="Isi nomor voucher">
+                </div>
+
+                {{-- NIM MURID BARU --}}
+                <div class="mb-3">
+                    <label for="nim_murid_baru_input"
+                           class="form-label">
+                        NIM Murid Baru
+                    </label>
+
+                    <input type="text"
+                           name="nim_murid_baru"
+                           id="nim_murid_baru_input"
+                           class="form-control"
+                           placeholder="Opsional untuk voucher event/lainnya">
+                </div>
+
+                {{-- TANGGAL --}}
+                <div class="mb-3">
+                    <label for="tanggal_penyerahan_input"
+                           class="form-label">
+                        Tanggal Penyerahan (opsional)
+                    </label>
+
+                    <input type="date"
+                           name="tanggal_penyerahan"
+                           id="tanggal_penyerahan_input"
+                           class="form-control">
+                </div>
+
+                {{-- FILE --}}
+                <div class="mb-3">
+                    <label for="bukti_penyerahan_input"
+                           class="form-label">
+                        File Bukti (jpg/png/pdf, max 5MB)
+                    </label>
+
+                    <input type="file"
+                           name="bukti_penyerahan"
+                           id="bukti_penyerahan_input"
+                           class="form-control"
+                           accept=".jpg,.jpeg,.png,.pdf"
+                           required>
+                </div>
+
+                <small class="text-muted">
+                    Voucher regular menggunakan NIM.
+                    Voucher event/lainnya dapat menggunakan nomor voucher.
+                </small>
+
+            </div>
+
+            <div class="modal-footer">
+
+                <button type="button"
+                        class="btn btn-secondary"
+                        data-bs-dismiss="modal">
+                    Batal
+                </button>
+
+                <button type="submit"
+                        class="btn btn-primary"
+                        id="uploadBuktiSubmitBtn">
+                    Unggah dan Terapkan
+                </button>
+
+            </div>
+
+        </form>
+
     </div>
-  </div>
+</div>
 
   {{-- Modal Preview Bukti --}}
   <div class="modal fade" id="buktiPreviewModal" tabindex="-1" aria-labelledby="buktiPreviewModalLabel" aria-hidden="true">
@@ -359,22 +433,27 @@
                   @endif
                 </td>
                 <td>
-                  <div class="position-relative">
-                    <input type="date" class="form-control form-control-sm inline-edit" data-id="{{ $v->id }}"
-                      data-field="tanggal_penyerahan"
-                      value="{{ $v->tanggal_penyerahan ? \Carbon\Carbon::parse($v->tanggal_penyerahan)->format('Y-m-d') : '' }}"
-                      style="min-width:150px;">
-                    <small class="d-block text-muted mt-1 tanggal-format-{{ $v->id }}">
-                      @if($v->tanggal_penyerahan)
-                        {{ \Carbon\Carbon::parse($v->tanggal_penyerahan)->format('d-m-Y') }}
-                      @else
-                        Belum diisi
-                      @endif
-                    </small>
-                    <div class="invalid-feedback small mt-1 d-none inline-error" id="error-tanggal_penyerahan-{{ $v->id }}">
-                    </div>
-                  </div>
-                </td>
+  <div class="position-relative">
+    <input 
+      type="date" 
+      class="form-control form-control-sm inline-edit" 
+      data-id="{{ $v->id }}"
+      data-field="tanggal_penyerahan"
+      value="{{ $v->tanggal_penyerahan ? \Carbon\Carbon::parse($v->tanggal_penyerahan)->format('Y-m-d') : '' }}"
+      style="min-width:150px;"
+    >
+    
+    <small class="d-block text-muted mt-1 tanggal-format-{{ $v->id }}">
+      @if($v->tanggal_penyerahan)
+        {{ \Carbon\Carbon::parse($v->tanggal_penyerahan)->format('d-m-Y') }}
+      @else
+        Belum diisi
+      @endif
+    </small>
+
+    <div class="invalid-feedback small mt-1 d-none inline-error" id="error-tanggal_penyerahan-{{ $v->id }}"></div>
+  </div>
+</td>
                 <td class="status-cell-{{ $v->id }}">
                   @php $st = $v->status ?? null; @endphp
 
@@ -436,8 +515,9 @@
                   {{-- Tombol Upload Bukti per baris --}}
                   <div class="mt-1">
                     <button class="btn btn-sm btn-outline-secondary upload-bukti-btn" type="button"
-                      data-nim="{{ $v->nim_murid_baru ?? '' }}">
-                      <i class="bi bi-upload"></i> Upload Bukti (NIM)
+                      data-nim="{{ $v->nim_murid_baru ?? '' }}"
+                      data-voucher="{{ $v->no_voucher ?? '' }}">
+                      <i class="bi bi-upload"></i> Upload Bukti
                     </button>
                   </div>
                 </td>
@@ -537,14 +617,13 @@
 
         try {
           const res = await fetch(url, {
-            method: 'PATCH',
-            headers: {
-              'X-CSRF-TOKEN': csrfToken,
-              'Content-Type': 'application/json',
-              'Accept': 'application/json'
-            },
-            body: JSON.stringify({ field: field, value: payloadValue })
-          });
+    method: 'POST',
+    headers: {
+        'X-CSRF-TOKEN': csrfToken,
+        'Accept': 'application/json'
+    },
+    body: formData
+});
 
           const data = await res.json();
 
@@ -623,69 +702,87 @@
       });
 
       // --------- Upload Bukti by NIM: modal handling & AJAX submit ----------
-      document.querySelectorAll('.upload-bukti-btn').forEach(btn => {
-        btn.addEventListener('click', function () {
-          const nim = this.dataset.nim || '';
-          document.getElementById('nim_murid_baru_input').value = nim;
-          document.getElementById('bukti_penyerahan_input').value = '';
-          document.getElementById('tanggal_penyerahan_input').value = '';
-          const alertEl = document.getElementById('uploadBuktiAlert');
-          alertEl.classList.add('d-none');
-          const modalEl = document.getElementById('uploadBuktiModal');
-          const modal = new bootstrap.Modal(modalEl);
-          modal.show();
-        });
-      });
+      // --------- Upload Bukti by NIM: modal handling & AJAX submit ----------
+document.querySelectorAll('.upload-bukti-btn').forEach(btn => {
+  btn.addEventListener('click', function () {
+    const nim = this.dataset.nim || '';
+    const voucher = this.dataset.voucher || '';
+
+    // Isi otomatis dengan pengecekan aman
+    const nimInput = document.getElementById('nim_murid_baru_input');
+    const voucherInput = document.getElementById('no_voucher_input');
+    const fileInput = document.getElementById('bukti_penyerahan_input');
+    const tanggalInput = document.getElementById('tanggal_penyerahan_input');
+
+    if (nimInput) nimInput.value = nim;
+    if (voucherInput) voucherInput.value = voucher;
+    if (fileInput) fileInput.value = '';
+    if (tanggalInput) tanggalInput.value = '';
+
+    // Reset alert
+    const alertEl = document.getElementById('uploadBuktiAlert');
+    if (alertEl) {
+      alertEl.classList.add('d-none');
+    }
+
+    // Tampilkan modal
+    const modalEl = document.getElementById('uploadBuktiModal');
+    if (modalEl) {
+      const modal = new bootstrap.Modal(modalEl);
+      modal.show();
+    } else {
+      console.error('Modal uploadBuktiModal tidak ditemukan!');
+    }
+  });
+});
 
       const uploadForm = document.getElementById('uploadBuktiForm');
-      if (uploadForm) {
-        uploadForm.addEventListener('submit', async function (e) {
-          e.preventDefault();
-          const btn = document.getElementById('uploadBuktiSubmitBtn');
-          btn.disabled = true;
-          const origHtml = btn.innerHTML;
-          btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Mengunggah...';
+if (uploadForm) {
+    uploadForm.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        const btn = document.getElementById('uploadBuktiSubmitBtn');
+        btn.disabled = true;
+        const origHtml = btn.innerHTML;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Mengunggah...';
 
-          const formData = new FormData(uploadForm);
-          const url = "{{ route('voucher.uploadBuktiByNim') }}";
-          try {
+        const formData = new FormData(uploadForm);
+        const url = "{{ route('voucher.uploadBuktiByNim') }}";
+
+        try {
             const res = await fetch(url, {
-              method: 'POST',
-              headers: { 'X-CSRF-TOKEN': csrfToken },
-              body: formData
+                method: 'POST',
+                headers: { 'X-CSRF-TOKEN': csrfToken },
+                body: formData
             });
+
             const data = await res.json();
             const alertEl = document.getElementById('uploadBuktiAlert');
             alertEl.classList.remove('d-none');
 
             if (!res.ok) {
-              alertEl.className = 'alert alert-danger';
-              alertEl.innerText = data.message || 'Gagal mengunggah bukti.';
-              btn.disabled = false;
-              btn.innerHTML = origHtml;
-              return;
+                alertEl.className = 'alert alert-danger';
+                alertEl.innerText = data.message || 'Gagal mengunggah bukti.';
+            } else {
+                alertEl.className = 'alert alert-success';
+                alertEl.innerText = data.message || 'Berhasil!';
+                
+                setTimeout(() => {
+                    bootstrap.Modal.getInstance(document.getElementById('uploadBuktiModal')).hide();
+                    window.location.reload();
+                }, 1200);
             }
-
-            alertEl.className = 'alert alert-success';
-            alertEl.innerText = data.message || 'Berhasil mengunggah bukti.';
-
-            setTimeout(() => {
-              const modalEl = document.getElementById('uploadBuktiModal');
-              const modalInstance = bootstrap.Modal.getInstance(modalEl);
-              if (modalInstance) modalInstance.hide();
-              window.location.reload();
-            }, 900);
-          } catch (err) {
+        } catch (err) {
             console.error(err);
             const alertEl = document.getElementById('uploadBuktiAlert');
             alertEl.classList.remove('d-none');
             alertEl.className = 'alert alert-danger';
-            alertEl.innerText = 'Terjadi kesalahan saat mengunggah.';
+            alertEl.innerText = 'Terjadi kesalahan koneksi.';
+        } finally {
             btn.disabled = false;
             btn.innerHTML = origHtml;
-          }
-        });
-      }
+        }
+    });
+}
 
       // Bukti preview modal handler
       document.querySelectorAll('.bukti-preview-trigger').forEach(el => {

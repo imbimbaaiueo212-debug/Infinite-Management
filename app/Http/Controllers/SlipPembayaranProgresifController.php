@@ -48,20 +48,16 @@ class SlipPembayaranProgresifController extends Controller
         ->pluck('bimba_unit')
         ->toArray();
 
-    // Query daftar nama (Guru + Kepala Unit)
-    $namaQuery = RekapProgresif::whereIn('jabatan', ['Guru', 'Kepala Unit']);
-
-    // Filter berdasarkan unit
-    if (!empty($selectedUnit)) {
-        $namaQuery->where('bimba_unit', $selectedUnit);
-    }
-
-    // Ambil nama list
-    $namaList = $namaQuery
-        ->distinct()
-        ->orderBy('nama')
-        ->pluck('nama')
-        ->toArray();
+    // Query nama yang lebih bersih dan anti-duplikat
+$namaList = RekapProgresif::query()
+    ->whereIn('jabatan', ['Guru', 'Kepala Unit'])
+    ->when(!empty($selectedUnit), function ($q) use ($selectedUnit) {
+        $q->where('bimba_unit', $selectedUnit);
+    })
+    ->groupBy('nama')           // Pastikan unik per nama
+    ->orderBy('nama')
+    ->pluck('nama')
+    ->toArray();
 
     $rekap = null;
     $profile = null;
@@ -91,6 +87,8 @@ class SlipPembayaranProgresifController extends Controller
         $maxRows = max(count($muridList), self::DEFAULT_MAX_ROWS);
     }
 
+    $namaList = $this->getUniqueNamaList($selectedUnit);
+
     return view('slip-progresif.index', compact(
         'unitList',
         'selectedUnit',
@@ -104,6 +102,20 @@ class SlipPembayaranProgresifController extends Controller
         'muridList',
         'maxRows'
     ));
+}
+
+/**
+ * Ambil daftar nama unik untuk filter
+ */
+private function getUniqueNamaList(?string $unit = null): array
+{
+    return RekapProgresif::query()
+        ->whereIn('jabatan', ['Guru', 'Kepala Unit'])
+        ->when($unit, fn($q) => $q->where('bimba_unit', $unit))
+        ->groupBy('nama')
+        ->orderBy('nama')
+        ->pluck('nama')
+        ->toArray();
 }
 
     public function previewPdf(Request $request)

@@ -34,17 +34,34 @@ class VoucherLamaController extends Controller
      * @return string|null
      */
     protected function storeBuktiPenyerahanFile(?\Illuminate\Http\UploadedFile $file): ?string
-    {
-        if (! $file) return null;
+{
+    if (!$file || !$file->isValid()) {
+        return null;
+    }
 
-        // simpan di disk 'public' ke dalam folder 'bukti_penyerahan'
+    try {
+        // Pastikan folder ada
+        if (!Storage::disk('public')->exists('bukti_penyerahan')) {
+            Storage::disk('public')->makeDirectory('bukti_penyerahan');
+        }
+
         $path = $file->store('bukti_penyerahan', 'public');
 
-        if (! $path) return null;
+        if (!$path) {
+            Log::error('Gagal menyimpan file bukti', [
+                'original_name' => $file->getClientOriginalName(),
+                'mime_type' => $file->getMimeType(),
+                'size' => $file->getSize()
+            ]);
+            return null;
+        }
 
-        // store() returns path relative to disk root (e.g. 'bukti_penyerahan/xyz.jpg')
         return $path;
+    } catch (\Exception $e) {
+        Log::error('Exception saat upload bukti: ' . $e->getMessage());
+        return null;
     }
+}
 
     /**
      * Hapus file bukti penyerahan jika path ada.
@@ -247,36 +264,36 @@ public function store(Request $request)
     foreach ($voucherNumbers as $noVoucher) {
 
         VoucherLama::create([
-            'voucher'           => $noVoucher,
-            'no_voucher'        => $noVoucher,
-            'tanggal'           => now()->toDateString(),
-            'tanggal_penyerahan'=> $tanggalPenyerahan,
-            'status'            => $statusAuto,
-            'jumlah_voucher'    => 1,
+    'voucher'           => $noVoucher,
+    'no_voucher'        => $noVoucher,
+    'tanggal'           => now()->toDateString(),
+    'tanggal_penyerahan'=> $tanggalPenyerahan,
+    'status'            => $statusAuto,
+    'jumlah_voucher'    => 1,
 
-            // Tipe & Status
-            'tipe_voucher'      => $request->tipe_voucher,
-            'is_independent'    => $isIndependent,
+    // Tipe & Status
+    'tipe_voucher'      => $request->tipe_voucher,
+    'is_independent'    => $isIndependent,
 
-            // Data Murid Existing (Humas)
-            'nim'               => $request->nim,
-            'nama_murid'        => $request->nama_murid,
-            'orangtua'          => $request->orangtua,
-            'telp_hp'           => $request->telp_hp,
+    // Data Humas
+    'nim' => $isIndependent ? null : $request->nim,
+    'nama_murid' => $isIndependent ? null : $request->nama_murid,
+    'orangtua' => $isIndependent ? null : $request->orangtua,
+    'telp_hp' => $isIndependent ? null : $request->telp_hp,
 
-            // Data Murid Baru
-            'nim_murid_baru'     => $request->nim_murid_baru,
-            'nama_murid_baru'    => $request->nama_murid_baru,
-            'orangtua_murid_baru'=> $request->orangtua_murid_baru,     // ← Ditambahkan
-            'telp_hp_murid_baru' => $request->telp_hp_murid_baru,      // ← Ditambahkan
+    // Data Murid Baru
+    'nim_murid_baru'      => $request->nim_murid_baru,
+    'nama_murid_baru'     => $request->nama_murid_baru,
+    'orangtua_murid_baru' => $request->orangtua_murid_baru,
+    'telp_hp_murid_baru'  => $request->telp_hp_murid_baru,
 
-            // Unit
-            'bimba_unit'        => $bimbaUnit,
-            'no_cabang'         => $noCabang,
+    // Unit
+    'bimba_unit' => $bimbaUnit,
+    'no_cabang'  => $noCabang,
 
-            'source'            => 'manual',
-            'bukti_penyerahan_path' => $buktiPath,
-        ]);
+    'source' => 'manual',
+    'bukti_penyerahan_path' => $buktiPath,
+]);
     }
 
     return redirect()->route('voucher.index')
@@ -784,88 +801,110 @@ public function store(Request $request)
 }
 
     // ----------------------------------------------------------------------------- 
-    // Inline update (no_voucher or tanggal_penyerahan)
-    public function updateInline(Request $request, $id)
-    {
+// Inline update (no_voucher or tanggal_penyerahan)
+public function updateInline(Request $request, $id)
+{
+    try {
         $allowed = ['no_voucher', 'tanggal_penyerahan'];
         $field = $request->input('field');
         $rawValue = $request->input('value', null);
 
-        if (! in_array($field, $allowed, true)) {
-            return response()->json(['status' => 'error', 'message' => 'Field tidak diizinkan'], 422);
+        if (!in_array($field, $allowed, true)) {
+            return response()->json([
+                'status' => 'error', 
+                'message' => 'Field tidak diizinkan'
+            ], 422);
         }
 
         $voucher = VoucherLama::find($id);
-        if (! $voucher) {
-            return response()->json(['status' => 'error', 'message' => 'Voucher tidak ditemukan'], 404);
-        }
-
-        if ($field === 'tanggal_penyerahan' && !empty($voucher->tanggal_penyerahan)) {
+        if (!$voucher) {
             return response()->json([
-                'status' => 'error',
-                'message' => 'Tanggal penyerahan sudah tercatat dan tidak dapat diubah melalui daftar. Silakan gunakan halaman edit voucher jika perlu.'
-            ], 403);
+                'status' => 'error', 
+                'message' => 'Voucher tidak ditemukan'
+            ], 404);
         }
 
-        $normalized = $rawValue;
-        if ($rawValue === '' || $rawValue === 'null' || $rawValue === 'undefined') {
-            $normalized = null;
-        }
+        $normalized = ($rawValue === '' || $rawValue === 'null' || $rawValue === 'undefined' || $rawValue === null) 
+                        ? null : trim($rawValue);
 
+        // Validasi
         $validatorData = ['value' => $normalized];
         $rules = [];
+
         if ($field === 'no_voucher') {
-            $rules['value'] = ['nullable', 'string', 'max:255', Rule::unique('voucher_lama', 'no_voucher')->ignore($voucher->id)];
+            $rules['value'] = ['nullable', 'string', 'max:255', 
+                Rule::unique('voucher_lama', 'no_voucher')->ignore($voucher->id)];
         } else {
             $rules['value'] = ['nullable', 'date'];
         }
 
-        $validator = \Validator::make($validatorData, $rules, [
-            'value.date' => 'Format tanggal tidak valid.',
-            'value.unique' => 'Nomor voucher sudah digunakan.'
+        $validator = Validator::make($validatorData, $rules, [
+            'value.date'  => 'Format tanggal tidak valid.',
+            'value.unique'=> 'Nomor voucher sudah digunakan.'
         ]);
 
         if ($validator->fails()) {
-            return response()->json(['status' => 'error', 'message' => $validator->errors()->first('value')], 422);
-        }
-
-        try {
-            if ($field === 'no_voucher') {
-                $voucher->no_voucher = $normalized;
-            } else {
-                $tanggal = $normalized ? Carbon::parse($normalized)->toDateString() : null;
-                $voucher->tanggal_penyerahan = $tanggal;
-                $voucher->status = $this->statusFromTanggalPenyerahan($tanggal);
-            }
-
-            if ($voucher->jumlah_voucher <= 0) {
-                $voucher->status = 'Digunakan';
-            }
-
-            $voucher->save();
-            $voucher->refresh();
-
-            $formatted = $voucher->tanggal_penyerahan ? Carbon::parse($voucher->tanggal_penyerahan)->format('d-m-Y') : null;
-            $statusDisplay = $voucher->status === 'penyerahan' ? 'Penyerahan' :
-                             ($voucher->status === 'Digunakan' ? 'Digunakan' : 'Belum diserahkan');
-
             return response()->json([
-                'status' => 'ok',
-                'message' => 'Perubahan tersimpan',
-                'data' => [
-                    'id' => $voucher->id,
-                    'tanggal_penyerahan' => $voucher->tanggal_penyerahan,
-                    'tanggal_penyerahan_formatted' => $formatted,
-                    'status' => $voucher->status,
-                    'status_display' => $statusDisplay,
-                    'no_voucher' => $voucher->no_voucher,
-                ],
-            ]);
-        } catch (\Throwable $e) {
-            Log::error('updateInline error: '.$e->getMessage(), ['id'=>$id,'field'=>$field,'value'=>$rawValue]);
-            return response()->json(['status' => 'error', 'message' => 'Gagal menyimpan perubahan.'], 500);
+                'status' => 'error', 
+                'message' => $validator->errors()->first('value')
+            ], 422);
         }
+
+        // Proses Update
+        if ($field === 'no_voucher') {
+            $voucher->no_voucher = $normalized;
+        } else {
+            // tanggal_penyerahan
+            $tanggal = $normalized ? Carbon::parse($normalized)->toDateString() : null;
+            $voucher->tanggal_penyerahan = $tanggal;
+            $voucher->status = $this->statusFromTanggalPenyerahan($tanggal);
+        }
+
+        if ($voucher->jumlah_voucher <= 0) {
+            $voucher->status = 'Digunakan';
+        }
+
+        $voucher->save();
+        $voucher->refresh();
+
+        $formatted = $voucher->tanggal_penyerahan 
+            ? Carbon::parse($voucher->tanggal_penyerahan)->format('d-m-Y') 
+            : null;
+
+        $statusDisplay = match($voucher->status) {
+            'penyerahan' => 'Penyerahan',
+            'Digunakan'  => 'Digunakan',
+            default      => 'Belum diserahkan'
+        };
+
+        return response()->json([
+            'status'  => 'ok',
+            'message' => 'Perubahan berhasil disimpan',
+            'data'    => [
+                'id'                          => $voucher->id,
+                'tanggal_penyerahan'          => $voucher->tanggal_penyerahan,
+                'tanggal_penyerahan_formatted'=> $formatted,
+                'status'                      => $voucher->status,
+                'status_display'              => $statusDisplay,
+                'no_voucher'                  => $voucher->no_voucher,
+            ],
+        ]);
+
+    } catch (\Throwable $e) {
+        Log::error('updateInline Error', [
+            'id'     => $id,
+            'field'  => $request->input('field'),
+            'value'  => $request->input('value'),
+            'error'  => $e->getMessage(),
+            'trace'  => $e->getTraceAsString()
+        ]);
+
+        return response()->json([
+            'status'  => 'error',
+            'message' => 'Terjadi kesalahan sistem. Silakan refresh halaman dan coba lagi.'
+        ], 500);
     }
+}
 
     // ----------------------------------------------------------------------------- 
     // helper status
@@ -950,100 +989,101 @@ public function store(Request $request)
 
     // ----------------------------------------------------------------------------- 
     public function uploadBuktiByNim(Request $request)
-    {
+{
+    try {
         $validated = $request->validate([
-            'nim_murid_baru' => 'required|string',
-            'bukti_penyerahan' => 'required|file|mimes:jpg,jpeg,png,pdf|max:5120',
+            'no_voucher'         => 'nullable|string',
+            'nim_murid_baru'     => 'nullable|string',
             'tanggal_penyerahan' => 'nullable|date',
-            'match_by' => 'nullable|in:nim_murid_baru,nim,nama',
+            'bukti_penyerahan'   => 'required|file|mimes:jpg,jpeg,png,pdf|max:5120',
         ]);
 
-        $nim = trim($validated['nim_murid_baru']);
-        $matchBy = $validated['match_by'] ?? null;
-        $uploaded = $request->file('bukti_penyerahan');
-        $tanggalRaw = $validated['tanggal_penyerahan'] ?? null;
-        $tanggalPenyerahan = ($tanggalRaw === '' || $tanggalRaw === 'null' || $tanggalRaw === 'undefined')
-            ? null : ($tanggalRaw ? Carbon::parse($tanggalRaw)->toDateString() : null);
-
-        $newPath = $this->storeBuktiPenyerahanFile($uploaded);
-        if (! $newPath) {
-            return response()->json(['status' => 'error', 'message' => 'Gagal menyimpan file.'], 500);
+        // Minimal salah satu harus diisi
+        if (empty($request->no_voucher) && empty($request->nim_murid_baru)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'No Voucher atau NIM Murid Baru harus diisi.'
+            ], 422);
         }
 
-        // build query: try exact nim_murid_baru OR nim (including trim leading zeros)
-        $nimNumeric = ltrim($nim, '0');
+        $newPath = $this->storeBuktiPenyerahanFile($request->file('bukti_penyerahan'));
+
+        if (!$newPath) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Gagal menyimpan file bukti.'
+            ], 500);
+        }
+
+        $tanggalPenyerahan = $request->filled('tanggal_penyerahan') 
+            ? Carbon::parse($request->tanggal_penyerahan)->toDateString() 
+            : null;
 
         $query = VoucherLama::query();
 
-        if ($matchBy === 'nama') {
-            $nameLower = mb_strtolower($nim); // here nim param used as name
-            $query->whereRaw('LOWER(TRIM(COALESCE(nama_murid_baru, \'\'))) = ?', [$nameLower])
-                  ->orWhereRaw('LOWER(TRIM(COALESCE(nama_murid, \'\'))) = ?', [$nameLower]);
-        } else {
-            // default: try nim_murid_baru OR nim, with trimmed zeros
-            $query->where(function($q) use ($nim, $nimNumeric) {
-                $q->where('nim_murid_baru', $nim)
-                  ->orWhereRaw("TRIM(LEADING '0' FROM COALESCE(nim_murid_baru,'')) = ?", [$nimNumeric])
-                  ->orWhere('nim', $nim)
-                  ->orWhereRaw("TRIM(LEADING '0' FROM COALESCE(nim,'')) = ?", [$nimNumeric]);
-            });
+        if ($request->filled('no_voucher')) {
+            $query->where('no_voucher', $request->no_voucher);
+        }
+
+        if ($request->filled('nim_murid_baru')) {
+            $nim = trim($request->nim_murid_baru);
+            $nimNumeric = ltrim($nim, '0');
+            $query->orWhere('nim_murid_baru', $nim)
+                  ->orWhereRaw("TRIM(LEADING '0' FROM COALESCE(nim_murid_baru,'')) = ?", [$nimNumeric]);
         }
 
         $vouchers = $query->get();
 
         if ($vouchers->isEmpty()) {
-            // hapus file baru untuk menghindari orphan
             $this->deleteBuktiPenyerahanFile($newPath);
-            return response()->json(['status' => 'error', 'message' => 'Tidak ditemukan voucher untuk NIM/nama tersebut.'], 404);
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Voucher tidak ditemukan.'
+            ], 404);
         }
 
         DB::beginTransaction();
-        try {
-            $updated = 0;
-            $statusAfter = $this->statusFromTanggalPenyerahan($tanggalPenyerahan);
+        $updated = 0;
+        $statusAfter = $this->statusFromTanggalPenyerahan($tanggalPenyerahan);
 
-            foreach ($vouchers as $v) {
-                // hapus file lama tiap baris
-                $this->deleteBuktiPenyerahanFile($v->bukti_penyerahan_path);
+        foreach ($vouchers as $v) {
+            $this->deleteBuktiPenyerahanFile($v->bukti_penyerahan_path);
 
-                // set tanggal_penyerahan dan status
-                $v->update([
-                    'bukti_penyerahan_path' => $newPath,
-                    'tanggal_penyerahan' => $tanggalPenyerahan,
-                    'status' => $statusAfter,
-                ]);
-
-                // update voucher_histori terkait supaya histori juga punya bukti
-                try {
-                    \App\Models\VoucherHistori::where('voucher_lama_id', $v->id)
-                        ->update([
-                            'bukti_penggunaan_path' => $newPath,
-                        ]);
-                } catch (\Throwable $e) {
-                    \Log::warning('Failed to update voucher_histori bukti for voucher_lama_id '.$v->id, ['err'=>$e->getMessage()]);
-                }
-
-                $updated++;
-            }
-
-            DB::commit();
-
-            return response()->json([
-                'status' => 'ok',
-                'message' => "Berhasil mengunggah bukti dan mengupdate {$updated} voucher.",
-                'updated' => $updated,
+            $v->update([
                 'bukti_penyerahan_path' => $newPath,
-                'tanggal_penyerahan' => $tanggalPenyerahan,
+                'tanggal_penyerahan'    => $tanggalPenyerahan,
+                'status'                => $statusAfter,
             ]);
-        } catch (\Throwable $e) {
-            DB::rollBack();
-            // hapus file baru agar tidak orphan
-            $this->deleteBuktiPenyerahanFile($newPath);
 
-            Log::error('uploadBuktiByNim error: '.$e->getMessage(), ['trace'=>$e->getTraceAsString()]);
-            return response()->json(['status' => 'error', 'message' => 'Gagal mengupdate voucher.'], 500);
+            // Update histori juga
+            VoucherHistori::where('voucher_lama_id', $v->id)
+                ->update(['bukti_penggunaan_path' => $newPath]);
+
+            $updated++;
         }
+
+        DB::commit();
+
+        return response()->json([
+            'status'  => 'ok',
+            'message' => "Berhasil mengunggah bukti ke {$updated} voucher.",
+            'updated' => $updated,
+        ]);
+
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => collect($e->errors())->flatten()->first()
+        ], 422);
+    } catch (\Throwable $e) {
+        DB::rollBack();
+        Log::error('uploadBuktiByNim Error: ' . $e->getMessage());
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Terjadi kesalahan saat mengunggah.'
+        ], 500);
     }
+}
 
     public function storeHistori(Request $request, $id)
     {

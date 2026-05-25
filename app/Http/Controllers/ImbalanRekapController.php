@@ -53,7 +53,6 @@ class ImbalanRekapController extends Controller
      * ====================================================== */
     $bulanLabels = [];
     $tmp = $startDate->copy();
-
     while ($tmp <= $endDate) {
         $bulanLabels[] = $tmp->locale('id')->translatedFormat('F Y');
         $tmp->addMonth();
@@ -71,10 +70,8 @@ class ImbalanRekapController extends Controller
      * 5. CEK ADMIN
      * ====================================================== */
     $user = Auth::user();
-
     $isAdmin = $user && (
-        $user->role === 'admin' ||
-        ($user->is_admin ?? false)
+        $user->role === 'admin' || ($user->is_admin ?? false)
     );
 
     /* ======================================================
@@ -96,7 +93,6 @@ class ImbalanRekapController extends Controller
     if (!$showAll) {
         $namaOptionsQuery->whereIn('imbalan_rekaps.bulan', $bulanLabels);
     }
-
     if ($bimba_unit) {
         $namaOptionsQuery->where('profiles.biMBA_unit', $bimba_unit);
     }
@@ -107,7 +103,7 @@ class ImbalanRekapController extends Controller
      * 8. QUERY UTAMA
      * ====================================================== */
     $query = \App\Models\ImbalanRekap::query()
-        ->with('profile') // relasi penting
+        ->with('profile')
         ->join('profiles', 'imbalan_rekaps.nama', '=', 'profiles.nama')
         ->select(
             'imbalan_rekaps.*',
@@ -121,11 +117,9 @@ class ImbalanRekapController extends Controller
     if (!$showAll) {
         $query->whereIn('imbalan_rekaps.bulan', $bulanLabels);
     }
-
     if ($bimba_unit) {
         $query->where('profiles.biMBA_unit', $bimba_unit);
     }
-
     if ($nama) {
         $query->where('imbalan_rekaps.nama', $nama);
     }
@@ -139,11 +133,10 @@ class ImbalanRekapController extends Controller
      * 10. FIX DATA (SUPER PENTING)
      * ====================================================== */
     foreach ($rekaps as $r) {
-
-        // ✅ FIX STATUS (AMBIL DARI PROFILE)
+        // FIX STATUS
         $r->status = $r->profile_status ?? $r->status;
 
-        // ✅ FIX MASA KERJA
+        // FIX MASA KERJA
         if (!empty($r->masa_kerja)) {
             $r->masa_kerja_formatted = $this->formatMasaKerja((int)$r->masa_kerja);
         } elseif (!empty($r->profile_masa_kerja)) {
@@ -154,11 +147,74 @@ class ImbalanRekapController extends Controller
             $r->masa_kerja_formatted = '-';
         }
 
-        // ✅ OPTIONAL: FIX MAGANG AUTO ZERO (biar konsisten)
-        if (strtolower(trim($r->status)) === 'magang') {
+        // FIX MAGANG
+        if (strtolower(trim($r->status ?? '')) === 'magang') {
             $r->imbalan_pokok = 0;
             $r->total_imbalan = 0;
             $r->yang_dibayarkan = 0;
+        }
+    }
+
+    /* ======================================================
+     * 11. PROSES ADJUSTMENT (BARU DITAMBAHKAN)
+     * ====================================================== */
+    if ($rekaps->isNotEmpty()) {
+        $namaList = $rekaps->pluck('nama')->map(fn($n) => strtoupper(trim($n)))->unique()->toArray();
+
+        $adjustments = Adjustment::whereIn(
+                DB::raw('TRIM(UPPER(nama))'), 
+                $namaList
+            )
+            ->whereBetween('month', [$startDate->month, $endDate->month])
+            ->whereBetween('year', [$startDate->year, $endDate->year])
+            ->get()
+            ->groupBy(fn($adj) => strtoupper(trim($adj->nama)));
+
+        foreach ($rekaps as $r) {
+            $namaUpper = strtoupper(trim($r->nama));
+            $adjList = $adjustments->get($namaUpper, collect());
+
+            $totalKekuranganAdj = 0;
+            $totalKelebihanAdj  = 0;
+            $ketKekurangan = [];
+            $ketKelebihan  = [];
+
+            foreach ($adjList as $adj) {
+                $nominal = (float) ($adj->nominal ?? 0);
+                $type    = strtolower(trim($adj->type ?? ''));
+
+                if (str_contains($type, 'tambah') || $type === 'tambahan') {
+                    $totalKekuranganAdj += $nominal;
+                    if (!empty($adj->keterangan)) $ketKekurangan[] = $adj->keterangan;
+                } elseif (str_contains($type, 'potong') || $type === 'potongan') {
+                    $totalKelebihanAdj += $nominal;
+                    if (!empty($adj->keterangan)) $ketKelebihan[] = $adj->keterangan;
+                }
+            }
+
+            // Simpan data adjustment
+            $r->total_kekurangan_adj = $totalKekuranganAdj;
+            $r->total_kelebihan_adj  = $totalKelebihanAdj;
+            $r->keterangan_kekurangan_adj = $ketKekurangan ? implode(' | ', $ketKekurangan) : null;
+            $r->keterangan_kelebihan_adj  = $ketKelebihan ? implode(' | ', $ketKelebihan) : null;
+
+            // Merge ke kolom utama
+            $r->kekurangan = ($r->kekurangan ?? 0) + $totalKekuranganAdj;
+            $r->kelebihan  = ($r->kelebihan ?? 0) + $totalKelebihanAdj;
+
+            // Hitung ulang total
+            $r->total_imbalan = 
+                ($r->imbalan_pokok ?? 0) +
+                ($r->imbalan_lainnya ?? 0) +
+                ($r->insentif_mentor ?? 0) +
+                ($r->tambahan_transport ?? 0) +
+                ($r->kekurangan ?? 0);
+
+            $r->yang_dibayarkan = 
+                $r->total_imbalan +
+                ($r->jumlah_bagi_hasil ?? 0) -
+                ($r->kelebihan ?? 0) -
+                ($r->cicilan ?? 0);
         }
     }
 
@@ -167,7 +223,7 @@ class ImbalanRekapController extends Controller
     }
 
     /* ======================================================
-     * 11. RETURN
+     * 12. RETURN
      * ====================================================== */
     return view('imbalan_rekap.index', compact(
         'rekaps',

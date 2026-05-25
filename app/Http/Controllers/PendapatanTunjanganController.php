@@ -133,16 +133,11 @@ class PendapatanTunjanganController extends Controller
     $bulan = $request->input('bulan') ?: now()->format('Y-m');
     $search = $request->input('search');
 
-    $tahun = substr($bulan, 0, 4);
-    $bulanAngka = substr($bulan, 5, 2);
-
     $profilesQuery = Profile::query();
 
-    // Exclude karyawan keluar
+    // Exclude yang sudah keluar
     $profilesQuery->whereNotIn('status_karyawan', [
-        'Resign',
-        'Keluar',
-        'Pensiun'
+        'Resign', 'Keluar', 'Pensiun', 'Non Aktif'
     ]);
 
     // Hindari data dummy lama
@@ -151,134 +146,67 @@ class PendapatanTunjanganController extends Controller
           ->orWhere('tgl_masuk', '>=', '2010-01-01');
     });
 
-    // Filter jabatan
-    $profilesQuery->where(function ($q) use ($tahun, $bulanAngka) {
+    // ================== FILTER JABATAN YANG DIPERBOLEHKAN ==================
+    $profilesQuery->where(function ($q) {
 
-        // ======================
-        // NON GURU
-        // ======================
-        $q->whereNotIn('jabatan', [
-            'Guru',
-            'Guru Trial',
-            'Guru biMBA',
-            'Pengajar',
-            'Tutor',
+        // Semua Kepala Unit / Kepala Sekolah
+        $q->whereIn('jabatan', [
             'Kepala Unit',
             'Kepala biMBA',
             'Kepala Sekolah'
         ])
 
-        // ======================
-        // GURU MAGANG / TRIAL
-        // ======================
-        ->orWhere(function ($sub) {
-
-            $sub->whereIn('jabatan', [
-                'Guru',
-                'Guru Trial',
-                'Guru biMBA',
-                'Pengajar',
-                'Tutor'
-            ])
-            ->where(function ($sub2) {
-
-                $sub2->where('status_karyawan', 'like', '%magang%')
-                     ->orWhere('status_karyawan', 'like', '%trial%');
-
-            });
-
-        })
-
-        // ======================
-        // GURU TETAP
-        // ======================
-        ->orWhere(function ($sub) use ($tahun, $bulanAngka) {
-
-            $sub->whereIn('jabatan', [
-                'Guru',
-                'Guru Trial',
-                'Guru biMBA',
-                'Pengajar',
-                'Tutor'
-            ])
-            ->whereNot(function ($sub2) {
-
-                $sub2->where('status_karyawan', 'like', '%magang%')
-                     ->orWhere('status_karyawan', 'like', '%trial%');
-
-            })
-            ->whereExists(function ($exists) use ($tahun, $bulanAngka) {
-
-                $exists->select(DB::raw(1))
-                       ->from('penerimaan')
-                       ->whereColumn('penerimaan.guru', 'profiles.nama')
-                       ->whereNotNull('penerimaan.guru')
-                       ->whereYear('penerimaan.tanggal', '<=', $tahun)
-                       ->where(function ($sub2) use ($tahun, $bulanAngka) {
-
-                           $sub2->whereYear('penerimaan.tanggal', '<', $tahun)
-                                ->orWhere(function ($sub3) use ($tahun, $bulanAngka) {
-
-                                    $sub3->whereYear('penerimaan.tanggal', '=', $tahun)
-                                         ->whereMonth('penerimaan.tanggal', '<=', $bulanAngka);
-
-                                });
-
-                       });
-
-            });
-
-        })
-
-        // ======================
-        // KEPALA UNIT (SELALU TAMPIL)
-        // ======================
+        // Guru (semua jenis)
         ->orWhereIn('jabatan', [
-            'Kepala Unit',
-            'Kepala biMBA',
-            'Kepala Sekolah'
-        ]);
+            'Guru',
+            'Guru Trial',
+            'Guru biMBA',
+            'Pengajar',
+            'Tutor'
+        ])
 
+        // Staff pendukung (sesuaikan dengan kebutuhan)
+        ->orWhereIn('jabatan', [
+            'Staff',
+            'Admin',
+            'Koordinator',
+            'Finance',
+            'HRD',
+            // tambahkan jabatan lain jika perlu
+        ]);
     });
 
-    // ======================
-    // SEARCH
-    // ======================
+    // Search
     if ($search) {
-
         $profilesQuery->where(function ($q) use ($search) {
-
             $q->where('nama', 'like', "%{$search}%")
               ->orWhere('nik', 'like', "%{$search}%");
-
         });
-
     }
 
     $profiles = $profilesQuery
         ->orderBy('nama')
         ->get();
 
+    // ================== Proses Pendapatan ==================
     $pendapatans = [];
 
     foreach ($profiles as $profile) {
-
         $data = $this->getPendapatanForProfileAndMonth($profile, $bulan);
 
-        // Auto save jika hasil kalkulasi
+        // Auto create jika belum ada
         if (($data['is_calculated'] ?? false) && empty($data['id'])) {
-
             $saved = PendapatanTunjangan::create([
-
-                'nik'              => $data['nik'] ?? $profile->nik ?? null,
-                'nama'             => $data['nama'] ?? $profile->nama,
-                'jabatan'          => $data['jabatan'] ?? $profile->jabatan,
-                'status'           => $data['status'] ?? $profile->status_karyawan,
-                'departemen'       => $data['departemen'] ?? $profile->departemen,
-                'bimba_unit'       => $data['bimba_unit'] ?? $profile->bimba_unit ?? null,
-                'no_cabang'        => $data['no_cabang'] ?? $profile->no_cabang ?? null,
-                'masa_kerja'       => $data['masa_kerja'] ?? $profile->masa_kerja ?? 0,
-                'thp'              => $data['thp'] ?? 0,
+                'nik'              => $profile->nik,
+                'nama'             => $profile->nama,
+                'jabatan'          => $profile->jabatan,
+                'status'           => $profile->status_karyawan,
+                'departemen'       => $profile->departemen,
+                'bimba_unit'       => $profile->bimba_unit,
+                'no_cabang'        => $profile->no_cabang,
+                'masa_kerja'       => $profile->masa_kerja,
+                'bulan'            => $bulan,
+                'thp'              => $data['thp'],
                 'kerajinan'        => 0,
                 'english'          => 0,
                 'mentor'           => 0,
@@ -286,24 +214,16 @@ class PendapatanTunjanganController extends Controller
                 'bulan_kekurangan' => null,
                 'tj_keluarga'      => 0,
                 'lain_lain'        => 0,
-                'total'            => $data['total'] ?? 0,
-                'bulan'            => $bulan,
-
+                'total'            => $data['thp'],
             ]);
 
             $data = $saved->toArray();
-            $data['is_calculated'] = false;
-
         }
 
         $pendapatans[] = $data;
-
     }
 
-    // ======================
-    // DROPDOWN BULAN
-    // ======================
-
+    // Dropdown bulan
     $allMonths = PendapatanTunjangan::select('bulan')
         ->distinct()
         ->orderBy('bulan', 'desc')
@@ -313,18 +233,13 @@ class PendapatanTunjanganController extends Controller
         ->values();
 
     if (!$allMonths->contains($bulan)) {
-
         $allMonths->push($bulan);
-
     }
 
     $allMonths = $allMonths->sortDesc();
 
     return view('pendapatan-tunjangan.index', compact(
-        'pendapatans',
-        'allMonths',
-        'bulan',
-        'search'
+        'pendapatans', 'allMonths', 'bulan', 'search'
     ));
 }
 public function create()

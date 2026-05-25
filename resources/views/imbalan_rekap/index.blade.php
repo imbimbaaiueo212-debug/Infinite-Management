@@ -357,8 +357,7 @@
     @endif
 </td>
 
-                                <!-- Kekurangan Imbalan -->
-                                <!-- KEKURANGAN -->
+                                <!-- KEKURANGAN IMBALAN -->
 <td class="text-end text-danger position-relative">
     @if(auth()->check() && (auth()->user()->is_admin ?? false))
         <div class="d-flex align-items-center justify-content-end gap-2">
@@ -366,24 +365,52 @@
                 value="{{ ($r->kekurangan ?? 0) > 0 ? number_format($r->kekurangan, 0, ',', '.') : '' }}"
                 data-field="kekurangan" data-id="{{ $r->id }}"
                 style="width:100px;" placeholder="0">
-            <i class="bi bi-pencil text-primary edit-icon" title="Edit"></i>
+            <i class="bi bi-pencil text-primary edit-icon" title="Edit Kekurangan Manual"></i>
             <span class="saving text-primary" style="display:none; font-size:0.7rem;">Saving...</span>
         </div>
     @else
-        <span class="text-end d-block text-danger">{{ ($r->kekurangan ?? 0) > 0 ? 'Rp ' . number_format($r->kekurangan, 0, ',', '.') : '-' }}</span>
+        <span class="text-end d-block text-danger">
+            @if(($r->kekurangan ?? 0) > 0)
+                Rp {{ number_format($r->kekurangan, 0, ',', '.') }}
+                @if(($r->total_kekurangan_adj ?? 0) > 0)
+                    <small class="text-warning fw-bold">(+Adj)</small>
+                @endif
+            @else
+                -
+            @endif
+        </span>
     @endif
 </td>
-                                <td class="text-center">
-                                    {{ $r->bulan_kekurangan_full ?? '-' }}
-                                </td>
-                                <td class="position-relative">
-                                    <div class="d-flex align-items-center gap-1" title="{{ $r->keterangan_kekurangan ?? 'Tidak ada keterangan' }}" data-bs-toggle="tooltip">
-                                        <i class="bi bi-info-circle text-primary small"></i>
-                                        <span class="text-muted small text-truncate" style="max-width: 110px;">
-                                            {{ $r->keterangan_kekurangan ? Str::limit($r->keterangan_kekurangan, 18) : '-' }}
-                                        </span>
-                                    </div>
-                                </td>
+
+<!-- BULAN KEKURANGAN -->
+<td class="text-center">
+    {{ $r->bulan_kekurangan_full ?? '-' }}
+</td>
+
+<!-- KETERANGAN KEKURANGAN -->
+<td class="position-relative">
+    <div class="d-flex align-items-center gap-1" 
+         title="{{ 
+             ($r->keterangan_kekurangan ?? '') . 
+             (($r->keterangan_kekurangan && $r->keterangan_kekurangan_adj) ? ' | ' : '') .
+             ($r->keterangan_kekurangan_adj ?? '')
+         }}" 
+         data-bs-toggle="tooltip">
+        <i class="bi bi-info-circle text-primary small"></i>
+        <span class="text-muted small text-truncate" style="max-width: 130px;">
+            @php
+                $ket = $r->keterangan_kekurangan ?? '';
+                if ($r->keterangan_kekurangan_adj) {
+                    $ket .= ($ket ? ' | ' : '') . $r->keterangan_kekurangan_adj;
+                }
+            @endphp
+            {{ $ket ? Str::limit($ket, 22) : '-' }}
+        </span>
+        @if(($r->total_kekurangan_adj ?? 0) > 0)
+            <span class="badge bg-warning text-dark px-1 py-0" style="font-size: 0.65rem;">ADJ</span>
+        @endif
+    </div>
+</td>
 
                                <!-- KELEBIHAN -->
 <td class="text-end text-success position-relative">
