@@ -6,198 +6,294 @@ use Illuminate\Http\Request;
 use App\Models\Penerimaan;
 use App\Models\PettyCash;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Log;
 
 class RekapController extends Controller
 {
     public function petty(Request $request)
-{
-    $perPage = max((int) $request->input('per_page', 50), 50);
-    $start   = $request->input('start_date');
-    $end     = $request->input('end_date');
-    $unit    = $request->input('unit'); // Filter Bimba Unit
+    {
+        $perPage = max((int) $request->input('per_page', 50), 50);
 
-    // 1. Daftar unit untuk dropdown
-    $unitList = \App\Models\Unit::withoutGlobalScopes()
-        ->orderBy('biMBA_unit')
-        ->get();
+        $start = $request->input('start_date');
+        $end   = $request->input('end_date');
+        $unit  = $request->input('unit');
 
-    // 2. Query Penerimaan — dengan filter unit & tanggal
-    $penerimaanQuery = Penerimaan::query();
+        /*
+        |--------------------------------------------------------------------------
+        | UNIT LIST
+        |--------------------------------------------------------------------------
+        */
+        $unitList = \App\Models\Unit::withoutGlobalScopes()
+            ->orderBy('biMBA_unit')
+            ->get();
 
-    if ($start) {
-        $penerimaanQuery->whereDate('tanggal', '>=', Carbon::parse($start));
-    }
-    if ($end) {
-        $penerimaanQuery->whereDate('tanggal', '<=', Carbon::parse($end));
-    }
-    if ($unit) {
-        $penerimaanQuery->where('bimba_unit', $unit);
-    }
+        /*
+        |--------------------------------------------------------------------------
+        | QUERY BUILDER
+        |--------------------------------------------------------------------------
+        */
+        $penerimaanQuery = Penerimaan::query();
 
-    $penerimaan = (clone $penerimaanQuery)
-        ->orderByDesc('tanggal')
-        ->paginate($perPage)
-        ->withQueryString();
-
-    $allPenerimaan = (clone $penerimaanQuery)->get();
-
-    // 3. Query Petty Cash — WAJIB ikut filter unit yang sama
-    $pettyCashQuery = PettyCash::query();
-
-    if ($start) {
-        $pettyCashQuery->whereDate('tanggal', '>=', Carbon::parse($start));
-    }
-    if ($end) {
-        $pettyCashQuery->whereDate('tanggal', '<=', Carbon::parse($end));
-    }
-    if ($unit) {
-        $pettyCashQuery->where('bimba_unit', $unit); // Karena sudah ada kolom ini
-    }
-
-    $pettycash = $pettyCashQuery->orderBy('tanggal', 'asc')->get();
-
-    // Saldo Awal — HARUS per unit juga
-    $saldoAwalQuery = PettyCash::where('kategori', 'Saldo Awal');
-    if ($unit) {
-        $saldoAwalQuery->where('bimba_unit', $unit);
-    }
-    $saldoAwalRecord = $saldoAwalQuery->first();
-    $saldoAwal = $saldoAwalRecord ? (float) $saldoAwalRecord->debit : 0;
-
-    // Total debit & kredit (kecuali Saldo Awal)
-    $pcOperasionalQuery = (clone $pettyCashQuery)->where('kategori', '!=', 'Saldo Awal');
-    $totalDebit  = (float) $pcOperasionalQuery->sum('debit');
-    $totalKredit = (float) $pcOperasionalQuery->sum('kredit');
-    $saldoAkhir  = $saldoAwal + $totalDebit - $totalKredit;
-
-    // Pengeluaran per kategori (exclude Petty Cash 500)
-    $byKategori = $pcOperasionalQuery->get()
-        ->groupBy('kategori')
-        ->map(fn($group) => (float) $group->sum('kredit'))
-        ->filter(fn($value, $key) => 
-            $value > 0 && 
-            !str_contains(strtolower($key), 'petty cash') && 
-            !str_contains($key, '500')
-        );
-
-    // Ambil transaksi Petty Cash (kode 500) — ikut unit
-    $pettyCashRow = $pettycash->first(fn($r) => 
-        str_contains(strtolower($r->kategori ?? ''), 'petty cash') || 
-        str_contains($r->kategori ?? '', '500')
-    );
-
-    $pettyCashAmount = $pettyCashRow
-        ? (float) ($pettyCashRow->saldo ?? ($pettyCashRow->debit - $pettyCashRow->kredit))
-        : null;
-
-    // 4. Daftar kategori dengan kode (untuk urutan tampilan)
-    $allKategoris = [
-        '501 | Modul', '502 | Modul Mewarnai', '503 | Upah',
-        '504 | Humas', '505 | Bagi Hasil', '506 | Sewa Tempat', '507 | Listrik',
-        '508 | Air', '509 | Telepon', '510 | ATK, AMB, FC & Fax', '511 | Rumah Tangga',
-        '512 | Iuran & Sumbangan', '513 | Transportasi', '514 | Kegiatan', '515 | Perawatan',
-        '516 | Kaos', '517 | Sertifikat', '518 | Lain-lain', '519 | Gaji',
-        '520 | Progresif', '521 | Bonus/THR',
-    ];
-
-    $kategoriOrder = [];
-    foreach ($allKategoris as $cat) {
-        if (preg_match('/^(\d+)\s*\|\s*(.+)$/u', trim($cat), $m)) {
-            $kategoriOrder[$m[1]] = trim($m[2]);
+        if ($start) {
+            $penerimaanQuery->whereDate('tanggal', '>=', Carbon::parse($start));
         }
-    }
-    uksort($kategoriOrder, fn($a, $b) => (int)$a <=> (int)$b);
-
-    // 5. Rekap Penerimaan (biMBA AIUEO) — dari data yang sudah difilter unit
-    $itemColumns = [
-        'Daftar' => 'daftar', 'Voucher' => 'voucher', 'SPP' => 'spp', 'Kaos' => 'kaos',
-        'KPK' => 'kpk', 'Sertifikat' => 'sertifikat', 'STPB' => 'stpb', 'Tas' => 'tas',
-        'BCABS' => 'bcabs', 'Event' => 'event', 'Lain-lain' => 'lain_lain',
-    ];
-
-    $masterItems = [
-        ['kode' => '4-00001', 'label' => 'Daftar'],
-        ['kode' => '4-00002', 'label' => 'Voucher'],
-        ['kode' => '4-00003', 'label' => 'SPP (Cash/Transfer)'],
-        ['kode' => '', 'label' => 'Cash'],
-        ['kode' => '', 'label' => 'Transfer'],
-        ['kode' => '', 'label' => 'EDC'],
-        ['kode' => '4-00004', 'label' => 'Kaos'],
-        ['kode' => '4-00005', 'label' => 'KPK'],
-        ['kode' => '4-00006', 'label' => 'Sertifikat'],
-        ['kode' => '4-00007', 'label' => 'STPB'],
-        ['kode' => '4-00008', 'label' => 'Tas'],
-        ['kode' => '4-00009', 'label' => 'BCABS'],
-        ['kode' => '4-00010', 'label' => 'Event'],
-        ['kode' => '4-00011', 'label' => 'Lain-lain'],
-    ];
-
-    $map = [];
-    $methodTotals = ['CASH' => 0, 'TRANSFER' => 0];
-    $normVia = fn($v) => mb_strtoupper(trim((string)$v));
-
-    foreach ($allPenerimaan as $row) {
-        $via = $normVia(data_get($row, 'via', data_get($row, 'metode_bayar', '')));
-        $isVA = ($via === 'VA');
-
-        $sppVal = (float) data_get($row, 'spp', 0);
-        if ($sppVal > 0) {
-            if ($via === 'CASH') $methodTotals['CASH'] += $sppVal;
-            if ($via === 'TRANSFER') $methodTotals['TRANSFER'] += $sppVal;
+        if ($end) {
+            $penerimaanQuery->whereDate('tanggal', '<=', Carbon::parse($end));
+        }
+        if ($unit) {
+            $penerimaanQuery->where('bimba_unit', $unit);
         }
 
-        foreach ($itemColumns as $label => $col) {
-            if ($label === 'SPP') continue;
-            $val = (float) data_get($row, $col, 0);
-            if ($val == 0) continue;
+        /*
+        |--------------------------------------------------------------------------
+        | DATA UNTUK VIEW
+        |--------------------------------------------------------------------------
+        */
+        $penerimaan = (clone $penerimaanQuery)
+            ->orderByDesc('tanggal')
+            ->paginate($perPage)
+            ->withQueryString();
 
-            $map[$label] ??= ['va' => 0.0, 'non_va' => 0.0];
-            if ($isVA) {
-                $map[$label]['va'] += $val;
-            } else {
-                $map[$label]['non_va'] += $val;
+        $allPenerimaan = (clone $penerimaanQuery)->get();
+
+        /*
+        |--------------------------------------------------------------------------
+        | PETTY CASH
+        |--------------------------------------------------------------------------
+        */
+        $pettyCashQuery = PettyCash::query();
+
+        if ($start) $pettyCashQuery->whereDate('tanggal', '>=', Carbon::parse($start));
+        if ($end)   $pettyCashQuery->whereDate('tanggal', '<=', Carbon::parse($end));
+        if ($unit)  $pettyCashQuery->where('bimba_unit', $unit);
+
+        $pettycash = $pettyCashQuery->orderBy('tanggal', 'asc')->get();
+
+        /*
+        |--------------------------------------------------------------------------
+        | toNumber - VERSI TERBAIK SAAT INI
+        |--------------------------------------------------------------------------
+        */
+        $toNumber = function ($value) {
+            if (blank($value) || $value === '0' || $value === 0) {
+                return 0;
+            }
+
+            $value = (string) $value;
+
+            // Bersihkan simbol
+            $value = str_replace(['Rp', 'rp', 'IDR', 'Rp.', ' ', 'Rp ', ','], '', $value);
+
+            // Hapus titik ribuan (1.234.567 → 1234567)
+            $value = preg_replace('/\.(?=\d{3})/', '', $value);
+
+            // Ambil angka
+            if (preg_match('/[\d.]+/', $value, $matches)) {
+                $clean = $matches[0];
+                if (is_numeric($clean)) {
+                    return (float) $clean;
+                }
+            }
+
+            return 0;
+        };
+
+        /*
+        |--------------------------------------------------------------------------
+        | SALDO AWAL & PETTY CASH
+        |--------------------------------------------------------------------------
+        */
+        $saldoAwalQuery = PettyCash::where('kategori', 'Saldo Awal');
+        if ($unit) $saldoAwalQuery->where('bimba_unit', $unit);
+        
+        $saldoAwalRecord = $saldoAwalQuery->first();
+        $saldoAwal = $saldoAwalRecord ? $toNumber($saldoAwalRecord->debit) : 0;
+
+        $pcOperasionalQuery = (clone $pettyCashQuery)->where('kategori', '!=', 'Saldo Awal');
+
+        $totalDebit = $pcOperasionalQuery->get()->sum(fn($x) => $toNumber($x->debit));
+        $totalKredit = $pcOperasionalQuery->get()->sum(fn($x) => $toNumber($x->kredit));
+
+        $saldoAkhir = $saldoAwal + $totalDebit - $totalKredit;
+
+        $byKategori = $pcOperasionalQuery
+            ->get()
+            ->groupBy('kategori')
+            ->map(fn($group) => $group->sum(fn($item) => $toNumber($item->kredit)))
+            ->filter(fn($value, $key) => 
+                $value > 0 && 
+                !str_contains(strtolower($key), 'petty cash') && 
+                !str_contains($key, '500')
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | REKAP PENERIMAAN
+        |--------------------------------------------------------------------------
+        */
+        $itemColumns = [
+            'Daftar'      => 'daftar',
+            'Voucher'     => 'voucher',
+            'Kaos'        => 'kaos',
+            'KPK'         => 'kpk',
+            'Sertifikat'  => 'sertifikat',
+            'STPB'        => 'stpb',
+            'Tas'         => 'tas',
+            'BCABS'       => 'bcabs',
+            'RBAS'        => 'rbas',
+            'Event'       => 'event',
+            'Lain-lain'   => 'lain_lain',
+        ];
+
+        $masterItems = [
+            ['kode' => '4-00001', 'label' => 'Daftar'],
+            ['kode' => '4-00002', 'label' => 'Voucher'],
+            ['kode' => '4-00003', 'label' => 'SPP (Cash/Transfer)'],
+            ['kode' => '', 'label' => 'Cash'],
+            ['kode' => '', 'label' => 'Transfer'],
+            ['kode' => '', 'label' => 'EDC'],
+            ['kode' => '', 'label' => 'VA'],
+            ['kode' => '4-00004', 'label' => 'Kaos'],
+            ['kode' => '4-00005', 'label' => 'KPK'],
+            ['kode' => '4-00006', 'label' => 'Sertifikat'],
+            ['kode' => '4-00007', 'label' => 'STPB'],
+            ['kode' => '4-00008', 'label' => 'Tas'],
+            ['kode' => '4-00009', 'label' => 'BCABS'],
+            ['kode' => '', 'label' => 'RBAS'],
+            ['kode' => '4-00010', 'label' => 'Event'],
+            ['kode' => '4-00011', 'label' => 'Lain-lain'],
+        ];
+
+        $normVia = function ($v) {
+            $v = strtoupper(trim((string) $v));
+            return match ($v) {
+                'TRANSFER', 'TF', 'BANK TRANSFER' => 'TRANSFER',
+                'CASH', 'TUNAI'                   => 'CASH',
+                'EDC', 'DEBIT'                    => 'EDC',
+                'VA', 'VIRTUAL ACCOUNT'           => 'VA',
+                default => 'LAINNYA',
+            };
+        };
+
+        $methodTotals = ['CASH' => 0, 'TRANSFER' => 0, 'EDC' => 0, 'VA' => 0];
+        $map = [];
+
+        // Debug
+        $debugDaftar = [];
+        $debugVoucher = [];
+
+        foreach ($allPenerimaan as $row) {
+            $via = $normVia(data_get($row, 'via') ?: data_get($row, 'metode_bayar'));
+            $isVA = ($via === 'VA');
+
+            // SPP
+            $sppVal = $toNumber(data_get($row, 'spp'));
+            if ($sppVal > 0 && isset($methodTotals[$via])) {
+                $methodTotals[$via] += $sppVal;
+            }
+
+            // Item Lainnya
+            foreach ($itemColumns as $label => $col) {
+                if ($label === 'SPP') continue;
+
+                $val = $toNumber(data_get($row, $col));
+
+                // Debug Daftar
+                if ($label === 'Daftar' && $val > 0) {
+                    $debugDaftar[] = [
+                        'id' => $row->id ?? 'unknown',
+                        'tanggal' => $row->tanggal ?? '-',
+                        'raw' => data_get($row, $col),
+                        'converted' => $val,
+                    ];
+                }
+
+                // Debug Voucher
+                if ($label === 'Voucher' && $val > 0) {
+                    $debugVoucher[] = [
+                        'id' => $row->id ?? 'unknown',
+                        'tanggal' => $row->tanggal ?? '-',
+                        'raw' => data_get($row, $col),
+                        'converted' => $val,
+                    ];
+                }
+
+                if ($val > 100_000_000_000) {
+                    Log::warning("Nilai mencurigakan", [
+                        'kolom' => $col,
+                        'raw' => data_get($row, $col),
+                        'processed' => $val
+                    ]);
+                    continue;
+                }
+
+                if ($val <= 0) continue;
+
+                $map[$label] ??= ['va' => 0, 'non_va' => 0];
+
+                if ($isVA) {
+                    $map[$label]['va'] += $val;
+                } else {
+                    $map[$label]['non_va'] += $val;
+                }
             }
         }
-    }
 
-    // Total SPP gabungan
-    $map['SPP (Cash/Transfer)'] = ['va' => 0.0, 'non_va' => $methodTotals['CASH'] + $methodTotals['TRANSFER']];
+        // SPP khusus
+        $map['SPP (Cash/Transfer)'] = [
+            'va' => $methodTotals['VA'],
+            'non_va' => $methodTotals['CASH'] + $methodTotals['TRANSFER'] + $methodTotals['EDC'],
+        ];
 
-    // Hitung total VA & Non-VA
-    $totalVA = 0;
-    $totalNonVA = 0;
-    foreach ($map as $vals) {
-        $totalVA += $vals['va'] ?? 0;
-        $totalNonVA += $vals['non_va'] ?? 0;
-    }
+        $totalVA = collect($map)->sum('va');
+        $totalNonVA = collect($map)->sum('non_va');
 
-    // Susun rekap untuk view
-    $rekapAiueo = [];
-    foreach ($masterItems as $m) {
-        $label = $m['label'];
-        $kode  = $m['kode'] ?? '';
+        /*
+        |--------------------------------------------------------------------------
+        | FINAL REKAP
+        |--------------------------------------------------------------------------
+        */
+        $rekapAiueo = [];
 
-        if (in_array($label, ['Cash', 'Transfer'])) {
-            $key = mb_strtoupper($label);
-            $sum = $methodTotals[$key] ?? 0;
-            $rekapAiueo[] = ['kode' => $kode, 'type' => $label, 'va' => 0, 'non_va' => $sum];
-            continue;
+        foreach ($masterItems as $m) {
+            $label = $m['label'];
+            $kode  = $m['kode'];
+
+            if (in_array($label, ['Cash', 'Transfer', 'EDC', 'VA'])) {
+                $key = strtoupper($label);
+                $rekapAiueo[] = [
+                    'kode'   => $kode,
+                    'type'   => $label,
+                    'va'     => 0,
+                    'non_va' => $methodTotals[$key] ?? 0,
+                ];
+                continue;
+            }
+
+            $rekapAiueo[] = [
+                'kode'   => $kode,
+                'type'   => $label,
+                'va'     => $map[$label]['va'] ?? 0,
+                'non_va' => $map[$label]['non_va'] ?? 0,
+            ];
         }
 
-        $va = $map[$label]['va'] ?? 0;
-        $non_va = $map[$label]['non_va'] ?? 0;
-        $rekapAiueo[] = ['kode' => $kode, 'type' => $label, 'va' => $va, 'non_va' => $non_va];
+        return view('rekap.petty.index', compact(
+            'penerimaan',
+            'pettycash',
+            'rekapAiueo',
+            'totalVA',
+            'totalNonVA',
+            'saldoAwal',
+            'totalKredit',
+            'saldoAkhir',
+            'byKategori',
+            'unitList',
+            'unit',
+            'start',
+            'end',
+            'debugDaftar',
+            'debugVoucher'
+        ));
     }
-
-    // Return view
-    return view('rekap.petty.index', compact(
-        'penerimaan', 'pettycash', 'perPage',
-        'rekapAiueo', 'totalVA', 'totalNonVA',
-        'saldoAwal', 'totalDebit', 'totalKredit', 'saldoAkhir',
-        'byKategori', 'start', 'end', 'kategoriOrder', 'pettyCashAmount',
-        'unitList', 'unit'
-    ));
-}
 }
