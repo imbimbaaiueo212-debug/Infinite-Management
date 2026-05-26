@@ -222,7 +222,7 @@ class ImportStudentsFromForms extends Command
 
         'nama lengkap peserta anak bimba' => 'nama',
         'nama lengkap peserta anak bimb' => 'nama',
-        'nama' => 'nama',
+        'nama' => 'informasi_humas_nama',
 
         'tanggal lahir' => 'tgl_lahir',
         'tempat lahir' => 'tempat_lahir',

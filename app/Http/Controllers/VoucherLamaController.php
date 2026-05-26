@@ -998,7 +998,6 @@ public function updateInline(Request $request, $id)
             'bukti_penyerahan'   => 'required|file|mimes:jpg,jpeg,png,pdf|max:5120',
         ]);
 
-        // Minimal salah satu harus diisi
         if (empty($request->no_voucher) && empty($request->nim_murid_baru)) {
             return response()->json([
                 'status' => 'error',
@@ -1007,12 +1006,8 @@ public function updateInline(Request $request, $id)
         }
 
         $newPath = $this->storeBuktiPenyerahanFile($request->file('bukti_penyerahan'));
-
         if (!$newPath) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Gagal menyimpan file bukti.'
-            ], 500);
+            return response()->json(['status' => 'error', 'message' => 'Gagal menyimpan file.'], 500);
         }
 
         $tanggalPenyerahan = $request->filled('tanggal_penyerahan') 
@@ -1022,19 +1017,15 @@ public function updateInline(Request $request, $id)
         $query = VoucherLama::query();
 
         if ($request->filled('no_voucher')) {
-            $query->where('no_voucher', $request->no_voucher);
-        }
-
-        if ($request->filled('nim_murid_baru')) {
+            $query->where('no_voucher', $request->no_voucher);   // ← Hanya 1 voucher
+        } elseif ($request->filled('nim_murid_baru')) {
             $nim = trim($request->nim_murid_baru);
-            $nimNumeric = ltrim($nim, '0');
-            $query->orWhere('nim_murid_baru', $nim)
-                  ->orWhereRaw("TRIM(LEADING '0' FROM COALESCE(nim_murid_baru,'')) = ?", [$nimNumeric]);
+            $query->where('nim_murid_baru', $nim);
         }
 
-        $vouchers = $query->get();
+        $voucher = $query->first();   // ← Ambil hanya 1 (first), bukan get()
 
-        if ($vouchers->isEmpty()) {
+        if (!$voucher) {
             $this->deleteBuktiPenyerahanFile($newPath);
             return response()->json([
                 'status' => 'error',
@@ -1042,41 +1033,22 @@ public function updateInline(Request $request, $id)
             ], 404);
         }
 
-        DB::beginTransaction();
-        $updated = 0;
-        $statusAfter = $this->statusFromTanggalPenyerahan($tanggalPenyerahan);
+        // Hapus bukti lama jika ada
+        $this->deleteBuktiPenyerahanFile($voucher->bukti_penyerahan_path);
 
-        foreach ($vouchers as $v) {
-            $this->deleteBuktiPenyerahanFile($v->bukti_penyerahan_path);
-
-            $v->update([
-                'bukti_penyerahan_path' => $newPath,
-                'tanggal_penyerahan'    => $tanggalPenyerahan,
-                'status'                => $statusAfter,
-            ]);
-
-            // Update histori juga
-            VoucherHistori::where('voucher_lama_id', $v->id)
-                ->update(['bukti_penggunaan_path' => $newPath]);
-
-            $updated++;
-        }
-
-        DB::commit();
+        $voucher->update([
+            'bukti_penyerahan_path' => $newPath,
+            'tanggal_penyerahan'    => $tanggalPenyerahan,
+            'status'                => $this->statusFromTanggalPenyerahan($tanggalPenyerahan),
+        ]);
 
         return response()->json([
             'status'  => 'ok',
-            'message' => "Berhasil mengunggah bukti ke {$updated} voucher.",
-            'updated' => $updated,
+            'message' => 'Bukti berhasil diunggah.',
+            'bukti_path' => $newPath,
         ]);
 
-    } catch (\Illuminate\Validation\ValidationException $e) {
-        return response()->json([
-            'status' => 'error',
-            'message' => collect($e->errors())->flatten()->first()
-        ], 422);
     } catch (\Throwable $e) {
-        DB::rollBack();
         Log::error('uploadBuktiByNim Error: ' . $e->getMessage());
         return response()->json([
             'status' => 'error',

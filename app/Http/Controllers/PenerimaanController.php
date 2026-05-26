@@ -1297,17 +1297,14 @@ public function update(Request $request, Penerimaan $penerimaan)
     public function spp(Request $request)
 {
     $perPage       = (int) $request->input('per_page', 10);
-    $search        = $request->input('search');                  // NIM atau nama murid (partial)
-    $unitKode      = $request->input('unit');                     // Kode unit (misal '01045')
-    $periodeDari   = $request->filled('periode_dari') ? $request->input('periode_dari') : null;
-    $periodeSampai = $request->filled('periode_sampai') ? $request->input('periode_sampai') : null;
+    $search        = trim($request->input('search'));
+    $unitKode      = $request->input('unit');
+    $periodeDari   = $request->input('periode_dari');
+    $periodeSampai = $request->input('periode_sampai');
 
-    // Dropdown Unit
-    $unitList = Unit::withoutGlobalScopes()
-        ->orderBy('biMBA_unit')
-        ->get();
+    // Dropdowns
+    $unitList = Unit::withoutGlobalScopes()->orderBy('biMBA_unit')->get();
 
-    // Dropdown Murid: dinamis sesuai unit yang dipilih
     $muridQuery = Penerimaan::query()
         ->select('nim', 'nama_murid')
         ->whereNotNull('nama_murid')
@@ -1318,81 +1315,103 @@ public function update(Request $request, Penerimaan $penerimaan)
         $muridQuery->where('bimba_unit', $unitKode);
     }
 
-    $muridList = $muridQuery
-        ->distinct()
-        ->orderBy('nama_murid')
-        ->get();
+    $muridList = $muridQuery->distinct()->orderBy('nama_murid')->get();
 
-    // Query utama: hanya yang ada SPP
-    $query = Penerimaan::query()->where('spp', '>', 0);
+    // ==================== QUERY UTAMA ====================
+    $query = Penerimaan::query()
+        ->where('spp', '>', 0)
+        ->whereNotNull('spp');
 
-    // Filter Unit
     if ($unitKode) {
         $query->where('bimba_unit', $unitKode);
     }
 
-    // Filter NIM atau Nama Murid (partial search)
     if (!empty($search)) {
         $query->where(function ($q) use ($search) {
-            $q->where('nim', 'LIKE', '%' . trim($search) . '%')
-              ->orWhere('nama_murid', 'LIKE', '%' . trim($search) . '%');
+            $q->where('nim', 'LIKE', "%{$search}%")
+              ->orWhere('nama_murid', 'LIKE', "%{$search}%");
         });
     }
 
-    // Filter Periode
+    // === FILTER PERIODE (tanggal + bulan/tahun) ===
     if ($periodeDari || $periodeSampai) {
-        $from = $periodeDari
-            ? Carbon::createFromFormat('Y-m', $periodeDari)->startOfMonth()->toDateString()
-            : '1900-01-01';
+        $query->where(function ($q) use ($periodeDari, $periodeSampai) {
 
-        $to = $periodeSampai
-            ? Carbon::createFromFormat('Y-m', $periodeSampai)->endOfMonth()->toDateString()
-            : '2999-12-31';
+            // 1. Kondisi Tanggal
+            if (Schema::hasColumn('penerimaan', 'tanggal')) {
+                $from = $periodeDari ? Carbon::createFromFormat('Y-m', $periodeDari)->startOfMonth()->toDateString() : null;
+                $to   = $periodeSampai ? Carbon::createFromFormat('Y-m', $periodeSampai)->endOfMonth()->toDateString() : null;
 
-        if (Schema::hasColumn('penerimaan', 'tanggal')) {
-            $query->whereBetween('tanggal', [$from, $to]);
-        } else {
-            // Jika tidak ada kolom tanggal, gunakan bulan & tahun
-            $query->where(function ($q) use ($from, $to) {
-                $q->whereRaw("STR_TO_DATE(CONCAT(tahun, '-', LPAD(CASE
-                    WHEN LOWER(TRIM(bulan))='januari' THEN 1 WHEN LOWER(TRIM(bulan))='februari' THEN 2 WHEN LOWER(TRIM(bulan))='maret' THEN 3
-                    WHEN LOWER(TRIM(bulan))='april' THEN 4 WHEN LOWER(TRIM(bulan))='mei' THEN 5 WHEN LOWER(TRIM(bulan))='juni' THEN 6
-                    WHEN LOWER(TRIM(bulan))='juli' THEN 7 WHEN LOWER(TRIM(bulan))='agustus' THEN 8 WHEN LOWER(TRIM(bulan))='september' THEN 9
-                    WHEN LOWER(TRIM(bulan))='oktober' THEN 10 WHEN LOWER(TRIM(bulan))='november' THEN 11 WHEN LOWER(TRIM(bulan))='desember' THEN 12
-                    END, 2, '0'), '-01'), '%Y-%m-%d') BETWEEN ? AND ?", [$from, $to]);
+                if ($from || $to) {
+                    $q->orWhere(function ($sub) use ($from, $to) {
+                        if ($from) $sub->where('tanggal', '>=', $from);
+                        if ($to)   $sub->where('tanggal', '<=', $to);
+                    });
+                }
+            }
+
+            // 2. Kondisi Bulan + Tahun
+            $q->orWhere(function ($sub) use ($periodeDari, $periodeSampai) {
+                $rawCondition = "STR_TO_DATE(CONCAT(tahun, '-', LPAD(CASE 
+                    WHEN LOWER(TRIM(bulan)) IN ('januari','jan') THEN 1
+                    WHEN LOWER(TRIM(bulan)) IN ('februari','feb') THEN 2
+                    WHEN LOWER(TRIM(bulan)) IN ('maret','mar') THEN 3
+                    WHEN LOWER(TRIM(bulan)) IN ('april','apr') THEN 4
+                    WHEN LOWER(TRIM(bulan)) IN ('mei','may') THEN 5
+                    WHEN LOWER(TRIM(bulan)) IN ('juni','jun') THEN 6
+                    WHEN LOWER(TRIM(bulan)) IN ('juli','jul') THEN 7
+                    WHEN LOWER(TRIM(bulan)) IN ('agustus','agu','aug') THEN 8
+                    WHEN LOWER(TRIM(bulan)) IN ('september','sep') THEN 9
+                    WHEN LOWER(TRIM(bulan)) IN ('oktober','okt','oct') THEN 10
+                    WHEN LOWER(TRIM(bulan)) IN ('november','nov') THEN 11
+                    WHEN LOWER(TRIM(bulan)) IN ('desember','des','dec') THEN 12
+                    ELSE 0 END, 2, '0'), '-01'), '%Y-%m-%d')";
+
+                if ($periodeDari && $periodeSampai) {
+                    $sub->whereRaw("$rawCondition BETWEEN ? AND ?", [
+                        Carbon::createFromFormat('Y-m', $periodeDari)->startOfMonth()->toDateString(),
+                        Carbon::createFromFormat('Y-m', $periodeSampai)->endOfMonth()->toDateString()
+                    ]);
+                } elseif ($periodeDari) {
+                    $sub->whereRaw("$rawCondition >= ?", [
+                        Carbon::createFromFormat('Y-m', $periodeDari)->startOfMonth()->toDateString()
+                    ]);
+                } elseif ($periodeSampai) {
+                    $sub->whereRaw("$rawCondition <= ?", [
+                        Carbon::createFromFormat('Y-m', $periodeSampai)->endOfMonth()->toDateString()
+                    ]);
+                }
             });
-        }
+        });
     }
 
-    // Ordering
-    $listQuery = (clone $query)->orderByDesc(
-        Schema::hasColumn('penerimaan', 'tanggal') ? 'tanggal' : DB::raw("CONCAT(tahun, '-', LPAD(CASE
-            WHEN LOWER(TRIM(bulan))='januari' THEN 1 WHEN LOWER(TRIM(bulan))='februari' THEN 2 WHEN LOWER(TRIM(bulan))='maret' THEN 3
-            WHEN LOWER(TRIM(bulan))='april' THEN 4 WHEN LOWER(TRIM(bulan))='mei' THEN 5 WHEN LOWER(TRIM(bulan))='juni' THEN 6
-            WHEN LOWER(TRIM(bulan))='juli' THEN 7 WHEN LOWER(TRIM(bulan))='agustus' THEN 8 WHEN LOWER(TRIM(bulan))='september' THEN 9
-            WHEN LOWER(TRIM(bulan))='oktober' THEN 10 WHEN LOWER(TRIM(bulan))='november' THEN 11 WHEN LOWER(TRIM(bulan))='desember' THEN 12
-            END, 2, '0'))")
-    );
-
-    $penerimaan = $listQuery->paginate($perPage)->appends($request->query());
-
     // Total
-    $totalSPP     = (clone $query)->sum('spp');
-    $totalVoucher = (clone $query)
-                    ->where('voucher', '>', 0)
-                    ->count() * 50000;
+    $totalSPP = (clone $query)->sum('spp');
+    $totalVoucher = (clone $query)->where('voucher', '>', 0)->count() * 50000;
+
+    // Pagination + Ordering (diperbaiki)
+    $penerimaan = (clone $query)
+        ->orderByDesc('tanggal')  // utama
+        ->orderByRaw("CONCAT(tahun, '-', LPAD(CASE 
+            WHEN LOWER(TRIM(bulan)) IN ('januari','jan') THEN 1
+            WHEN LOWER(TRIM(bulan)) IN ('februari','feb') THEN 2
+            WHEN LOWER(TRIM(bulan)) IN ('maret','mar') THEN 3
+            WHEN LOWER(TRIM(bulan)) IN ('april','apr') THEN 4
+            WHEN LOWER(TRIM(bulan)) IN ('mei','may') THEN 5
+            WHEN LOWER(TRIM(bulan)) IN ('juni','jun') THEN 6
+            WHEN LOWER(TRIM(bulan)) IN ('juli','jul') THEN 7
+            WHEN LOWER(TRIM(bulan)) IN ('agustus','agu','aug') THEN 8
+            WHEN LOWER(TRIM(bulan)) IN ('september','sep') THEN 9
+            WHEN LOWER(TRIM(bulan)) IN ('oktober','okt','oct') THEN 10
+            WHEN LOWER(TRIM(bulan)) IN ('november','nov') THEN 11
+            WHEN LOWER(TRIM(bulan)) IN ('desember','des','dec') THEN 12
+            ELSE 0 END, 2, '0')) DESC")
+        ->paginate($perPage)
+        ->appends($request->query());
 
     return view('penerimaan.spp', compact(
-        'penerimaan',
-        'unitList',
-        'muridList',
-        'totalSPP',
-        'totalVoucher',
-        'perPage',
-        'search',
-        'unitKode',
-        'periodeDari',
-        'periodeSampai'
+        'penerimaan', 'unitList', 'muridList', 'totalSPP', 'totalVoucher',
+        'perPage', 'search', 'unitKode', 'periodeDari', 'periodeSampai'
     ));
 }
 public function produk(Request $request)

@@ -6,6 +6,7 @@ use App\Models\Registration;
 use App\Models\HargaSaptataruna;
 use App\Models\Student;
 use App\Models\Unit;
+use App\Models\Huma;
 use App\Models\BukuInduk;
 use App\Models\Profile;
 use App\Models\Penerimaan;
@@ -766,6 +767,7 @@ public function store(Request $request)
             );
         }
     });
+    $this->createOrUpdateHumaFromStudent($student);
 
     // ====================== UPDATE STATUS MURID TRIAL ======================
     if (($request->has('from_trial') || $student->muridTrial) && $reg) {
@@ -1035,6 +1037,9 @@ public function store(Request $request)
             $noCabang,
             $registration->tanggal_daftar
         );
+
+        // === TAMBAHKAN INI: Buat/Update HUMAS Otomatis ===
+        $this->createOrUpdateHumaFromStudent($student);
     }
 
     // Redirect
@@ -1491,5 +1496,88 @@ private function normalizeDate($value)
     }
 
     return null;
+}
+
+/**
+ * Buat atau Update data HUMAS otomatis dari Student (saat registrasi diterima)
+ */
+protected function createOrUpdateHumaFromStudent(Student $student): void
+{
+    if (empty($student->nama)) {
+        return;
+    }
+
+    $noCabang = trim($student->no_cabang ?? '');
+
+    if (empty($noCabang)) {
+        Log::warning('Gagal membuat NIH: no_cabang kosong', [
+            'student_id' => $student->id
+        ]);
+        return;
+    }
+
+    // =========================
+    // GENERATE NIH
+    // Format:
+    // 051420001
+    // =========================
+
+    $prefix = str_pad($noCabang, 5, '0', STR_PAD_LEFT) . '02';
+
+    $lastNih = Huma::where('nih', 'LIKE', $prefix . '%')
+        ->lockForUpdate()
+        ->orderByRaw('CAST(SUBSTRING(nih, 6) AS UNSIGNED) DESC')
+        ->value('nih');
+
+    $nextNumber = $lastNih
+        ? ((int) substr($lastNih, 5)) + 1
+        : 1;
+
+    $nih = $prefix . str_pad($nextNumber, 4, '0', STR_PAD_LEFT);
+
+    // Hindari duplikat
+    $attempt = 0;
+
+    while (Huma::where('nih', $nih)->exists() && $attempt < 20) {
+        $nextNumber++;
+        $nih = $prefix . str_pad($nextNumber, 4, '0', STR_PAD_LEFT);
+        $attempt++;
+    }
+
+    // =========================
+    // DATA HUMAS
+    // =========================
+
+    $namaOrangTua = $student->orangtua
+        ?? $student->nama_ayah
+        ?? $student->nama_ibu
+        ?? ('Orang Tua ' . $student->nama);
+
+    $noTelp = $student->no_telp
+        ?? $student->hp_ayah
+        ?? $student->hp_ibu;
+
+    Huma::updateOrCreate(
+        [
+            'nih' => $nih
+        ],
+        [
+            'tgl_reg'     => $student->tanggal_masuk ?? now()->format('Y-m-d'),
+            'nama'        => $namaOrangTua,
+            'status'      => 'Aktif',
+            'no_telp'     => $noTelp,
+            'pekerjaan'   => 'Swasta',
+            'alamat'      => $student->alamat,
+            'bimba_unit'  => $student->bimba_unit,
+            'no_cabang'   => $student->no_cabang,
+        ]
+    );
+
+    Log::info('Humas otomatis dibuat', [
+        'nih'          => $nih,
+        'nama_humas'   => $namaOrangTua,
+        'bimba_unit'   => $student->bimba_unit,
+        'no_cabang'    => $student->no_cabang,
+    ]);
 }
 }

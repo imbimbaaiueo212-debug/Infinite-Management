@@ -3,6 +3,7 @@
 namespace App\Exports;
 
 use App\Models\VoucherLama;
+use Carbon\Carbon;
 use Maatwebsite\Excel\Concerns\FromQuery;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
@@ -71,55 +72,63 @@ class VoucherLamaExport implements FromQuery, WithHeadings, WithMapping, ShouldA
     }
 
     public function map($voucher): array
-    {
-        // Tanggal spin (atau tanggal umum)
-        $tanggal = $voucher->tanggal 
-            ? $voucher->tanggal->format('d-m-Y') 
-            : '-';
-
-        // Status (sama seperti di Blade)
-        $status = $voucher->status ?? '';
-        if ($status === 'Digunakan' || $voucher->jumlah_voucher <= 0) {
-            $statusLabel = 'Digunakan';
-        } elseif ($status === 'pemakaian') {
-            $statusLabel = 'Dalam Pemakaian';
-        } elseif ($status === 'penyerahan' || $voucher->tanggal_penyerahan) {
-            $statusLabel = 'Penyerahan';
-        } else {
-            $statusLabel = 'Belum Diserahkan';
+{
+    // Helper function untuk format tanggal aman
+    $formatTanggal = function ($tanggal) {
+        if (empty($tanggal)) return '-';
+        try {
+            return Carbon::parse($tanggal)->format('d-m-Y');
+        } catch (\Exception $e) {
+            return (string) $tanggal; // fallback jika gagal parse
         }
+    };
 
-        // Tanggal pemakaian terakhir dari histori
-        $tanggalPemakaian = $voucher->histori->isNotEmpty() 
-            ? $voucher->histori->first()->tanggal_pemakaian?->format('d-m-Y') 
-            : '-';
+    // Tanggal spin / tanggal umum
+    $tanggal = $formatTanggal($voucher->tanggal);
 
-        // ────── tambahan untuk dua kolom baru ──────
-        $noVoucher         = $voucher->no_voucher ?? '-';
-        $tanggalPenyerahan = $voucher->tanggal_penyerahan 
-            ? $voucher->tanggal_penyerahan->format('d-m-Y') 
-            : '-';
-
-        return [
-            $voucher->voucher ?? '-',                    // voucher
-            $tanggal,                                    // tanggal
-            $statusLabel,                                // status
-            $voucher->nim ?? '-',                        // nim
-            $voucher->nama_murid ?? '-',                 // nama_murid
-            $voucher->orangtua ?? '-',                   // orangtua
-            $voucher->telp_hp ?? '-',                    // telp_hp
-            $voucher->nim_murid_baru ?? '-',             // nim_murid_baru
-            $voucher->nama_murid_baru ?? '-',            // nama_murid_baru
-            $voucher->orangtua_murid_baru ?? '-',        // orangtua_murid_baru
-            $voucher->telp_hp_murid_baru ?? '-',         // telp_hp_murid_baru
-            $tanggalPemakaian,                           // tanggal_pemakaian
-            $voucher->jumlah_voucher ?? 0,               // jumlah_voucher
-            $voucher->bimba_unit ?? '-',                 // bimba_unit
-            $voucher->no_cabang  ?? '-',                 // no_cabang
-            $noVoucher,                                  // ← ditambahkan
-            $tanggalPenyerahan,                          // ← ditambahkan
-        ];
+    // Status
+    $status = $voucher->status ?? '';
+    if ($status === 'Digunakan' || $voucher->jumlah_voucher <= 0) {
+        $statusLabel = 'Digunakan';
+    } elseif ($status === 'pemakaian') {
+        $statusLabel = 'Dalam Pemakaian';
+    } elseif ($status === 'penyerahan' || $voucher->tanggal_penyerahan) {
+        $statusLabel = 'Penyerahan';
+    } else {
+        $statusLabel = 'Belum Diserahkan';
     }
+
+    // Tanggal pemakaian terakhir dari histori
+    $tanggalPemakaian = '-';
+    if ($voucher->histori->isNotEmpty()) {
+        $historiTerbaru = $voucher->histori->first();
+        $tanggalPemakaian = $formatTanggal($historiTerbaru->tanggal_pemakaian);
+    }
+
+    // Kolom tambahan
+    $noVoucher         = $voucher->no_voucher ?? '-';
+    $tanggalPenyerahan = $formatTanggal($voucher->tanggal_penyerahan);
+
+    return [
+        $voucher->voucher ?? '-',                    // voucher
+        $tanggal,                                    // tanggal
+        $statusLabel,                                // status
+        $voucher->nim ?? '-',                        // nim
+        $voucher->nama_murid ?? '-',                 // nama_murid
+        $voucher->orangtua ?? '-',                   // orangtua
+        $voucher->telp_hp ?? '-',                    // telp_hp
+        $voucher->nim_murid_baru ?? '-',             // nim_murid_baru
+        $voucher->nama_murid_baru ?? '-',            // nama_murid_baru
+        $voucher->orangtua_murid_baru ?? '-',        // orangtua_murid_baru
+        $voucher->telp_hp_murid_baru ?? '-',         // telp_hp_murid_baru
+        $tanggalPemakaian,                           // tanggal_pemakaian
+        $voucher->jumlah_voucher ?? 0,               // jumlah_voucher
+        $voucher->bimba_unit ?? '-',                 // bimba_unit
+        $voucher->no_cabang  ?? '-',                 // no_cabang
+        $noVoucher,                                  // no_voucher
+        $tanggalPenyerahan,                          // tanggal_penyerahan
+    ];
+}
 
     public function styles(Worksheet $sheet)
     {
