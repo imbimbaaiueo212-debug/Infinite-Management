@@ -427,6 +427,28 @@ Route::middleware('auth')->group(function () {
 });
 
 
+// =========================================
+// CHAT SYSTEM
+// =========================================
+Route::middleware('auth')->prefix('chat')->name('chat.')->group(function () {
+
+    // Halaman Utama Chat (Daftar Percakapan)
+    Route::get('/', [App\Http\Controllers\ChatController::class, 'index'])
+         ->name('index');
+
+    // Halaman Chat dengan User Tertentu
+    Route::get('/{conversation}', [App\Http\Controllers\ChatController::class, 'show'])
+         ->name('show');
+
+    // Buat Percakapan Baru
+    Route::post('/create', [App\Http\Controllers\ChatController::class, 'createConversation'])
+         ->name('create');
+
+    // Mark as Read (opsional)
+    Route::post('/{conversation}/read', [App\Http\Controllers\ChatController::class, 'markAsRead'])
+         ->name('mark-as-read');
+});
+
 
 
 

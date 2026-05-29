@@ -70,4 +70,10 @@ class User extends Authenticatable implements CanResetPassword
             'direktur',
         ]);
     }
+
+    public function conversations()
+{
+    return $this->hasMany(Conversation::class, 'user1_id')
+                ->orWhere('user2_id', $this->id);
+}
 }

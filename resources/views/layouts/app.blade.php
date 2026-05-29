@@ -167,6 +167,13 @@
         });
     </script>
 
+    <!-- === LIVEWIRE v4 === -->
+    @livewireScripts
+
+    <script>
+        console.log('🚀 Livewire v4 Loaded');
+    </script>
+
     @stack('scripts')
 </body>
 </html>
