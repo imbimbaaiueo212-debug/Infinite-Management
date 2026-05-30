@@ -500,101 +500,124 @@ if (!$isAdmin) {
             'mutasi' => 'Mutasi',
         ];
 
-        return view('students.edit', compact('student', 'bi', 'kelasList', 'trialStatuses'));
+        $sumberInformasi = [
+        'HUMAS'          => 'HUMAS',
+        'Iklan'          => 'Iklan',
+        'Sosial Media'   => 'Sosial Media',
+        'Referral'       => 'Referral / Rekomendasi',
+        'Sekolah'        => 'Kerjasama Sekolah',
+        'Event'          => 'Event / Open House',
+        'Lainnya'        => 'Lainnya',
+    ];
+
+        return view('students.edit', compact('student', 'bi', 'kelasList', 'trialStatuses', 'sumberInformasi'));
     }
 
     // -------------------------------------------------------------------------
     // UPDATE
     // -------------------------------------------------------------------------
     public function update(Request $request, Student $student)
-    {
-        $normalized = $this->normalizeSource($request->input('source'));
-        $formRules = $this->formValidationRules();
+{
+    $normalized = $this->normalizeSource($request->input('source'));
+    $formRules = $this->formValidationRules();
 
-        $data = $request->validate(array_merge([
-            'nama' => ['required', 'string', 'max:255'],
-            'kelas' => ['nullable', 'string', 'max:100'],
-            'tgl_lahir' => ['nullable', 'date'],
-            'usia' => ['nullable', 'integer', 'between:1,120'],
-            'orangtua' => ['nullable', 'string', 'max:255'],
-            'no_telp' => ['nullable', 'string', 'max:20'],
-            'alamat' => ['nullable', 'string'],
-            'guru_wali' => ['nullable', 'string', 'max:255'],
-            'source' => ['nullable', 'in:trial,direct'],
-            'status_trial' => ['nullable', 'string'],
-            'no_cabang' => ['nullable', 'string', 'max:20'],
-            'bimba_unit' => ['nullable', 'string', 'max:100'],
-        ], $formRules));
+    $data = $request->validate(array_merge([
+        'nama' => ['required', 'string', 'max:255'],
+        'kelas' => ['nullable', 'string', 'max:100'],
+        'tgl_lahir' => ['nullable', 'date'],
+        'usia' => ['nullable', 'integer', 'between:1,120'],
+        'orangtua' => ['nullable', 'string', 'max:255'],
+        'no_telp' => ['nullable', 'string', 'max:20'],
+        'alamat' => ['nullable', 'string'],
+        'guru_wali' => ['nullable', 'string', 'max:255'],
+        'source' => ['nullable', 'in:trial,direct'],
+        'status_trial' => ['nullable', 'string'],
+        'no_cabang' => ['nullable', 'string', 'max:20'],
+        'bimba_unit' => ['nullable', 'string', 'max:100'],
 
-        if ($request->has('source')) {
-            $data['source'] = $normalized ?? ($student->source ?? 'direct');
-        } else {
-            unset($data['source']);
-        }
+        // === FIELD BARU ===
+        'informasi_bimba'       => ['nullable', 'string', 'max:100'],
+        'informasi_humas_nama'  => ['nullable', 'string', 'max:255'],
+        'informasi_lainnya'     => ['nullable', 'string', 'max:1000'],
+    ], $formRules));
 
-        if (empty($data['source']) && !empty($data['sumber_pendaftaran'])) {
-            $data['source'] = $this->normalizeSourceFromForm($data['sumber_pendaftaran']) ?? ($student->source ?? 'direct');
-        }
-
-        $this->castFormLikeColumns($data);
-
-        // AUTOMATIC: resolve no_cabang from bimba_unit if changed or absent
-        if (!empty($data['bimba_unit'])) {
-            $shouldResolve = empty($data['no_cabang']) || (isset($data['bimba_unit']) && $data['bimba_unit'] !== $student->bimba_unit);
-            if ($shouldResolve) {
-                $resolved = $this->resolveNoCabangFromBimbaUnit($data['bimba_unit']);
-                if ($resolved) {
-                    $data['no_cabang'] = $resolved;
-                }
-            }
-        }
-
-        DB::transaction(function () use ($request, $student, $data) {
-            $fields = [
-                'nama','kelas','tgl_lahir','usia','orangtua','no_telp','telp_hp','hp_ayah','hp_ibu',
-                'alamat','guru_wali','source','no_cabang','bimba_unit'
-            ];
-            $before = $student->only($fields);
-
-            $student->update($data);
-
-            if (($student->source ?? null) === 'trial') {
-                $this->ensureTrialRelation($student, 'aktif');
-            }
-
-            $bi = BukuInduk::where('nim', $student->nim)->first();
-            if ($bi) {
-                $this->mergeStudentToBukuInduk($student, $bi);
-            }
-
-            $after = $student->only($fields);
-            $diff = [];
-            foreach ($fields as $k) {
-                $old = $before[$k] ?? null;
-                $nw = $after[$k] ?? null;
-                if ($k === 'tgl_lahir') {
-                    $old = $old ? substr((string) $old, 0, 10) : $old;
-                    $nw = $nw ? substr((string) $nw, 0, 10) : $nw;
-                }
-                if ((string) $old !== (string) $nw) {
-                    $diff[$k] = ['old' => $old, 'new' => $nw];
-                }
-            }
-
-            if ($diff) {
-                StudentHistory::create([
-                    'student_id' => $student->id,
-                    'user_id' => Auth::id(),
-                    'diff' => $diff,
-                    'ip' => $request->ip(),
-                    'user_agent' => $request->userAgent(),
-                ]);
-            }
-        });
-
-        return redirect()->route('students.index')
-            ->with('success', 'Data student berhasil diperbarui.');
+    // === LOGIKA KHUSUS INFORMASI_BIMBA ===
+    if ($request->informasi_bimba === 'Lainnya' && $request->filled('informasi_lainnya')) {
+        $data['informasi_bimba'] = $request->informasi_lainnya;
     }
+
+    if ($request->has('source')) {
+        $data['source'] = $normalized ?? ($student->source ?? 'direct');
+    } else {
+        unset($data['source']);
+    }
+
+    if (empty($data['source']) && !empty($data['sumber_pendaftaran'])) {
+        $data['source'] = $this->normalizeSourceFromForm($data['sumber_pendaftaran']) ?? ($student->source ?? 'direct');
+    }
+
+    $this->castFormLikeColumns($data);
+
+    // Resolve no_cabang
+    if (!empty($data['bimba_unit'])) {
+        $shouldResolve = empty($data['no_cabang']) || (isset($data['bimba_unit']) && $data['bimba_unit'] !== $student->bimba_unit);
+        if ($shouldResolve) {
+            $resolved = $this->resolveNoCabangFromBimbaUnit($data['bimba_unit']);
+            if ($resolved) {
+                $data['no_cabang'] = $resolved;
+            }
+        }
+    }
+
+    DB::transaction(function () use ($request, $student, $data) {
+        $fields = [
+            'nama','kelas','tgl_lahir','usia','orangtua','no_telp','telp_hp','hp_ayah','hp_ibu',
+            'alamat','guru_wali','source','no_cabang','bimba_unit',
+            // Tambahkan field baru untuk history
+            'informasi_bimba', 'informasi_humas_nama'
+        ];
+
+        $before = $student->only($fields);
+
+        $student->update($data);
+
+        if (($student->source ?? null) === 'trial') {
+            $this->ensureTrialRelation($student, 'aktif');
+        }
+
+        $bi = BukuInduk::where('nim', $student->nim)->first();
+        if ($bi) {
+            $this->mergeStudentToBukuInduk($student, $bi);
+        }
+
+        $after = $student->only($fields);
+        $diff = [];
+        foreach ($fields as $k) {
+            $old = $before[$k] ?? null;
+            $nw = $after[$k] ?? null;
+            if ($k === 'tgl_lahir') {
+                $old = $old ? substr((string) $old, 0, 10) : $old;
+                $nw = $nw ? substr((string) $nw, 0, 10) : $nw;
+            }
+            if ((string) $old !== (string) $nw) {
+                $diff[$k] = ['old' => $old, 'new' => $nw];
+            }
+        }
+
+        if ($diff) {
+            StudentHistory::create([
+                'student_id' => $student->id,
+                'user_id' => Auth::id(),
+                'diff' => $diff,
+                'ip' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
+        }
+    });
+
+    return redirect()->route('students.index')
+        ->with('success', 'Data student berhasil diperbarui.');
+}
 
     // -------------------------------------------------------------------------
     // Helper NIM dari Buku Induk

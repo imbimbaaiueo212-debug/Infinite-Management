@@ -46,43 +46,43 @@
                         </div>
 
                         <div class="col-md-4">
-    <label for="kelas" class="form-label">Kelas</label>
-    <select name="kelas" id="kelas" class="form-select @error('kelas') is-invalid @enderror">
-        <option value="">— Pilih Kelas —</option>
-        @foreach($kelasList as $kelas)
-            <option value="{{ $kelas }}" 
-                    {{ old('kelas', $student->kelas ?? 'biMBA-AIUEO') == $kelas ? 'selected' : '' }}>
-                {{ $kelas }}
-            </option>
-        @endforeach
-    </select>
-    @error('kelas') <div class="invalid-feedback">{{ $message }}</div> @enderror
-</div>
-                    </div>
+                                <label for="kelas" class="form-label">Kelas</label>
+                                <select name="kelas" id="kelas" class="form-select @error('kelas') is-invalid @enderror">
+                                    <option value="">— Pilih Kelas —</option>
+                                    @foreach($kelasList as $kelas)
+                                        <option value="{{ $kelas }}" 
+                                                {{ old('kelas', $student->kelas ?? 'biMBA-AIUEO') == $kelas ? 'selected' : '' }}>
+                                            {{ $kelas }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                                @error('kelas') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                            </div>
+                                                </div>
 
-                    <div class="row g-3">
-                        <div class="col-md-4">
-    <label for="jenis_kelamin" class="form-label">Jenis Kelamin</label>
-    <select name="jenis_kelamin" class="form-select @error('jenis_kelamin') is-invalid @enderror">
-        <option value="">— Pilih —</option>
-        <!-- Perbaikan: dukung nilai teks penuh dari database -->
-        @php
-            $jk = old('jenis_kelamin', $student->jenis_kelamin);
-            $isL = in_array($jk, ['L', 'Laki-laki', 'Laki laki']);
-            $isP = in_array($jk, ['P', 'Perempuan', 'perempuan']);
-        @endphp
-        <option value="L" {{ $isL ? 'selected' : '' }}>Laki-laki</option>
-        <option value="P" {{ $isP ? 'selected' : '' }}>Perempuan</option>
-    </select>
-</div>
+                                                <div class="row g-3">
+                                                    <div class="col-md-4">
+                                <label for="jenis_kelamin" class="form-label">Jenis Kelamin</label>
+                                <select name="jenis_kelamin" class="form-select @error('jenis_kelamin') is-invalid @enderror">
+                                    <option value="">— Pilih —</option>
+                                    <!-- Perbaikan: dukung nilai teks penuh dari database -->
+                                    @php
+                                        $jk = old('jenis_kelamin', $student->jenis_kelamin);
+                                        $isL = in_array($jk, ['L', 'Laki-laki', 'Laki laki']);
+                                        $isP = in_array($jk, ['P', 'Perempuan', 'perempuan']);
+                                    @endphp
+                                    <option value="L" {{ $isL ? 'selected' : '' }}>Laki-laki</option>
+                                    <option value="P" {{ $isP ? 'selected' : '' }}>Perempuan</option>
+                                </select>
+                            </div>
 
-                        <div class="col-md-4">
-    <label for="tgl_lahir" class="form-label">Tanggal Lahir</label>
-    <input type="date" name="tgl_lahir" id="tgl_lahir"
-           value="{{ old('tgl_lahir') ?? ($student->tgl_lahir ? $student->tgl_lahir->format('Y-m-d') : '') }}"
-           class="form-control @error('tgl_lahir') is-invalid @enderror">
-    @error('tgl_lahir') <div class="invalid-feedback">{{ $message }}</div> @enderror
-</div>
+                                                    <div class="col-md-4">
+                                <label for="tgl_lahir" class="form-label">Tanggal Lahir</label>
+                                <input type="date" name="tgl_lahir" id="tgl_lahir"
+                                    value="{{ old('tgl_lahir') ?? ($student->tgl_lahir ? $student->tgl_lahir->format('Y-m-d') : '') }}"
+                                    class="form-control @error('tgl_lahir') is-invalid @enderror">
+                                @error('tgl_lahir') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                            </div>
 
                         <div class="col-md-4">
                             <label class="form-label">Usia</label>
@@ -169,8 +169,36 @@
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label for="informasi_bimba" class="form-label">Sumber Informasi BiMBA</label>
-                            <input type="text" name="informasi_bimba" value="{{ old('informasi_bimba', $student->informasi_bimba) }}"
-                                class="form-control @error('informasi_bimba') is-invalid @enderror">
+                            <select name="informasi_bimba" id="informasi_bimba" 
+                                    class="form-control @error('informasi_bimba') is-invalid @enderror">
+                                <option value="">-- Pilih Sumber Informasi --</option>
+                                @foreach($sumberInformasi as $key => $label)
+                                    <option value="{{ $key }}" 
+                                        {{ old('informasi_bimba', $student->informasi_bimba) == $key ? 'selected' : '' }}>
+                                        {{ $label }}
+                                    </option>
+                                @endforeach
+                            </select>
+                            @error('informasi_bimba')
+                                <div class="invalid-feedback">{{ $message }}</div>
+                            @enderror
+                        </div>
+
+                        <!-- Field HUMAS -->
+                        <div class="col-md-6" id="humas_field" style="display: none;">
+                            <label for="informasi_humas_nama" class="form-label">Nama Petugas HUMAS</label>
+                            <input type="text" name="informasi_humas_nama" id="informasi_humas_nama"
+                                value="{{ old('informasi_humas_nama', $student->informasi_humas_nama) }}"
+                                class="form-control @error('informasi_humas_nama') is-invalid @enderror"
+                                placeholder="Nama lengkap petugas HUMAS">
+                        </div>
+
+                        <!-- Field Lainnya -->
+                        <div class="col-md-12" id="lainnya_field" style="display: none;">
+                            <label for="informasi_lainnya" class="form-label">Keterangan Lainnya</label>
+                            <textarea name="informasi_lainnya" id="informasi_lainnya" rows="2"
+                                    class="form-control @error('informasi_lainnya') is-invalid @enderror"
+                                    placeholder="Jelaskan sumber informasinya...">{{ old('informasi_lainnya', $student->informasi_lainnya ?? '') }}</textarea>
                         </div>
 
                         <div class="col-md-6">
@@ -227,6 +255,33 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Jalankan sekali di awal
     updatePreview();
+});
+
+$(document).ready(function() {
+    const $select = $('#informasi_bimba');
+    const $humasField = $('#humas_field');
+    const $lainnyaField = $('#lainnya_field');
+
+    function toggleFields() {
+        const value = $select.val();
+
+        if (value === 'HUMAS') {
+            $humasField.show();
+            $lainnyaField.hide();
+        } else if (value === 'Lainnya') {
+            $humasField.hide();
+            $lainnyaField.show();
+        } else {
+            $humasField.hide();
+            $lainnyaField.hide();
+        }
+    }
+
+    // Jalankan saat halaman load
+    toggleFields();
+
+    // Jalankan saat select berubah
+    $select.on('change', toggleFields);
 });
 </script>
 @endpush

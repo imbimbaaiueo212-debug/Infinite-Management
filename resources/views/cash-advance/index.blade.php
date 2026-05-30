@@ -68,27 +68,27 @@
                                             @endif
                                         </td>
                                         <td class="text-center pe-4">
-    <!-- Tombol Detail -->
-    <a href="{{ route('cash-advance.show', $ca) }}"
-       class="btn btn-outline-info btn-sm px-3 me-2">
-        <i class="fas fa-eye me-1"></i> Detail
-    </a>
+                                            <!-- Tombol Detail -->
+                                            <a href="{{ route('cash-advance.show', $ca) }}"
+                                            class="btn btn-outline-info btn-sm px-3 me-2">
+                                                <i class="fas fa-eye me-1"></i> Detail
+                                            </a>
 
-    <!-- Tombol Hapus - HANYA UNTUK ADMIN -->
-    @if(auth()->user()->isAdminUser()) {{-- Ganti dengan method cek admin Anda jika berbeda --}}
-        <form action="{{ route('cash-advance.destroy', $ca) }}" 
-              method="POST" 
-              class="d-inline"
-              onsubmit="return confirm('Yakin ingin menghapus pengajuan cash advance ini?\n\nData pengajuan dan cicilan (jika sudah di-approve) akan dihapus permanen!')">
-            @csrf
-            @method('DELETE')
-            <button type="submit" 
-                    class="btn btn-outline-danger btn-sm px-3">
-                <i class="fas fa-trash-alt me-1"></i> Hapus
-            </button>
-        </form>
-    @endif
-</td>
+                                            <!-- Tombol Hapus - HANYA UNTUK ADMIN -->
+                                            @if(auth()->user()->isAdminUser()) {{-- Ganti dengan method cek admin Anda jika berbeda --}}
+                                                <form action="{{ route('cash-advance.destroy', $ca) }}" 
+                                                    method="POST" 
+                                                    class="d-inline"
+                                                    onsubmit="return confirm('Yakin ingin menghapus pengajuan cash advance ini?\n\nData pengajuan dan cicilan (jika sudah di-approve) akan dihapus permanen!')">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button type="submit" 
+                                                            class="btn btn-outline-danger btn-sm px-3">
+                                                        <i class="fas fa-trash-alt me-1"></i> Hapus
+                                                    </button>
+                                                </form>
+                                            @endif
+                                        </td>
                                     </tr>
                                 @empty
                                     <tr>

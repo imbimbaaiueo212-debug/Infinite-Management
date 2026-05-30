@@ -152,83 +152,95 @@
     @endphp
 
     {{-- ================= TABEL ================= --}}
-    <div class="card border-0 shadow-sm mb-4">
-        <div class="card-header bg-primary text-dark">
-            <h5 class="mb-0">
-                Perkembangan Murid
-                {{ $bulan ? 'Bulan ' . \Carbon\Carbon::create()->month($bulan)->locale('id')->monthName : 'Tahun' }}
-                {{ $tahunMulai }} - {{ strtoupper($bimba_unit) }}
-            </h5>
-        </div>
-
-        <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-bordered table-hover table-sm text-center align-middle mb-0">
-                    <thead class="table-light">
-                        <tr>
-                            <th rowspan="2">BULAN</th>
-                            <th rowspan="2">SPP</th>
-                            <th colspan="6">MURID</th>
-                        </tr>
-                        <tr>
-                            <th>MTB</th>
-                            <th>MB</th>
-                            <th>MK</th>
-                            <th>MA</th>
-                            <th>BNF</th>
-                            <th>D</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach($months as $i => $bulanNama)
-                        <tr>
-                            <td class="text-start fw-bold">{{ $bulanNama }}</td>
-                            <td>Rp {{ number_format($sppPerBulan[$i]['total_spp'] ?? 0, 0, ',', '.') }}</td>
-                            <td>0</td>
-                            <td class="table-success fw-bold">{{ $baruIni[$i] }}</td>
-                            <td class="table-danger fw-bold">{{ $keluarIni[$i] }}</td>
-                            <td class="table-info fw-bold">{{ $aktifIni[$i] }}</td>
-                            <td class="table-warning">{{ $bnf[$i] ?? 0 }}</td>
-                            <td class="table-warning">{{ $d[$i] ?? 0 }}</td>
-                        </tr>
-                        @endforeach
-                    </tbody>
-                    <tfoot>
-                        <tr>
-                            <th class="text-start">TOTAL</th>
-                            <th class="text-success">
-            Rp {{ number_format(array_sum(array_column($sppPerBulan, 'total_spp')), 0, ',', '.') }}
-        </th>
-                            <th>0</th>
-                            <th class="text-success">{{ array_sum($baruIni) }}</th>
-                            <th class="text-danger">{{ array_sum($keluarIni) }}</th>
-                            <th class="text-primary">{{ $ma[11] ?? 0 }}</th>
-                            <th class="text-warning">{{ array_sum($bnf ?? []) }}</th>
-                            <th class="text-warning">{{ array_sum($d ?? []) }}</th>
-                        </tr>
-                    </tfoot>
-                </table>
-            </div>
-        </div>
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-primary text-dark">
+        <h5 class="mb-0">
+            Perkembangan Murid 
+            {{ $bulan ? 'Bulan ' . \Carbon\Carbon::create()->month($bulan)->locale('id')->monthName : 'Tahun' }}
+            {{ $tahunMulai }} - {{ strtoupper($bimba_unit) }}
+        </h5>
     </div>
 
-    <div class="row mb-4">
-        <div class="col-md-6">
-            <div class="card border-0 shadow-sm bg-light border-warning">
-                <div class="card-body text-center">
-                    <h6 class="text-muted mb-1">Total Murid BNF Aktif <small>(Semua Tahun)</small></h6>
-                    <h3 class="mb-0 text-success fw-bold">{{ number_format($totalBnfAllTime ?? 0) }}</h3>
-                    <small class="text-muted">Murid</small>
-                </div>
-            </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover table-sm text-center align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th rowspan="2">BULAN</th>
+                        <th rowspan="2">SPP</th>
+                        <th colspan="8">MURID</th>
+                    </tr>
+                    <tr>
+                        <th>MA1<br><small>(Bulan Lalu)</small></th>
+                        <th>MTB<br><small>(Trial Baru)</small></th>
+                        <th>MTA<br><small>(Trial Aktif)</small></th>
+                        <th>MB<br><small>(Murid Baru)</small></th>
+                        <th>MK<br><small>(Murid Keluar)</small></th>
+                        <th>MA2<br><small>(Bulan Berjalan)</small></th>
+                        <th>BNF<br><small>(S3B1,S3B2,S3B3)</small></th>
+                        <th>D<br><small>(Dhuafa)</small></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach($months as $i => $bulanNama)
+                    <tr>
+                        <td class="text-start fw-bold">{{ $bulanNama }}</td>
+                        <td>Rp {{ number_format($sppPerBulan[$i]['total_spp'] ?? 0, 0, ',', '.') }}</td>
+                        
+                        <!-- MA1 - Murid Aktif Bulan Lalu -->
+                        <td class="table-info fw-bold">{{ $ma1[$i] ?? 0 }}</td>
+                        
+                        <!-- MTB - Murid Trial Baru -->
+                        <td class="table-success fw-bold">{{ $mtb[$i] ?? 0 }}</td>
+                        
+                        <!-- MTA - Murid Trial Aktif -->
+                        <td class="table-warning fw-bold">{{ $mta[$i] ?? 0 }}</td>
+                        
+                        <!-- MB - Murid Baru -->
+                        <td class="table-success fw-bold">{{ $mb[$i] ?? 0 }}</td>
+                        
+                        <!-- MK - Murid Keluar -->
+                        <td class="table-danger fw-bold">{{ $mk[$i] ?? 0 }}</td>
+                        
+                        <!-- MA2 - Murid Aktif Bulan Berjalan -->
+                        <td class="table-primary fw-bold">{{ $ma[$i] ?? 0 }}</td>
+                        
+                        <!-- BNF -->
+                        <td class="table-warning">{{ $bnf[$i] ?? 0 }}</td>
+                        
+                        <!-- D -->
+                        <td class="table-warning">{{ $d[$i] ?? 0 }}</td>
+                    </tr>
+                    @endforeach
+                </tbody>
+                <tfoot>
+                    <tr class="fw-bold">
+    <th class="text-start">TOTAL</th>
+    <th class="text-success">
+        Rp {{ number_format(array_sum(array_column($sppPerBulan, 'total_spp')), 0, ',', '.') }}
+    </th>
+    <th>{{ $total_ma1 ?? 0 }}</th>           {{-- MA1 = Kumulatif Akhir --}}
+    <th>{{ $total_mtb ?? 0 }}</th>
+    <th>{{ $total_mta ?? 0 }}</th>
+    <th class="text-success">{{ $total_mb ?? 0 }}</th>
+    <th class="text-danger">{{ $total_mk ?? 0 }}</th>
+    <th class="text-primary">{{ $total_ma ?? 0 }}</th>
+    <th class="text-dark">{{ $totalBnfAllTime ?? 0 }}</th>
+    <th class="text-dark">{{ $totalDhuafaAllTime ?? 0 }}</th>
+</tr>
+                </tfoot>
+            </table>
         </div>
-        <div class="col-md-6">
-            <div class="card border-0 shadow-sm bg-light border-warning">
-                <div class="card-body text-center">
-                    <h6 class="text-muted mb-1">Total Murid Dhuafa Aktif <small>(Semua Tahun)</small></h6>
-                    <h3 class="mb-0 text-success fw-bold">{{ number_format($totalDhuafaAllTime ?? 0) }}</h3>
-                    <small class="text-muted">Murid</small>
-                </div>
+    </div>
+</div>
+
+    <div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm bg-light border-primary">
+            <div class="card-body text-center">
+                <h6 class="text-muted mb-1">Total Murid Keseluruhan <small>(Semua Tahun)</small></h6>
+                <h3 class="mb-0 text-primary fw-bold">{{ number_format($totalMuridKeseluruhan ?? 0) }}</h3>
+                <small class="text-muted">Murid (Aktif + Keluar)</small>
             </div>
         </div>
     </div>

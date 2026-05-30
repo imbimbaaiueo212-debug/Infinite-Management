@@ -59,57 +59,57 @@
 
                             <div class="row g-3">
                                <div class="col-md-3">
-    <label for="bulan" class="form-label fw-medium">
-        Bulan <span class="text-danger">*</span>
-    </label>
-    <select name="bulan" id="bulan" class="form-select @error('bulan') is-invalid @enderror" required>
-        <option value="">-- Pilih Bulan --</option>
-        @php
-            $bulanIndonesia = [
-                1 => 'Januari',
-                2 => 'Februari',
-                3 => 'Maret',
-                4 => 'April',
-                5 => 'Mei',
-                6 => 'Juni',
-                7 => 'Juli',
-                8 => 'Agustus',
-                9 => 'September',
-                10 => 'Oktober',
-                11 => 'November',
-                12 => 'Desember',
-            ];
-        @endphp
-        @foreach($bulanIndonesia as $nomor => $nama)
-            <option value="{{ $nomor }}" {{ old('bulan') == $nomor ? 'selected' : '' }}>
-                {{ $nama }}
-            </option>
-        @endforeach
-    </select>
-    @error('bulan')
-        <div class="invalid-feedback">{{ $message }}</div>
-    @enderror
-</div>
+                                    <label for="bulan" class="form-label fw-medium">
+                                        Bulan <span class="text-danger">*</span>
+                                    </label>
+                                    <select name="bulan" id="bulan" class="form-select @error('bulan') is-invalid @enderror" required>
+                                        <option value="">-- Pilih Bulan --</option>
+                                        @php
+                                            $bulanIndonesia = [
+                                                1 => 'Januari',
+                                                2 => 'Februari',
+                                                3 => 'Maret',
+                                                4 => 'April',
+                                                5 => 'Mei',
+                                                6 => 'Juni',
+                                                7 => 'Juli',
+                                                8 => 'Agustus',
+                                                9 => 'September',
+                                                10 => 'Oktober',
+                                                11 => 'November',
+                                                12 => 'Desember',
+                                            ];
+                                        @endphp
+                                        @foreach($bulanIndonesia as $nomor => $nama)
+                                            <option value="{{ $nomor }}" {{ old('bulan') == $nomor ? 'selected' : '' }}>
+                                                {{ $nama }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                    @error('bulan')
+                                        <div class="invalid-feedback">{{ $message }}</div>
+                                    @enderror
+                                </div>
 
-<div class="col-md-3">
-    <label for="tahun" class="form-label fw-medium">
-        Tahun <span class="text-danger">*</span>
-    </label>
-    <select name="tahun" id="tahun" class="form-select @error('tahun') is-invalid @enderror" required>
-        <option value="">-- Pilih Tahun --</option>
-        @php
-            $tahunSekarang = now()->year;
-        @endphp
-        @for($y = $tahunSekarang; $y <= $tahunSekarang + 2; $y++)
-            <option value="{{ $y }}" {{ old('tahun') == $y ? 'selected' : '' }}>
-                {{ $y }}
-            </option>
-        @endfor
-    </select>
-    @error('tahun')
-        <div class="invalid-feedback">{{ $message }}</div>
-    @enderror
-</div>
+                                <div class="col-md-3">
+                                    <label for="tahun" class="form-label fw-medium">
+                                        Tahun <span class="text-danger">*</span>
+                                    </label>
+                                    <select name="tahun" id="tahun" class="form-select @error('tahun') is-invalid @enderror" required>
+                                        <option value="">-- Pilih Tahun --</option>
+                                        @php
+                                            $tahunSekarang = now()->year;
+                                        @endphp
+                                        @for($y = $tahunSekarang; $y <= $tahunSekarang + 2; $y++)
+                                            <option value="{{ $y }}" {{ old('tahun') == $y ? 'selected' : '' }}>
+                                                {{ $y }}
+                                            </option>
+                                        @endfor
+                                    </select>
+                                    @error('tahun')
+                                        <div class="invalid-feedback">{{ $message }}</div>
+                                    @enderror
+                                </div>
 
                                 <div class="col-md-6">
                                     <label for="nominal_pinjam_display" class="form-label fw-medium">Nominal Pinjaman (Rp)
