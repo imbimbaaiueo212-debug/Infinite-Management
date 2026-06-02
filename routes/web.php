@@ -523,6 +523,8 @@ Route::post('rekap-progresif/calculate', [App\Http\Controllers\RekapProgresifCon
 // Route::delete('rekap-progresif/{rekap_progresif}', [RekapProgresifController::class, 'destroy'])->name('rekap-progresif.destroy');
 // web.php
 // routes/web.php
+Route::post('/rekap-progresif/generate-all', [RekapProgresifController::class, 'generateAllMissing'])
+     ->name('rekap-progresif.generate-all');
 
 
 // Pembayaran Progresif

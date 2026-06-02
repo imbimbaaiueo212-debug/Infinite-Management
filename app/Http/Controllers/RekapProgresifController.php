@@ -157,50 +157,114 @@ public function index(Request $request)
                               ->get();
 
     // ====================== AMBIL REKAP PROGRESIF ======================
-    $rekapQuery = RekapProgresif::query();
+$rekapQuery = RekapProgresif::query();
 
-    if ($selectedTahun) {
-        $rekapQuery->where('tahun', $selectedTahun);
+if ($selectedTahun) {
+    $rekapQuery->where('tahun', $selectedTahun);
+}
+if ($selectedBulanNama) {
+    $rekapQuery->where('bulan', $selectedBulanNama);
+} elseif ($monthFrom && $monthTo) {
+    $rekapQuery->whereBetween('tahun', [$from->year, $to->year]);
+}
+
+$rekapList = $rekapQuery->get()->keyBy('nama');
+
+// ====================== AUTO CREATE MISSING REKAP ======================
+$createdCount = 0;
+
+if ($selectedTahun && $selectedBulanNama) {
+    foreach ($profiles as $profile) {
+        if (!$rekapList->has($profile->nama)) {
+
+            $calc = $this->calculateForProfile($profile, strtolower($selectedBulanNama), $selectedTahun);
+
+            $data = [
+                'nama'          => $profile->nama,
+                'jabatan'       => $profile->jabatan ?? '-',
+                'status'        => $profile->status_karyawan ?? 'Aktif',
+                'departemen'    => $profile->departemen ?? '-',
+                'masa_kerja'    => $this->formatMasaKerja($profile->masa_kerja),
+
+                'bulan'         => $selectedBulanNama,
+                'tahun'         => $selectedTahun,
+
+                'spp_bimba'     => $calc['spp_bimba'],
+                'am1'           => $calc['am1'],
+                'am2'           => $calc['am2'],
+                'total_fm'      => $calc['total_fm'],
+                'progresif'     => $calc['progresif'],
+
+                'spp_english'   => 0,
+                'komisi'        => 0,
+                'dibayarkan'    => $calc['progresif'],
+
+                'bimba_unit'    => $calc['bimba_unit'],
+                'no_cabang'     => $calc['no_cabang'],
+            ];
+
+            $newRekap = RekapProgresif::create($data);
+
+            // Simpan dengan ID yang benar
+            $rekapList->put($profile->nama, $newRekap);
+
+            $createdCount++;
+        }
     }
-    if ($selectedBulanNama) {
-        $rekapQuery->where('bulan', $selectedBulanNama);
-    } elseif ($monthFrom && $monthTo) {
-        // Jika pakai range, ambil semua bulan di range (opsional)
-        $rekapQuery->whereBetween('tahun', [$from->year, $to->year]);
-    }
+}
 
-    $rekapList = $rekapQuery->get()->keyBy('nama');
+if ($createdCount > 0) {
+    session()->flash('success', "$createdCount data rekap baru berhasil dibuat otomatis.");
+}
 
-    // ====================== MAPPING DATA ======================
-    $rekapProgresifs = $profiles->map(function ($profile) use ($rekapList, $selectedBulanNama, $selectedTahun) {
+   // ====================== MAPPING DATA ======================
+$rekapProgresifs = $profiles->map(function ($profile) use ($rekapList, $selectedBulanNama, $selectedTahun) {
 
-        $rekap = $rekapList->get($profile->nama);
+    $rekap = $rekapList->get($profile->nama);
 
-        return (object) [
-            'id'            => $rekap?->id,
-            'nama'          => $profile->nama,
-            'jabatan'       => $profile->jabatan ?? $rekap?->jabatan ?? '-',
-            'status'        => $profile->status_karyawan ?? $rekap?->status ?? 'Aktif',
-            'departemen'    => $profile->departemen ?? $rekap?->departemen ?? '-',
-            'masa_kerja'    => $this->formatMasaKerja($profile->masa_kerja ?? $rekap?->masa_kerja),
-            'bimba_unit'    => $profile->biMBA_unit ?? $profile->bimba_unit ?? $rekap?->bimba_unit ?? '-',
-            'no_cabang'     => $profile->no_cabang ?? $rekap?->no_cabang ?? '-',
-
-            // Data Rekap
-            'bulan'         => $rekap?->bulan ?? $selectedBulanNama,
-            'tahun'         => $rekap?->tahun ?? $selectedTahun,
-            'spp_bimba'     => $rekap?->spp_bimba ?? 0,
-            'am1'           => $rekap?->am1 ?? 0,
-            'am2'           => $rekap?->am2 ?? 0,
-            'total_fm'      => $rekap?->total_fm ?? 0,
-            'progresif'     => $rekap?->progresif ?? 0,
-            'spp_english'   => $rekap?->spp_english ?? 0,
-            'komisi'        => $rekap?->komisi ?? 0,
-            'dibayarkan'    => $rekap?->dibayarkan ?? 0,
-
-            'has_rekap'     => !is_null($rekap),   // untuk penanda apakah sudah ada rekap
+    if ($rekap) {
+        // Sudah ada rekap → ambil dari database
+        $data = [
+            'spp_bimba'  => $rekap->spp_bimba,
+            'am1'        => $rekap->am1,
+            'am2'        => $rekap->am2,
+            'total_fm'   => $rekap->total_fm,
+            'progresif'  => $rekap->progresif,
+            'bimba_unit' => $rekap->bimba_unit,
+            'no_cabang'  => $rekap->no_cabang,
         ];
-    })->sortBy('bimba_unit')->sortBy('nama')->values();
+    } else {
+        // Belum ada rekap → hitung otomatis
+        $calc = $this->calculateForProfile($profile, strtolower($selectedBulanNama), $selectedTahun);
+
+        $data = $calc;
+    }
+
+    return (object) [
+        'id'            => $rekap?->id,
+        'nama'          => $profile->nama,
+        'jabatan'       => $profile->jabatan ?? $rekap?->jabatan ?? '-',
+        'status'        => $profile->status_karyawan ?? $rekap?->status ?? 'Aktif',
+        'departemen'    => $profile->departemen ?? $rekap?->departemen ?? '-',
+        'masa_kerja'    => $this->formatMasaKerja($profile->masa_kerja ?? $rekap?->masa_kerja),
+        'bimba_unit'    => $data['bimba_unit'],
+        'no_cabang'     => $data['no_cabang'],
+
+        'bulan'         => $rekap?->bulan ?? $selectedBulanNama,
+        'tahun'         => $rekap?->tahun ?? $selectedTahun,
+
+        'spp_bimba'     => $data['spp_bimba'],
+        'am1'           => $data['am1'],
+        'am2'           => $data['am2'],
+        'total_fm'      => $data['total_fm'],
+        'progresif'     => $data['progresif'],
+        'spp_english'   => $rekap?->spp_english ?? 0,
+        'komisi'        => $rekap?->komisi ?? 0,
+        'dibayarkan'    => $rekap?->dibayarkan ?? ($data['progresif'] ?? 0),
+
+        'has_rekap'     => !is_null($rekap),
+    ];
+})->sortBy('bimba_unit')->sortBy('nama')->values();
 
     $isAdmin = $this->isCurrentUserAdmin();
 
@@ -588,5 +652,137 @@ public function destroy($id)
         }
     }
 
+    /**
+ * Hitung progresif untuk satu profile (digunakan di index & calculate)
+ */
+private function calculateForProfile($profile, string $bulan, int $tahun)
+{
+    $bimbaUnit = $profile->biMBA_unit ?? $profile->bimba_unit ?? $profile->unit;
+
+    $unit = Unit::whereRaw('LOWER(TRIM(biMBA_unit)) = ?', 
+        [strtolower(trim($bimbaUnit))]
+    )->first();
+
+    $jabatan = strtolower(trim($profile->jabatan ?? ''));
+    $isKepalaUnit = $jabatan === 'kepala unit' || $jabatan === 'kepala ua';
+
+    // Query Penerimaan
+    $paidQuery = Penerimaan::whereRaw('LOWER(bulan) = ?', [$bulan])
+        ->where('tahun', $tahun)
+        ->where('spp', '>', 0);
+
+    if ($isKepalaUnit) {
+        $paidQuery->where('bimba_unit', 'LIKE', '%' . $bimbaUnit . '%');
+    } else {
+        $paidQuery->where('guru', $profile->nama);
+    }
+
+    $paidNims = $paidQuery->distinct()->pluck('nim');
+
+    $totalMuridBayar = $paidNims->count();
+
+    $totalSPP = Penerimaan::whereIn('nim', $paidNims)
+        ->whereRaw('LOWER(bulan) = ?', [$bulan])
+        ->where('tahun', $tahun)
+        ->sum('spp');
+
+    // Total Murid Aktif
+    if ($isKepalaUnit) {
+        $totalMurid = BukuInduk::where('bimba_unit', 'LIKE', '%' . $bimbaUnit . '%')
+            ->where('status', 'aktif')
+            ->count();
+    } else {
+        $totalMurid = BukuInduk::where('guru', $profile->nama)
+            ->where('status', 'aktif')
+            ->count();
+    }
+
+    $hargaS3 = HargaSaptataruna::whereRaw("LOWER(nama)='s3'")
+        ->value('harga') ?? 300000;
+
+    $totalFM = round(($totalSPP / $hargaS3) * 1.17, 2);
+
+    $progresif = $this->calculateProgresifTariff($totalFM, $profile->jabatan);
+
+    return [
+        'spp_bimba'   => $totalSPP,
+        'am1'         => $totalMurid,
+        'am2'         => $totalMuridBayar,
+        'total_fm'    => $totalFM,
+        'progresif'   => $progresif,
+        'bimba_unit'  => $bimbaUnit,
+        'no_cabang'   => $unit->no_cabang ?? null,
+    ];
+}
+
+/**
+ * Generate / Simpan Semua Rekap yang Belum Ada
+ */
+public function generateAllMissing(Request $request)
+{
+    $periode = $request->get('periode');
+    $selectedTahun = null;
+    $selectedBulanNama = null;
+
+    if ($periode && preg_match('/^\d{4}-\d{2}$/', $periode)) {
+        $date = Carbon::createFromFormat('Y-m', $periode);
+        $selectedTahun = $date->year;
+        $selectedBulan = $date->format('m');
+        $selectedBulanNama = $this->getIndonesianMonthName($selectedBulan);
+    } else {
+        $defaultDate = Carbon::now()->subMonth()->startOfMonth();
+        $selectedTahun = $defaultDate->year;
+        $selectedBulanNama = $this->getIndonesianMonthName($defaultDate->format('m'));
+    }
+
+    $profiles = Profile::whereIn('status_karyawan', ['Aktif', 'Magang'])
+                        ->orWhereNull('status_karyawan')
+                        ->get();
+
+    $created = 0;
+
+    foreach ($profiles as $profile) {
+        // Cek apakah sudah ada rekap
+        $exists = RekapProgresif::where('nama', $profile->nama)
+                    ->where('bulan', $selectedBulanNama)
+                    ->where('tahun', $selectedTahun)
+                    ->exists();
+
+        if (!$exists) {
+            // Hitung dulu
+            $calc = $this->calculateForProfile($profile, strtolower($selectedBulanNama), $selectedTahun);
+
+            $data = [
+                'nama'          => $profile->nama,
+                'jabatan'       => $profile->jabatan,
+                'status'        => $profile->status_karyawan ?? 'Aktif',
+                'departemen'    => $profile->departemen,
+                'masa_kerja'    => $this->formatMasaKerja($profile->masa_kerja),
+
+                'bulan'         => $selectedBulanNama,
+                'tahun'         => $selectedTahun,
+
+                'spp_bimba'     => $calc['spp_bimba'],
+                'am1'           => $calc['am1'],
+                'am2'           => $calc['am2'],
+                'total_fm'      => $calc['total_fm'],
+                'progresif'     => $calc['progresif'],
+
+                'spp_english'   => 0,
+                'komisi'        => 0,
+                'dibayarkan'    => $calc['progresif'],
+
+                'bimba_unit'    => $calc['bimba_unit'],
+                'no_cabang'     => $calc['no_cabang'],
+            ];
+
+            RekapProgresif::create($data);
+            $created++;
+        }
+    }
+
+    return redirect()->route('rekap-progresif.index', ['periode' => $periode ?? ''])
+                     ->with('success', "$created data rekap berhasil dibuat otomatis.");
+}
 
 }

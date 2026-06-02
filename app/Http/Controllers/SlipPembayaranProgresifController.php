@@ -41,24 +41,39 @@ class SlipPembayaranProgresifController extends Controller
     $selectedTahun = $request->get('tahun', date('Y'));
     $statusFilter  = $request->get('status');
 
-    // Daftar Unit
+    // ====================== DAFTAR UNIT ======================
     $unitList = RekapProgresif::whereNotNull('bimba_unit')
         ->distinct()
         ->orderBy('bimba_unit')
         ->pluck('bimba_unit')
         ->toArray();
 
-    // Query nama yang lebih bersih dan anti-duplikat
-$namaList = RekapProgresif::query()
-    ->whereIn('jabatan', ['Guru', 'Kepala Unit'])
-    ->when(!empty($selectedUnit), function ($q) use ($selectedUnit) {
-        $q->where('bimba_unit', $selectedUnit);
-    })
-    ->groupBy('nama')           // Pastikan unik per nama
-    ->orderBy('nama')
-    ->pluck('nama')
-    ->toArray();
+    // ====================== DAFTAR NAMA DARI PROFILE SAJA ======================
+    $namaListQuery = Profile::query()
+        ->where(function ($q) {
+            $q->whereIn('status_karyawan', ['Aktif', 'Magang'])
+              ->orWhereNull('status_karyawan');
+        });
 
+    // Filter Unit (lebih robust)
+    if (!empty($selectedUnit)) {
+        $namaListQuery->where(function($q) use ($selectedUnit) {
+            $q->where('bimba_unit', '=', $selectedUnit)
+              ->orWhere('biMBA_unit', '=', $selectedUnit)
+              ->orWhereRaw('TRIM(bimba_unit) = ?', [$selectedUnit])
+              ->orWhereRaw('TRIM(biMBA_unit) = ?', [$selectedUnit]);
+        });
+    }
+
+    $namaList = $namaListQuery
+        ->orderBy('bimba_unit')
+        ->orderBy('nama')
+        ->pluck('nama')
+        ->unique()
+        ->values()
+        ->toArray();
+
+    // ====================== AMBIL DATA REKAP & PROFILE ======================
     $rekap = null;
     $profile = null;
     $unit = null;
@@ -66,7 +81,6 @@ $namaList = RekapProgresif::query()
     $maxRows = self::DEFAULT_MAX_ROWS;
 
     if (!empty($selectedNama)) {
-
         [$rekap, $profile] = $this->getRekapData(
             $selectedNama,
             $selectedBulan,
@@ -75,7 +89,6 @@ $namaList = RekapProgresif::query()
 
         $unit = $this->getUnitByRekapOrProfile($rekap, $profile);
 
-        // Ambil daftar murid
         $muridList = $this->getMuridList(
             $selectedNama,
             $profile,
@@ -86,8 +99,6 @@ $namaList = RekapProgresif::query()
 
         $maxRows = max(count($muridList), self::DEFAULT_MAX_ROWS);
     }
-
-    $namaList = $this->getUniqueNamaList($selectedUnit);
 
     return view('slip-progresif.index', compact(
         'unitList',
