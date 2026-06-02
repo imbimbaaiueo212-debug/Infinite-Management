@@ -22,27 +22,47 @@ class PembayaranTunjanganController extends Controller
      */
     public function index(Request $request)
 {
-    $nama  = $request->input('nama');
-    $bulan = $request->input('bulan', now()->format('Y-m'));
+    $nama       = $request->input('nama');
+    $monthFrom  = $request->input('month_from');
+    $monthTo    = $request->input('month_to');
 
     $user = auth()->user();
-
     $tarif_harian = 24000;
 
-    /*
-    |--------------------------------------------------------------------------
-    | Ambil semua profile aktif
-    |--------------------------------------------------------------------------
-    */
+    // ====================== PARSING BULAN ======================
+    if ($monthFrom) {
+        try {
+            $monthFrom = Carbon::parse($monthFrom)->format('Y-m');
+        } catch (\Throwable $e) {
+            $monthFrom = null;
+        }
+    }
 
-    $profilesQuery = Profile::query();
+    if ($monthTo) {
+        try {
+            $monthTo = Carbon::parse($monthTo)->format('Y-m');
+        } catch (\Throwable $e) {
+            $monthTo = null;
+        }
+    }
 
-    $profilesQuery->whereNotIn('status_karyawan', ['Resign','Keluar','Pensiun']);
+    // Default ke bulan ini jika tidak ada filter range
+    $singleBulan = $request->input('bulan', now()->format('Y-m'));
+    
+    if (!$monthFrom && !$monthTo) {
+        $monthFrom = $singleBulan;
+        $monthTo   = $singleBulan;
+    }
 
-    $profilesQuery->where(function ($q) {
-        $q->whereNull('tgl_masuk')
-          ->orWhere('tgl_masuk', '>=', '2010-01-01');
-    });
+    // ====================== AMBIL PROFILE ======================
+    // Hanya Aktif dan Magang yang boleh muncul
+    $profilesQuery = Profile::query()
+        ->whereIn('status_karyawan', ['Aktif', 'Magang'])
+        ->orWhereNull('status_karyawan')
+        ->where(function ($q) {
+            $q->whereNull('tgl_masuk')
+              ->orWhere('tgl_masuk', '>=', '2010-01-01');
+        });
 
     if ($nama) {
         $profilesQuery->where('nama', $nama);
@@ -50,170 +70,108 @@ class PembayaranTunjanganController extends Controller
 
     $profiles = $profilesQuery->orderBy('nama')->get();
 
+    // ====================== AMBIL PENDAPATAN & POTONGAN ======================
+    $pendapatanQuery = PendapatanTunjangan::query();
+    $potonganQuery   = PotonganTunjangan::query();
 
-    /*
-    |--------------------------------------------------------------------------
-    | TAMBAHAN PENTING
-    | Ambil relawan dari pendapatan_tunjangan yang belum ada di profile list
-    |--------------------------------------------------------------------------
-    */
+    if ($monthFrom && $monthTo) {
+        $pendapatanQuery->whereBetween('bulan', [$monthFrom, $monthTo]);
+        $potonganQuery->whereBetween('bulan', [$monthFrom, $monthTo]);
+    } else {
+        $pendapatanQuery->where('bulan', $singleBulan);
+        $potonganQuery->where('bulan', $singleBulan);
+    }
 
-    $pendapatanNames = PendapatanTunjangan::where('bulan', $bulan)
-        ->pluck('nama');
+    $pendapatanList = $pendapatanQuery->get()->groupBy('nama');
+    $potonganList   = $potonganQuery->get()->groupBy('nama');
 
-    $missingProfiles = Profile::whereIn('nama', $pendapatanNames)
-        ->whereNotIn('nama', $profiles->pluck('nama'))
-        ->get();
+    // ====================== MAPPING DATA DENGAN AKUMULASI ======================
+    $pembayaranTunjangans = $profiles->map(function ($profile) use ($pendapatanList, $potonganList, $monthFrom, $monthTo, $singleBulan) {
 
-    $profiles = $profiles
-        ->merge($missingProfiles)
-        ->unique('nama')
-        ->values();
+        $pendapatanRecords = $pendapatanList->get($profile->nama) ?? collect();
+        $potonganRecords   = $potonganList->get($profile->nama) ?? collect();
 
-
-    /*
-    |--------------------------------------------------------------------------
-    | Ambil data pendapatan sekaligus
-    |--------------------------------------------------------------------------
-    */
-
-    $pendapatanList = PendapatanTunjangan::where('bulan', $bulan)
-        ->get()
-        ->keyBy('nama');
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | Ambil data potongan sekaligus
-    |--------------------------------------------------------------------------
-    */
-
-    $potonganList = PotonganTunjangan::where('bulan', $bulan)
-        ->get()
-        ->keyBy('nama');
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | Mapping ke object pembayaran
-    |--------------------------------------------------------------------------
-    */
-
-    $pembayaranTunjangans = $profiles->map(function ($profile) use ($bulan, $pendapatanList, $potonganList) {
-
-        $pendapatan = $pendapatanList->get($profile->nama);
-
-        if ($pendapatan) {
-            $totalPendapatan = $pendapatan->total;
-        } else {
-            $totalPendapatan = $this->hitungSkim($profile);
+        // Total Pendapatan
+        $totalPendapatan = $pendapatanRecords->sum('total');
+        if ($totalPendapatan == 0) {
+            $totalPendapatan = $this->hitungSkim($profile); // fallback jika belum ada data pendapatan
         }
 
-        $potongan = $potonganList->get($profile->nama);
+        // Total Potongan (diakumulasi jika range bulan)
+        $sakit_rp       = (int) $potonganRecords->sum('sakit');
+        $izin_rp        = (int) $potonganRecords->sum('izin');
+        $alpa_rp        = (int) $potonganRecords->sum('alpa');
+        $tidak_aktif_rp = (int) $potonganRecords->sum('tidak_aktif');
+        $kelebihan_rp   = (int) ($potonganRecords->sum('kelebihan_nominal') + $potonganRecords->sum('kelebihan'));
+        $lain_lain_rp   = (int) $potonganRecords->sum('lain_lain');
 
-        $sakit_rp       = (int) ($potongan->sakit ?? 0);
-        $izin_rp        = (int) ($potongan->izin ?? 0);
-        $alpa_rp        = (int) ($potongan->alpa ?? 0);
-        $tidak_aktif_rp = (int) ($potongan->tidak_aktif ?? 0);
-        $kelebihan_rp   = (int) ($potongan->kelebihan ?? 0);
-        $lain_lain_rp   = (int) ($potongan->lain_lain ?? 0);
+        $totalPotongan = $sakit_rp + $izin_rp + $alpa_rp + $tidak_aktif_rp + $kelebihan_rp + $lain_lain_rp;
 
-        $totalPotongan = 
-            $sakit_rp +
-            $izin_rp +
-            $alpa_rp +
-            $tidak_aktif_rp +
-            $kelebihan_rp +
-            $lain_lain_rp;
-
-        /*
-        |--------------------------------------------------------------------------
-        | Format masa kerja
-        |--------------------------------------------------------------------------
-        */
-
+        // Format Masa Kerja
         $masaKerjaBulan = $profile->masa_kerja ?? 0;
-
         $years  = intdiv($masaKerjaBulan, 12);
         $months = $masaKerjaBulan % 12;
 
         $masaKerjaFormatted = trim(
-            ($years > 0 ? $years.' th ' : '') .
-            ($months > 0 ? $months.' bln' : '0 bln')
+            ($years > 0 ? $years . ' th ' : '') .
+            ($months > 0 ? $months . ' bln' : '0 bln')
         );
 
-        /*
-        |--------------------------------------------------------------------------
-        | Unit dan Cabang
-        |--------------------------------------------------------------------------
-        */
+        // Label Bulan untuk tampilan
+        $bulanLabel = ($monthFrom && $monthTo && $monthFrom !== $monthTo)
+            ? "$monthFrom s/d $monthTo"
+            : ($monthFrom ?? $singleBulan);
 
-        $bimbaUnit = $profile->bimba_unit ?? $profile->nama_unit ?? '-';
+        return (object) [
+            'nik'           => $profile->nik ?? '-',
+            'nama'          => $profile->nama,
+            'bulan'         => $bulanLabel,
+            'jabatan'       => $profile->jabatan ?? '-',
+            'status'        => $profile->status_karyawan ?? 'Aktif',
+            'departemen'    => $profile->departemen ?? '-',
+            'masa_kerja'    => $masaKerjaFormatted,
 
-        $noCabang  = $profile->no_cabang ?? $profile->kode_cabang ?? '-';
+            'no_rekening'   => $profile->no_rekening ?? '-',
+            'bank'          => $profile->bank ?? '-',
+            'atas_nama'     => $profile->atas_nama ?? '-',
 
-        return (object)[
+            'pendapatan'    => $totalPendapatan,
 
-            'nik'        => $profile->nik ?? '-',
-            'nama'       => $profile->nama,
-            'bulan'      => $bulan,
+            'sakit'         => $sakit_rp,
+            'izin'          => $izin_rp,
+            'alpa'          => $alpa_rp,
+            'tidak_aktif'   => $tidak_aktif_rp,
+            'kelebihan'     => $kelebihan_rp,
+            'lain_lain'     => $lain_lain_rp,
 
-            'jabatan'    => $profile->jabatan ?? '-',
-            'status'     => $profile->status_karyawan ?? '-',
-            'departemen' => $profile->departemen ?? '-',
+            'potongan'      => $totalPotongan,
+            'dibayarkan'    => $totalPendapatan - $totalPotongan,
 
-            'masa_kerja' => $masaKerjaFormatted,
+            'bimba_unit'    => $profile->bimba_unit ?? $profile->nama_unit ?? '-',
+            'no_cabang'     => $profile->no_cabang ?? $profile->kode_cabang ?? '-',
 
-            'no_rekening'=> $profile->no_rekening ?? '-',
-            'bank'       => $profile->bank ?? '-',
-            'atas_nama'  => $profile->atas_nama ?? '-',
-
-            'pendapatan' => $totalPendapatan,
-
-            'sakit'      => $sakit_rp,
-            'izin'       => $izin_rp,
-            'alpa'       => $alpa_rp,
-            'tidak_aktif'=> $tidak_aktif_rp,
-            'kelebihan'  => $kelebihan_rp,
-            'lain_lain'  => $lain_lain_rp,
-
-            'potongan'   => $totalPotongan,
-
-            'dibayarkan' => $totalPendapatan - $totalPotongan,
-
-            'bimba_unit' => $bimbaUnit,
-            'no_cabang'  => $noCabang,
-
+            'jumlah_bulan'  => $potonganRecords->count(),
         ];
-
     })
     ->sortBy('nik')
     ->values();
 
-
-    /*
-    |--------------------------------------------------------------------------
-    | Dropdown filter
-    |--------------------------------------------------------------------------
-    */
-
+    // ====================== DROPDOWN FILTER ======================
     $allNames = Profile::orderBy('nama')->pluck('nama');
 
     $allMonths = PendapatanTunjangan::distinct()
         ->orderByDesc('bulan')
         ->pluck('bulan');
 
-
-    return view(
-        'pembayaran.index',
-        compact(
-            'pembayaranTunjangans',
-            'allNames',
-            'allMonths',
-            'nama',
-            'bulan'
-        )
-    );
+    return view('pembayaran.index', compact(
+        'pembayaranTunjangans',
+        'allNames',
+        'allMonths',
+        'nama',
+        'monthFrom',
+        'monthTo',
+        'singleBulan'
+    ));
 }
 private function hitungSkim($profile)
 {

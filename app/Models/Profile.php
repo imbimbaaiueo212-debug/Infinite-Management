@@ -333,4 +333,29 @@ public function histories()
     static::addGlobalScope(new UnitScope);
 
 }
+
+// Di Model Profile.php
+public function isKepalaUnit(): bool
+{
+    return str_contains(strtolower($this->jabatan ?? ''), 'kepala') ||
+           str_contains(strtolower($this->jabatan ?? ''), 'head');
+}
+
+public function getTotalMuridBawahanAttribute()
+{
+    if (array_key_exists('total_murid_bawahan', $this->attributes) && 
+        $this->attributes['total_murid_bawahan'] !== null) {
+        return (int) $this->attributes['total_murid_bawahan'];
+    }
+
+    if ($this->isKepalaUnit()) {
+        return BukuInduk::where('bimba_unit', $this->biMBA_unit)
+            ->whereIn('status', ['Aktif', 'Baru'])
+            ->count();
+    }
+
+    return BukuInduk::where('guru', $this->nama)
+        ->whereIn('status', ['Aktif', 'Baru'])
+        ->count();
+}
 }

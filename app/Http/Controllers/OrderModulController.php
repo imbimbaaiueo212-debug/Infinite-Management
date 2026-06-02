@@ -335,4 +335,62 @@ public function updateStatus(Request $request, $id)
 
     return back()->with('success', 'Status berhasil diupdate');
 }
+
+/**
+ * AUTO GENERATE ORDER MODUL dari DataProduk (Low Stock)
+ */
+public function generateAutoOrder(Request $request)
+{
+    $request->validate([
+        'unit_id'  => 'required|exists:units,id',
+        'periode'  => 'required|date_format:Y-m',
+        'safety_multiplier' => 'nullable|integer|min:1|max:5', // berapa kali min_stok
+    ]);
+
+    $unitId = (int)$request->unit_id;
+    $periode = $request->periode;
+    $multiplier = $request->safety_multiplier ?? 2; // default 2x min_stok
+
+    // Ambil produk yang stoknya rendah
+    $lowStockItems = DataProduk::where('periode', $periode)
+        ->where('unit_id', $unitId)
+        ->whereColumn('sld_akhir', '<', 'min_stok')  // stok akhir < min stok
+        ->where('min_stok', '>', 0)
+        ->get();
+
+    if ($lowStockItems->isEmpty()) {
+        return back()->with('info', 'Tidak ada produk yang stoknya di bawah minimum.');
+    }
+
+    $created = 0;
+    $hargaMap = $this->getHargaMap();
+
+    foreach ($lowStockItems as $item) {
+        $sisa = $item->sld_akhir;
+        $minStok = $item->min_stok;
+
+        // Hitung jumlah order yang disarankan
+        $jumlahOrder = ($minStok * $multiplier) - $sisa;
+        if ($jumlahOrder < 1) $jumlahOrder = $minStok; // minimal pesan 1x min_stok
+
+        $hargaSatuan = $hargaMap[$item->label] ?? 0;
+        $totalHarga = $jumlahOrder * $hargaSatuan;
+
+        // Buat Order Modul
+        OrderModul::create([
+            'tanggal_order' => now()->format('Y-m-d'),
+            'unit_id'       => $unitId,
+            'kode1'         => $item->label,        // atau $item->kode
+            'jml1'          => $jumlahOrder,
+            'hrg1'          => $totalHarga,
+            'status'        => 'pending',
+            'approval'      => 'pending',
+        ]);
+
+        $created++;
+    }
+
+    return redirect()->route('order_modul.index')
+        ->with('success', "✅ Berhasil membuat {$created} order otomatis untuk produk low stock.");
+}
 }

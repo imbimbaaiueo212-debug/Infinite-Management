@@ -514,6 +514,7 @@ Route::get('/slip-tunjangan/pdf-preview', [SlipTunjanganController::class, 'prev
 Route::resource('rekap-progresif', RekapProgresifController::class);
 Route::post('rekap-progresif/calculate', [App\Http\Controllers\RekapProgresifController::class, 'calculate'])
     ->name('rekap-progresif.calculate');
+// Di routes/web.php
 // Route::get('rekap-progresif', [RekapProgresifController::class, 'index'])->name('rekap-progresif.index');
 // Route::get('rekap-progresif/create', [RekapProgresifController::class, 'create'])->name('rekap-progresif.create');
 // Route::post('rekap-progresif', [RekapProgresifController::class, 'store'])->name('rekap-progresif.store');
@@ -595,6 +596,8 @@ Route::get('/order-modul/status-stok', [OrderModulController::class, 'getStatusS
     ->name('order_modul.get_status_stok');
 Route::get('/order-modul/produks-by-unit', [OrderModulController::class, 'getProduksByUnit'])
     ->name('order_modul.produks_by_unit');
+    Route::post('/order-modul/generate-auto', [OrderModulController::class, 'generateAutoOrder'])
+     ->name('order_modul.generate-auto');
 
 //pemesanan kaos
 Route::resource('pemesanan_kaos', PemesananKaosController::class)->middleware('auth');

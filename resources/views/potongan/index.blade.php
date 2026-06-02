@@ -155,19 +155,28 @@
                             </strong>
                         </td>
 
-                        <td class="text-nowrap">
-                            <a href="{{ route('potongan.show', $p->id) }}" class="btn btn-info btn-sm">Detail</a>
-                            <a href="{{ route('potongan.edit', $p->id) }}" class="btn btn-warning btn-sm">Edit</a>
+                       <td class="text-nowrap">
+    @if($p->id)
+        <!-- Data sudah ada -->
+        @if (auth()->user()?->role === 'admin')
+        <a href="{{ route('potongan.show', $p->id) }}" class="btn btn-info btn-sm">Detail</a>
+        
+        
+            <a href="{{ route('potongan.edit', $p->id) }}" class="btn btn-warning btn-sm">Edit</a>
+            
+            <form action="{{ route('potongan.destroy', $p->id) }}" method="POST" style="display:inline;">
+                @csrf
+                @method('DELETE')
+                <button type="submit" onclick="return confirm('Yakin hapus data ini?')" 
+                        class="btn btn-danger btn-sm">Hapus</button>
+            </form>
+        @endif
 
-                            @if (auth()->user()?->role === 'admin')
-                                <form action="{{ route('potongan.destroy', $p->id) }}" method="POST" style="display:inline;">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button type="submit" onclick="return confirm('Yakin hapus data?')"
-                                            class="btn btn-danger btn-sm">Hapus</button>
-                                </form>
-                            @endif
-                        </td>
+    @else
+        <!-- Belum ada data potongan -->
+        
+    @endif
+</td>
                     </tr>
                 @empty
                     <tr>

@@ -17,23 +17,33 @@
         </div>
     @endif
 
-    @php
-        $start_bulan = request('start_bulan', request('bulan', now()->format('m')));
-        $start_tahun = request('start_tahun', request('tahun', now()->format('Y')));
-        $end_bulan   = request('end_bulan', $start_bulan);
-        $end_tahun   = request('end_tahun', $start_tahun);
+        @php
+    $defaultBulan = now()->subMonth()->format('m');
+    $defaultTahun = now()->subMonth()->format('Y');
 
-        try {
-            $startDate = \Carbon\Carbon::createFromFormat('Y-m', "$start_tahun-$start_bulan")->startOfMonth();
-            $endDate   = \Carbon\Carbon::createFromFormat('Y-m', "$end_tahun-$end_bulan")->endOfMonth();
-        } catch (\Exception $e) {
-            $startDate = now()->startOfMonth();
-            $endDate   = now()->endOfMonth();
+    $start_bulan = request('start_bulan', $defaultBulan);
+    $start_tahun = request('start_tahun', $defaultTahun);
+    $end_bulan   = request('end_bulan', $start_bulan);
+    $end_tahun   = request('end_tahun', $start_tahun);
+
+    try {
+        $year  = (int)$start_tahun;
+        $month = (int)$start_bulan;
+
+        $startDate = \Carbon\Carbon::create($year, $month, 1)->subMonth()->day(26);
+        $endDate   = \Carbon\Carbon::create($year, $month, 25);
+
+        if ($start_bulan != $end_bulan || $start_tahun != $end_tahun) {
+            $endDate = \Carbon\Carbon::create((int)$end_tahun, (int)$end_bulan, 25);
         }
 
-        $periodeText = $startDate->locale('id')->translatedFormat('F Y') . 
-                       ($startDate->isSameMonth($endDate) ? '' : ' — ' . $endDate->locale('id')->translatedFormat('F Y'));
-    @endphp
+        $periodeText = $startDate->locale('id')->translatedFormat('d F') . 
+                       ' — ' . 
+                       $endDate->locale('id')->translatedFormat('d F Y');
+    } catch (\Exception $e) {
+        $periodeText = 'Periode Tidak Valid';
+    }
+@endphp
 
     <!-- HEADER + FILTER -->
     <div class="card shadow-sm mb-4">

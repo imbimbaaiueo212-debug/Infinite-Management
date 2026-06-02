@@ -70,12 +70,18 @@ class ProfileController extends Controller
 
     $profiles = $query->orderBy('nik')->get();
 
-    // 🔥 REKALKULASI OTOMATIS SETIAP LOAD INDEX (PENTING!)
-    foreach ($profiles as $profile) {
-        if (in_array($profile->jabatan, ['Guru', 'Kepala Unit'])) {
-            $this->recalculateMuridDanKtr($profile);
-        }
+    // 🔥 REKALKULASI OTOMATIS
+foreach ($profiles as $profile) {
+    if (in_array($profile->jabatan, ['Guru', 'Kepala Unit'])) {
+        $this->recalculateMuridDanKtr($profile);
     }
+}
+
+// Refresh ulang dari database
+$profiles = Profile::whereIn('id', $profiles->pluck('id'))
+    ->with(['bukuIndukMba'])
+    ->orderBy('nik')
+    ->get();
 
     // Refresh collection setelah recalculate
     $profiles = $profiles->fresh();   // atau reload dari DB
@@ -629,15 +635,21 @@ public function inlineUpdateKtr(Request $request, Profile $profile)
 
    private function calculateKepalaUnitData(Profile $profile): void
 {
-        $totalMurid = BukuInduk::whereIn('guru', function ($q) use ($profile) {
-        $q->select('nama')
-            ->from('profiles')
-            ->where('biMBA_unit', $profile->biMBA_unit)
-            ->where('jabatan', 'Guru')
-            ->whereIn('status_karyawan', ['Aktif', 'Magang']);
-    })
-    ->whereIn('status', ['Aktif', 'Baru'])
-    ->count();
+    $isKepalaUnit = str_contains(strtolower($profile->jabatan ?? ''), 'kepala') ||
+                    str_contains(strtolower($profile->jabatan ?? ''), 'head') ||
+                    str_contains(strtolower($profile->jabatan ?? ''), 'unit');
+
+    if ($isKepalaUnit) {
+        // Kepala Unit → ambil SEMUA murid di unit tersebut
+        $totalMurid = BukuInduk::where('bimba_unit', $profile->biMBA_unit)
+            ->whereIn('status', ['Aktif', 'Baru'])
+            ->count();
+    } else {
+        // Guru biasa
+        $totalMurid = BukuInduk::where('guru', $profile->nama)
+            ->whereIn('status', ['Aktif', 'Baru'])
+            ->count();
+    }
 
     $profile->total_murid_bawahan = $totalMurid;
 
@@ -1250,96 +1262,77 @@ public function export(Request $request)
 
 public function recalculateMuridDanKtr(Profile $profile): void
 {
-    if (
-        in_array($profile->jabatan, ['Guru', 'Kepala Unit']) &&
-        $profile->status_karyawan === 'Resign'
-    ) {
+    Log::info("REKALKULASI DIPANGGIL", [
+        'nama' => $profile->nama,
+        'jabatan' => $profile->jabatan,
+        'bimba_unit_raw' => $profile->getRawOriginal('bimba_unit') ?? $profile->biMBA_unit
+    ]);
+
+    if ($profile->status_karyawan === 'Resign') {
         return;
     }
 
+    $totalMurid = 0;
+    $unitName = trim($profile->biMBA_unit ?? $profile->getAttribute('bimba_unit') ?? '');
+
+    if (empty($unitName)) {
+        // Ambil dari database langsung jika null
+        $unitName = trim(Profile::where('id', $profile->id)->value('bimba_unit') ?? '');
+    }
+
     if ($profile->jabatan === 'Guru') {
-        $totalMurid = BukuInduk::where('guru', $profile->nama)
+        $totalMurid = BukuInduk::withoutGlobalScopes()
+            ->where('guru', trim($profile->nama ?? ''))
+            ->whereIn('status', ['Aktif', 'Baru'])
+            ->count();
+    } 
+    elseif (str_contains(strtolower($profile->jabatan ?? ''), 'kepala')) {
+        Log::info("MASUK BLOCK KEPALA UNIT", ['unitName' => $unitName]);
+
+        $totalMurid = BukuInduk::withoutGlobalScopes()
+            ->where('bimba_unit', '=', $unitName)
             ->whereIn('status', ['Aktif', 'Baru'])
             ->count();
 
-        $profile->jumlah_murid_mba     = $totalMurid;
-        $profile->jumlah_murid_jadwal  = $totalMurid;
-        $profile->total_murid          = $totalMurid;
-        $profile->jumlah_rombim        = $totalMurid > 0 ? $this->resolveSlotRombimFromCount($totalMurid) : 0;
+        if ($totalMurid === 0 && !empty($unitName)) {
+            $totalMurid = BukuInduk::withoutGlobalScopes()
+                ->whereRaw('TRIM(bimba_unit) = ?', [$unitName])
+                ->whereIn('status', ['Aktif', 'Baru'])
+                ->count();
+        }
 
+        Log::info("HASIL QUERY KEPALA UNIT", [
+            'unitName' => $unitName,
+            'totalMurid' => $totalMurid
+        ]);
+    }
+
+    // Update fields
+    $profile->total_murid_bawahan = $totalMurid;
+    $profile->jumlah_murid_jadwal = $totalMurid;
+    $profile->jumlah_murid_mba    = $totalMurid;
+    $profile->total_murid         = $totalMurid;
+    $profile->jumlah_rombim       = $totalMurid > 0 ? $this->resolveSlotRombimFromCount($totalMurid) : 0;
+
+    $profile->saveQuietly();
+
+    // Hitung RB & KTR
+    if (str_contains(strtolower($profile->jabatan ?? ''), 'kepala')) {
         if ($totalMurid <= 0) {
-            $profile->rb           = 'RB30';
-            $profile->ktr          = 'KTR 1A';
-            $profile->rb_tambahan  = 'RB30';
-            $profile->ktr_tambahan = 'KTR 1A';
-            
-            $profile->rp = $this->resolveRpFromJumlahMuridWithKtr(0, 'KTR 1A', 'RB30');
+            $profile->rb = 'RB40';
+            $profile->ktr = 'KTR 1B';
+            $profile->rb_tambahan = 'RB40';
+            $profile->ktr_tambahan = 'KTR 1B';
         } else {
-            // Logika untuk murid > 0
-            $rb = $this->resolveRbFromCount($totalMurid);
-            $profile->rb = $rb ? 'RB' . $rb : 'RB30';
-            
-            // 🔥 PERBAIKAN KRITIS
+            if (empty(trim($profile->rb ?? ''))) $profile->rb = 'RB40';
             $profile->rb_tambahan = $profile->rb;
 
-            $ktr = $this->formatKtrFromCountForGuru($totalMurid) ?: 'KTR 1A';
-            $profile->ktr          = $ktr;
-            $profile->ktr_tambahan = $ktr;
-
-            $profile->rp = $this->resolveRpFromJumlahMuridWithKtr(
-                $totalMurid,
-                $ktr,
-                $profile->rb
-            );
-        }
-
-        $profile->saveQuietly();
-    } 
-    elseif ($profile->jabatan === 'Kepala Unit') {
-        $totalMurid = BukuInduk::whereIn('guru', function ($q) use ($profile) {
-            $q->select('nama')->from('profiles')
-                ->where('biMBA_unit', $profile->biMBA_unit)
-                ->where('jabatan', 'Guru')
-                ->whereIn('status_karyawan', ['Aktif', 'Magang']);
-        })
-        ->whereIn('status', ['Aktif', 'Baru'])
-        ->count();
-
-        $profile->total_murid_bawahan = $totalMurid;
-
-        if ($totalMurid <= 0) {
-            $profile->rb           = 'RB40';
-            $profile->ktr          = 'KTR 1B';
-            $profile->rb_tambahan  = 'RB40';
-            $profile->ktr_tambahan = 'KTR 1B';
-            
-            $profile->rp = $this->resolveRpFromJumlahMuridWithKtr(0, 'KTR 1B', 'RB40');
-        } else {
-            if (empty(trim($profile->rb ?? ''))) {
-                $profile->rb = 'RB40';
-            }
-
-            $profile->rb_tambahan = $profile->rb;   // ← Tambahkan ini juga
-
             $ktrOtomatis = $this->formatKtrFromCountForKepala($totalMurid);
-
-            if (!empty(trim($profile->ktr_tambahan ?? ''))) {
-                $profile->ktr = $profile->ktr_tambahan;
-            } else {
-                $profile->ktr = $ktrOtomatis ?? 'KTR 1B';
-            }
-
-            $finalKtr = !empty(trim($profile->ktr_tambahan ?? '')) 
-                ? $profile->ktr_tambahan 
-                : $profile->ktr;
-
-            $profile->rp = $this->resolveRpFromJumlahMuridWithKtr(
-                $totalMurid,
-                $finalKtr,
-                $profile->rb
-            );
+            $profile->ktr = $profile->ktr_tambahan ?? $ktrOtomatis ?? 'KTR 1B';
+            $profile->ktr_tambahan = $profile->ktr;
         }
 
+        $profile->rp = $this->resolveRpFromJumlahMuridWithKtr($totalMurid, $profile->ktr, $profile->rb);
         $profile->saveQuietly();
     }
 }

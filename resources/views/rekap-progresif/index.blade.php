@@ -12,57 +12,60 @@
         {{-- Tombol Tambah hanya Admin --}}
         @if($isAdmin ?? false)
             <a href="{{ route('rekap-progresif.create') }}" class="btn btn-primary mb-3">
-                Tambah Data
+                <i class="fas fa-plus"></i> Tambah Data
             </a>
         @endif
 
+        {{-- Form Filter --}}
         <form method="GET" class="row g-2 align-items-end">
             <div class="col-auto">
                 <label class="form-label small text-muted">Filter Periode</label>
-                <input type="month" name="periode" class="form-control" value="{{ old('periode', $periode ?? '') }}">
+                <input type="month" name="periode" class="form-control" 
+                       value="{{ old('periode', $periode ?? '') }}">
             </div>
 
             <div class="col-auto">
-                <button type="submit" class="btn btn-info text-white">
-                    <i class="fas fa-filter me-1"></i> Filter
-                </button>
+                <label class="form-label small text-muted">Nama</label>
+                <select name="nama" class="form-select">
+                    <option value="">-- Semua --</option>
+                    @foreach($allProfiles ?? [] as $n)
+                        <option value="{{ $n }}" {{ ($nama ?? '') == $n ? 'selected' : '' }}>
+                            {{ $n }}
+                        </option>
+                    @endforeach
+                </select>
+            </div>
 
-                <a href="{{ route('rekap-progresif.index') }}" class="btn btn-secondary">
+            <div class="col-auto">
+                <button type="submit" class="btn btn-info text-white mt-4">
+                    <i class="fas fa-filter me-1"></i> Tampilkan
+                </button>
+                <a href="{{ route('rekap-progresif.index') }}" class="btn btn-secondary mt-4">
                     Reset
                 </a>
             </div>
         </form>
-
     </div>
 
     <div class="table-responsive">
 
         @php
-            $kolomRekapUtama = 12; // jumlah kolom tanpa unit, cabang, dan aksi
             $canEditDelete = $isAdmin ?? false;
-            $kolomAksi = $canEditDelete ? 1 : 0;
-
-            // Tambah kolom unit & cabang hanya jika admin
-            $kolomUnitCabang = (auth()->check() && (auth()->user()->is_admin ?? false)) ? 2 : 0;
-
-            $totalColspan = $kolomRekapUtama + $kolomUnitCabang + $kolomAksi;
+            $isAdminView   = auth()->check() && (auth()->user()->is_admin ?? false);
         @endphp
 
-        <table class="table table-bordered table-hover align-middle" style="min-width:900px;font-size:13px">
+        <table class="table table-bordered table-hover align-middle" style="min-width:950px;font-size:13px">
 
             <thead>
                 <tr class="text-center" style="background:#cfe8ff;font-weight:600">
-                    <th colspan="{{ $totalColspan }}">
-                        REKAP PROGRESIF
-                    </th>
+                    <th colspan="13">REKAP PROGRESIF</th>
                 </tr>
 
                 <tr class="table-light text-center">
                     <th rowspan="2">NO</th>
                     <th rowspan="2">NAMA</th>
 
-                    {{-- KOLOM biMBA UNIT & NO CABANG – HANYA UNTUK ADMIN --}}
-                    @if (auth()->check() && (auth()->user()->is_admin ?? false))
+                    @if($isAdminView)
                         <th rowspan="2">biMBA UNIT</th>
                         <th rowspan="2">NO CABANG</th>
                     @endif
@@ -73,7 +76,6 @@
                     <th rowspan="2">MASA KERJA</th>
 
                     <th colspan="2">SPP</th>
-
                     <th rowspan="2">TOTAL FM</th>
                     <th rowspan="2">PROGRESIF</th>
                     <th rowspan="2">KOMISI</th>
@@ -91,17 +93,14 @@
             </thead>
 
             <tbody>
-                @forelse($rekaps as $rekap)
+                @forelse($rekapProgresifs as $key => $rekap)
                     <tr @if(strtolower($rekap->jabatan ?? '') === 'kepala unit') class="table-warning" @endif>
-                        <td class="text-center">
-                            {{ ($rekaps->currentPage() - 1) * $rekaps->perPage() + $loop->iteration }}
-                        </td>
+                        <td class="text-center">{{ $key + 1 }}</td>
 
-                        <td>{{ $rekap->nama ?? '-' }}</td>
+                        <td class="fw-medium">{{ $rekap->nama ?? '-' }}</td>
 
-                        {{-- Hanya admin yang melihat kolom ini --}}
-                        @if (auth()->check() && (auth()->user()->is_admin ?? false))
-                            <td class="text-center">{{ $rekap->bimba_unit ?? $rekap->biMBA_unit ?? '-' }}</td>
+                        @if($isAdminView)
+                            <td class="text-center">{{ $rekap->bimba_unit ?? '-' }}</td>
                             <td class="text-center">{{ $rekap->no_cabang ?? '-' }}</td>
                         @endif
 
@@ -120,43 +119,43 @@
                             {{ number_format($rekap->dibayarkan ?? 0, 0, ',', '.') }}
                         </td>
 
-                        @if($canEditDelete)
-                            <td class="text-center">
-                                <div class="btn-group">
-                                    <a href="{{ route('rekap-progresif.edit', $rekap->id) }}"
-                                       class="btn btn-sm btn-warning">
-                                        <i class="fas fa-edit"></i>
-                                    </a>
+                       @if($canEditDelete)
+    <td class="text-center">
+        <div class="btn-group">
+            @if(!empty($rekap->id))
+                <!-- EDIT -->
+                <a href="{{ route('rekap-progresif.edit', ['rekap_progresif' => $rekap->id]) }}" 
+                   class="btn btn-sm btn-warning">
+                    <i class="fas fa-edit"></i>
+                </a>
 
-                                    <form action="{{ route('rekap-progresif.destroy', $rekap->id) }}"
-                                          method="POST"
-                                          onsubmit="return confirm('Yakin hapus data {{ $rekap->nama }} ?')">
-                                        @csrf
-                                        @method('DELETE')
-                                        <button class="btn btn-sm btn-danger">
-                                            <i class="fas fa-trash"></i>
-                                        </button>
-                                    </form>
-                                </div>
-                            </td>
-                        @endif
+                <!-- DELETE -->
+                <form action="{{ route('rekap-progresif.destroy', ['rekap_progresif' => $rekap->id]) }}" 
+                      method="POST" style="display:inline;"
+                      onsubmit="return confirm('Yakin hapus data {{ addslashes($rekap->nama ?? '') }} ?')">
+                    @csrf
+                    @method('DELETE')
+                    <button class="btn btn-sm btn-danger">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </form>
+            @else
+                <span class="text-muted small">Belum ada rekap</span>
+            @endif
+        </div>
+    </td>
+@endif
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="{{ $totalColspan }}" class="text-center py-4">
-                            Tidak ada data rekap progresif
+                        <td colspan="13" class="text-center py-5 text-muted">
+                            Tidak ada data rekap progresif untuk periode tersebut
                         </td>
                     </tr>
                 @endforelse
             </tbody>
         </table>
     </div>
-
-    @if(isset($rekaps) && method_exists($rekaps,'links'))
-        <div class="d-flex justify-content-center mt-4">
-            {{ $rekaps->appends(request()->query())->links() }}
-        </div>
-    @endif
 
 </div>
 @endsection

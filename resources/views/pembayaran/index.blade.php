@@ -17,38 +17,49 @@
         @endif
 
         {{-- Form Filter --}}
-        <div class="card shadow-sm mb-4">
-            <div class="card-body">
-                <form action="{{ route('pembayaran.index') }}" method="GET" class="row g-3 align-items-end">
-                    <div class="col-12 col-lg-5">
-                        <label class="form-label fw-medium small">Nama Relawan</label>
-                        <select name="nama" id="nama" class="form-select" onchange="this.form.submit()">
-                            <option value="">-- Semua Relawan --</option>
-                            @foreach($allNames as $n)
-                                <option value="{{ $n }}" {{ ($nama ?? '') == $n ? 'selected' : '' }}>{{ $n }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div class="col-12 col-lg-5">
-                        <label class="form-label fw-medium small">Bulan</label>
-                        <select name="bulan" id="bulan" class="form-select" onchange="this.form.submit()">
-                            <option value="">-- Semua Bulan --</option>
-                            @foreach($allMonths as $b)
-                                <option value="{{ $b }}" {{ ($bulan ?? '') == $b ? 'selected' : '' }}>
-                                    {{ \Carbon\Carbon::parse($b)->translatedFormat('F Y') }}
-                                </option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div class="col-12 col-lg-2 d-grid">
-                        <button type="button" class="btn btn-outline-secondary" 
-                                onclick="window.location.href='{{ route('pembayaran.index') }}'">
-                            Reset Filter
-                        </button>
-                    </div>
-                </form>
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <form action="{{ route('pembayaran.index') }}" method="GET" class="row g-3 align-items-end">
+            <div class="col-12 col-lg-4">
+                <label class="form-label fw-medium small">Nama Relawan</label>
+                <select name="nama" class="form-select">
+                    <option value="">-- Semua Relawan --</option>
+                    @foreach($allNames as $n)
+                        <option value="{{ $n }}" {{ ($nama ?? '') == $n ? 'selected' : '' }}>{{ $n }}</option>
+                    @endforeach
+                </select>
             </div>
-        </div>
+            
+            <div class="col-12 col-lg-3">
+                <label class="form-label fw-medium small">Dari Bulan</label>
+                <select name="month_from" class="form-select">
+                    <option value="">-- Pilih Bulan --</option>
+                    @foreach($allMonths as $b)
+                        <option value="{{ $b }}" {{ ($monthFrom ?? '') == $b ? 'selected' : '' }}>
+                            {{ \Carbon\Carbon::parse($b)->translatedFormat('F Y') }}
+                        </option>
+                    @endforeach
+                </select>
+            </div>
+            
+            <div class="col-12 col-lg-3">
+                <label class="form-label fw-medium small">Sampai Bulan</label>
+                <select name="month_to" class="form-select">
+                    <option value="">-- Pilih Bulan --</option>
+                    @foreach($allMonths as $b)
+                        <option value="{{ $b }}" {{ ($monthTo ?? '') == $b ? 'selected' : '' }}>
+                            {{ \Carbon\Carbon::parse($b)->translatedFormat('F Y') }}
+                        </option>
+                    @endforeach
+                </select>
+            </div>
+
+            <div class="col-12 col-lg-2 d-grid">
+                <button type="submit" class="btn btn-primary">Tampilkan</button>
+            </div>
+        </form>
+    </div>
+</div>
 
         {{-- Tabel Desktop / Tablet --}}
         <div class="table-responsive">

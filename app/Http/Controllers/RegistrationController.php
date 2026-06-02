@@ -595,17 +595,28 @@ public function store(Request $request)
 
     $student = Student::with('muridTrial', 'bukuInduk')->findOrFail($data['student_id']);
 
+    // ====================== CEK DUPLIKAT REGISTRASI ======================
+    $currentTahunAjaran = Registration::currentAcademicYear() ?? date('Y') . '/' . (date('Y') + 1);
+
+    $existingReg = Registration::where('student_id', $student->id)
+        ->where('tahun_ajaran', $currentTahunAjaran)
+        ->whereIn('status', ['pending', 'verified', 'accepted'])
+        ->first();
+
+    if ($existingReg) {
+        return redirect()->route('registrations.edit', $existingReg->id)
+            ->with('warning', 'Registrasi untuk siswa ini di tahun ajaran ' . $currentTahunAjaran . ' sudah ada.');
+    }
+
     // ====================== HELPER NORMALISASI TANGGAL ======================
     $normalizeDate = function ($value) {
         if (empty($value)) return null;
         $value = trim($value);
 
-        // Sudah format YYYY-MM-DD
         if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
             return $value;
         }
 
-        // Convert DD/MM/YYYY atau DD-MM-YYYY → YYYY-MM-DD
         if (preg_match('/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/', $value, $m)) {
             $day   = str_pad($m[1], 2, '0', STR_PAD_LEFT);
             $month = str_pad($m[2], 2, '0', STR_PAD_LEFT);
@@ -615,6 +626,8 @@ public function store(Request $request)
 
         return null;
     };
+
+    // ... (BI DATA, PAY, FINAL DATA tetap sama seperti sebelumnya) ...
 
     // ====================== BI DATA ======================
     $biInput = $request->input('bi', []);
@@ -643,7 +656,6 @@ public function store(Request $request)
         'hari_jam'           => trim(($biInput['hari'] ?? '') . ' ' . ($biInput['jam'] ?? '')),
         'spp'                => null,
 
-        // Garansi
         'tgl_surat_garansi'  => $normalizeDate($biInput['tgl_surat_garansi'] ?? null),
         'note_garansi'       => $biInput['note_garansi'] ?? null,
     ];
@@ -677,19 +689,18 @@ public function store(Request $request)
         'lain_lain'  => $this->parseMoney($request->lain_lain ?? 0),
     ];
 
-    // ====================== FINAL DATA REGISTRASI ======================
+    // ====================== FINAL DATA ======================
     $finalData = [
         'student_id'         => $data['student_id'],
         'gelombang'          => $data['gelombang'] ?? null,
         'program'            => $data['program'] ?? null,
         'status'             => $data['status'],
         'tanggal_daftar'     => $data['tanggal_daftar'] ?? now()->format('Y-m-d'),
-        'tahun_ajaran'       => Registration::currentAcademicYear() ?? date('Y'),
+        'tahun_ajaran'       => $currentTahunAjaran,   // ← Pakai variabel yang sudah diambil
         
         'bimba_unit'         => $student->bimba_unit,
         'no_cabang'          => $student->no_cabang,
 
-        // Data Akademik
         'tahap'              => $bi['tahap'],
         'tgl_tahapan'        => $bi['tgl_tahapan'],
         'level'              => $bi['level'],
@@ -703,23 +714,19 @@ public function store(Request $request)
         'kode_jadwal'        => $bi['kode_jadwal'],
         'hari_jam'           => $bi['hari_jam'],
 
-        // Data Tambahan Murid
         'no_telp_hp'         => $bi['no_telp_hp'],
         'alamat_murid'       => $bi['alamat_murid'],
         'asal_modul'         => $bi['asal_modul'],
 
-        // Dhuafa & BNF
         'periode'            => $biInput['periode'] ?? null,
         'tgl_mulai'          => $normalizeDate($biInput['tgl_mulai'] ?? null),
         'tgl_akhir'          => $normalizeDate($biInput['tgl_akhir'] ?? null),
         'alert'              => $biInput['alert'] ?? null,
 
-        // Paket 72
         'tgl_bayar'          => $normalizeDate($biInput['tgl_bayar'] ?? null),
         'tgl_selesai'        => $normalizeDate($biInput['tgl_selesai'] ?? null),
         'alert2'             => $biInput['alert2'] ?? null,
 
-        // Surat Garansi
         'tgl_surat_garansi'  => $bi['tgl_surat_garansi'],
         'note_garansi'       => $bi['note_garansi'],
         'tgl_pengajuan_garansi' => $normalizeDate($biInput['tgl_pengajuan_garansi'] ?? null),
@@ -728,7 +735,6 @@ public function store(Request $request)
         'perpanjang_garansi'    => $request->boolean('perpanjang_garansi'),
         'alasan_garansi'        => $biInput['alasan_garansi'] ?? null,
 
-        // Data Penerimaan
         'kwitansi'           => $pay['kwitansi'],
         'via'                => $pay['via'],
         'bulan'              => $pay['bulan'],
@@ -767,15 +773,14 @@ public function store(Request $request)
             );
         }
     });
+
     $this->createOrUpdateHumaFromStudent($student);
 
-    // ====================== UPDATE STATUS MURID TRIAL ======================
+    // Update Trial Status
     if (($request->has('from_trial') || $student->muridTrial) && $reg) {
         $muridTrial = $student->muridTrial;
-        
         if ($muridTrial) {
             $newTrialStatus = ($reg->status === 'accepted') ? 'terdaftar' : 'lanjut_daftar';
-            
             $muridTrial->update([
                 'status_trial'  => $newTrialStatus,
                 'tanggal_aktif' => now()->format('Y-m-d'),
@@ -783,7 +788,6 @@ public function store(Request $request)
         }
     }
 
-    // ====================== REDIRECT ======================
     $message = 'Registrasi berhasil disimpan dengan status ' . strtoupper($reg->status ?? 'pending');
 
     if ($reg && $reg->status === 'accepted') {
@@ -929,15 +933,18 @@ public function store(Request $request)
         'attachment'         => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:3072'],
     ]);
 
-    $user = Auth::user();
-    $isAdmin = $user && ($user->role === 'admin' || ($user->is_admin ?? false));
+   $user = Auth::user();
+$isAdmin = $user && ($user->role === 'admin' || ($user->is_admin ?? false));
 
-    if (!$isAdmin && $data['status'] === 'accepted') {
-        return back()->withErrors(['status' => 'Hanya Admin yang boleh mengubah status menjadi Accepted.'])->withInput();
-    }
-    if (!$isAdmin) {
-        $data['status'] = $registration->status;
-    }
+// Izinkan semua user mengubah ke Accepted
+if ($data['status'] === 'accepted') {
+    Log::info('Status diubah ke Accepted', [
+        'user_id' => $user?->id,
+        'user_role' => $user?->role,
+        'is_admin' => $isAdmin,
+        'registration_id' => $registration->id
+    ]);
+}
 
     $student = Student::with('bukuInduk')->findOrFail($data['student_id']);
     $bimbaUnit = $student->bimba_unit;
@@ -1080,37 +1087,54 @@ protected function commitBukuIndukWithPayload(
     DB::transaction(function () use ($student, $bi, $bimbaUnit, $noCabang, $tanggalDaftar) {
 
         // ====================== NIM GENERATION ======================
-        if (empty($student->nim)) {
-            $noCabangClean = trim($noCabang ?? '');
-            $bimbaUnitClean = trim($bimbaUnit ?? $student->bimba_unit ?? '');
+$nimSekarang = trim($student->nim ?? '');
 
-            $prefix = str_pad($noCabangClean, 5, '0', STR_PAD_LEFT);
+// Buat NIM baru jika kosong, "-" atau kurang dari 9 digit
+if (empty($nimSekarang) || $nimSekarang === '-' || strlen($nimSekarang) < 9) {
+    
+    $noCabangClean = trim($noCabang ?? $student->no_cabang ?? '');
+    $bimbaUnitClean = trim($bimbaUnit ?? $student->bimba_unit ?? '');
 
-            $lastNIM = BukuInduk::where('nim', 'LIKE', $prefix . '%')
-                ->lockForUpdate()
-                ->orderByRaw('CAST(SUBSTRING(nim, 6) AS UNSIGNED) DESC')
-                ->value('nim');
+    if (empty($noCabangClean)) {
+        $noCabangClean = '05141'; // fallback
+    }
 
-            if (!$lastNIM && $bimbaUnitClean) {
-                $lastNIM = BukuInduk::where('nim', 'LIKE', $prefix . '%')
-                    ->where('bimba_unit', 'LIKE', "%{$bimbaUnitClean}%")
-                    ->lockForUpdate()
-                    ->orderByRaw('CAST(SUBSTRING(nim, 6) AS UNSIGNED) DESC')
-                    ->value('nim');
-            }
+    $prefix = str_pad($noCabangClean, 5, '0', STR_PAD_LEFT);
 
-            $nextNumber = $lastNIM ? (int) substr($lastNIM, 5) + 1 : 1;
-            $student->nim = $prefix . str_pad((string)$nextNumber, 4, '0', STR_PAD_LEFT);
+    // Ambil NIM terakhir
+    $lastNIM = BukuInduk::where('nim', 'LIKE', $prefix . '%')
+        ->lockForUpdate()
+        ->orderByRaw('CAST(SUBSTRING(nim, 6) AS UNSIGNED) DESC')
+        ->value('nim');
 
-            $attempt = 0;
-            while (BukuInduk::where('nim', $student->nim)->exists() && $attempt < 10) {
-                $nextNumber++;
-                $student->nim = $prefix . str_pad((string)$nextNumber, 4, '0', STR_PAD_LEFT);
-                $attempt++;
-            }
+    if (!$lastNIM && !empty($bimbaUnitClean)) {
+        $lastNIM = BukuInduk::where('nim', 'LIKE', $prefix . '%')
+            ->where('bimba_unit', 'LIKE', "%{$bimbaUnitClean}%")
+            ->lockForUpdate()
+            ->orderByRaw('CAST(SUBSTRING(nim, 6) AS UNSIGNED) DESC')
+            ->value('nim');
+    }
 
-            $student->save();
-        }
+    $nextNumber = $lastNIM ? (int) substr($lastNIM, 5) + 1 : 1;
+    $newNim = $prefix . str_pad((string)$nextNumber, 4, '0', STR_PAD_LEFT);
+
+    // Anti collision
+    $attempt = 0;
+    while (BukuInduk::where('nim', $newNim)->exists() && $attempt < 15) {
+        $nextNumber++;
+        $newNim = $prefix . str_pad((string)$nextNumber, 4, '0', STR_PAD_LEFT);
+        $attempt++;
+    }
+
+    $student->nim = $newNim;
+    $student->save();
+
+    Log::info("✅ NIM BARU dibuat saat Accept (dari Edit)", [
+        'student_id' => $student->id,
+        'nim'        => $newNim,
+        'prefix'     => $prefix
+    ]);
+}
 
         // ====================== PREPARE DATA ======================
         $pay = $bi['penerimaan'] ?? [];
@@ -1388,29 +1412,32 @@ private function cleanUnitName(?string $unitName): string
     }
 
     public function firstOrCreateFor(Student $student): Registration
-    {
-        return DB::transaction(function () use ($student) {
-            $existing = Registration::where('student_id', $student->id)
-                ->whereIn('status', ['pending', 'verified', 'accepted'])
-                ->latest('id')
-                ->first();
+{
+    $currentYear = Registration::currentAcademicYear() ?? date('Y') . '/' . (date('Y') + 1);
 
-            if ($existing)
-                return $existing;
+    return DB::transaction(function () use ($student, $currentYear) {
+        $existing = Registration::where('student_id', $student->id)
+            ->where('tahun_ajaran', $currentYear)
+            ->whereIn('status', ['pending', 'verified', 'accepted'])
+            ->latest('id')
+            ->first();
 
-            $payload = [
-                'student_id' => $student->id,
-                'status' => 'pending',
-                'tanggal_daftar' => now(),
-            ];
+        if ($existing) {
+            return $existing;
+        }
 
-            if (Schema::hasColumn('registrations', 'tahun_ajaran')) {
-                $payload['tahun_ajaran'] = Registration::currentAcademicYear();
-            }
+        $payload = [
+            'student_id'     => $student->id,
+            'status'         => 'pending',
+            'tanggal_daftar' => now(),
+            'tahun_ajaran'   => $currentYear,
+            'source'         => $student->source ?? 'direct',
+            'created_by'     => Auth::id(),
+        ];
 
-            return Registration::create($payload);
-        });
-    }
+        return Registration::create($payload);
+    });
+}
     public function show(Registration $registration)
     {
         // Kalau mau langsung ke halaman edit:
@@ -1499,7 +1526,12 @@ private function normalizeDate($value)
 }
 
 /**
- * Buat atau Update data HUMAS otomatis dari Student (saat registrasi diterima)
+ * Buat atau Update data HUMAS otomatis dari Student
+ * FIXED VERSION - Lebih aman & anti-duplikat
+ */
+/**
+ * Buat atau Update HUMAS otomatis dari Student (Registration)
+ * Disamakan dengan logic createHumasSafely
  */
 protected function createOrUpdateHumaFromStudent(Student $student): void
 {
@@ -1510,74 +1542,97 @@ protected function createOrUpdateHumaFromStudent(Student $student): void
     $noCabang = trim($student->no_cabang ?? '');
 
     if (empty($noCabang)) {
-        Log::warning('Gagal membuat NIH: no_cabang kosong', [
-            'student_id' => $student->id
-        ]);
+        Log::warning('Gagal membuat NIH: no_cabang kosong', ['student_id' => $student->id]);
         return;
     }
 
-    // =========================
-    // GENERATE NIH
-    // Format:
-    // 051420001
-    // =========================
+    $namaOrangTua = trim($student->orangtua 
+        ?? $student->nama_ayah 
+        ?? $student->nama_ibu 
+        ?? ('Orang Tua ' . $student->nama));
 
-    $prefix = str_pad($noCabang, 5, '0', STR_PAD_LEFT) . '02';
+    $noTelp = trim($student->no_telp 
+        ?? $student->hp_ayah 
+        ?? $student->hp_ibu);
 
-    $lastNih = Huma::where('nih', 'LIKE', $prefix . '%')
-        ->lockForUpdate()
-        ->orderByRaw('CAST(SUBSTRING(nih, 6) AS UNSIGNED) DESC')
-        ->value('nih');
+    try {
+        DB::transaction(function () use ($student, $noCabang, $namaOrangTua, $noTelp) {
 
-    $nextNumber = $lastNih
-        ? ((int) substr($lastNih, 5)) + 1
-        : 1;
+            // Cek apakah sudah ada berdasarkan nama + cabang
+            $existing = DB::table('humas')
+                ->where('no_cabang', $noCabang)
+                ->where('nama', 'LIKE', "%{$namaOrangTua}%")
+                ->first();
 
-    $nih = $prefix . str_pad($nextNumber, 4, '0', STR_PAD_LEFT);
+            if ($existing) {
+                Log::info("Humas sudah ada, di-update saja", [
+                    'nih'  => $existing->nih,
+                    'nama' => $existing->nama
+                ]);
 
-    // Hindari duplikat
-    $attempt = 0;
+                DB::table('humas')->where('id', $existing->id)->update([
+                    'tgl_reg'    => $student->tanggal_masuk ?? now()->format('Y-m-d'),
+                    'no_telp'    => $noTelp ?: $existing->no_telp,
+                    'alamat'     => $student->alamat ?: $existing->alamat,
+                    'bimba_unit' => $student->bimba_unit ?: $existing->bimba_unit,
+                    'updated_at' => now(),
+                ]);
+                return;
+            }
 
-    while (Huma::where('nih', $nih)->exists() && $attempt < 20) {
-        $nextNumber++;
-        $nih = $prefix . str_pad($nextNumber, 4, '0', STR_PAD_LEFT);
-        $attempt++;
+            // Generate NIH baru
+            $prefix = str_pad($noCabang, 5, '0', STR_PAD_LEFT) . '02';
+
+            $lastNih = DB::table('humas')
+                        ->where('no_cabang', $noCabang)
+                        ->where('nih', 'LIKE', $prefix . '%')
+                        ->whereRaw('LENGTH(nih) = 9')
+                        ->lockForUpdate()
+                        ->orderByRaw('CAST(SUBSTRING(nih, 7, 4) AS UNSIGNED) DESC')  // Perbaikan indexing
+                        ->value('nih');
+
+            $lastSeq = 1;
+            if ($lastNih) {
+                $lastSeq = (int) substr($lastNih, 7);   // ambil setelah 7 karakter (0514102)
+            }
+
+            $newSeq = $lastSeq + 1;
+            $nih = $prefix . str_pad($newSeq, 4, '0', STR_PAD_LEFT);
+
+            // Anti-collision
+            while (DB::table('humas')->where('nih', $nih)->exists()) {
+                $newSeq++;
+                $nih = $prefix . str_pad($newSeq, 4, '0', STR_PAD_LEFT);
+            }
+
+            // Insert Humas
+            DB::table('humas')->insert([
+                'tgl_reg'     => $student->tanggal_masuk ?? now()->format('Y-m-d'),
+                'nih'         => $nih,
+                'nama'        => $namaOrangTua,
+                'no_telp'     => $noTelp,
+                'status'      => 'Aktif',
+                'pekerjaan'   => 'Swasta',
+                'alamat'      => $student->alamat,
+                'bimba_unit'  => $student->bimba_unit,
+                'no_cabang'   => $noCabang,
+                'created_at'  => now(),
+                'updated_at'  => now(),
+            ]);
+
+            Log::info("✅ Humas berhasil dibuat dengan NIH baru", [
+                'nih'  => $nih,
+                'nama' => $namaOrangTua,
+                'no_cabang' => $noCabang
+            ]);
+
+        });
+
+    } catch (\Throwable $e) {
+        Log::error("Gagal create/update humas di Registration", [
+            'nama'  => $namaOrangTua,
+            'error' => $e->getMessage()
+        ]);
     }
-
-    // =========================
-    // DATA HUMAS
-    // =========================
-
-    $namaOrangTua = $student->orangtua
-        ?? $student->nama_ayah
-        ?? $student->nama_ibu
-        ?? ('Orang Tua ' . $student->nama);
-
-    $noTelp = $student->no_telp
-        ?? $student->hp_ayah
-        ?? $student->hp_ibu;
-
-    Huma::updateOrCreate(
-        [
-            'nih' => $nih
-        ],
-        [
-            'tgl_reg'     => $student->tanggal_masuk ?? now()->format('Y-m-d'),
-            'nama'        => $namaOrangTua,
-            'status'      => 'Aktif',
-            'no_telp'     => $noTelp,
-            'pekerjaan'   => 'Swasta',
-            'alamat'      => $student->alamat,
-            'bimba_unit'  => $student->bimba_unit,
-            'no_cabang'   => $student->no_cabang,
-        ]
-    );
-
-    Log::info('Humas otomatis dibuat', [
-        'nih'          => $nih,
-        'nama_humas'   => $namaOrangTua,
-        'bimba_unit'   => $student->bimba_unit,
-        'no_cabang'    => $student->no_cabang,
-    ]);
 }
 }

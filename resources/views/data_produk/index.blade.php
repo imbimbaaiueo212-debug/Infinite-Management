@@ -180,6 +180,18 @@
             </div>
         </div>
     @else
+
+        @if ($unitId)
+<form action="{{ route('order_modul.generate-auto') }}" method="POST" style="display:inline;">
+    @csrf
+    <input type="hidden" name="unit_id" value="{{ $unitId }}">
+    <input type="hidden" name="periode" value="{{ $periode }}">
+    
+    <button type="submit" class="btn btn-warning">
+        <i class="fas fa-magic"></i> Generate Auto Order (Low Stock)
+    </button>
+</form>
+@endif
         <div class="table-sticky-wrapper table-responsive">
     <table class="table table-bordered table-striped table-hover align-middle text-center" id="rekapTable">
         <thead class="table-light">

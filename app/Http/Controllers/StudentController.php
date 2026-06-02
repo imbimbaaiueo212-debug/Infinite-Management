@@ -908,36 +908,62 @@ public function importFromSheet(Request $request)
     $sheet = $request->input('sheet', 'Registrasi');
     $user  = Auth::user();
 
+    if (!$user) {
+        return back()->with('error', 'Anda harus login terlebih dahulu.');
+    }
+
+    $isAdmin = in_array($user->role ?? '', ['admin', 'superadmin']);
+
     Log::info("Mulai import sheet via web", [
-        'sheet' => $sheet,
-        'user'  => $user?->name ?? 'unknown',
-        'role'  => $user?->role ?? 'unknown'
+        'sheet'       => $sheet,
+        'user'        => $user->name ?? 'unknown',
+        'role'        => $user->role ?? 'unknown',
+        'is_admin'    => $isAdmin,
+        'bimba_unit'  => $user->bimba_unit ?? null,
     ]);
 
     $unitFilter = null;
-    if ($user && !in_array($user->role ?? '', ['admin', 'superadmin'])) {
-        $unitFilter = $user->bimba_unit;
+
+    if (!$isAdmin) {
+        $unitFilter = trim((string) $user->bimba_unit);
+
+        if (empty($unitFilter)) {
+            Log::warning("User biasa tidak memiliki bimba_unit", ['user_id' => $user->id]);
+            return back()->with('error', 'Akun Anda tidak memiliki Unit biMBA. Hubungi Admin.');
+        }
     }
 
-    // Jalankan import command
-    $exitCode = Artisan::call('forms:import-students', [
-        'sheet'  => $sheet,
-        '--unit' => $unitFilter,
-    ]);
+    try {
+        $exitCode = Artisan::call('forms:import-students', [
+            'sheet'  => $sheet,
+            '--unit' => $unitFilter,   // null = admin
+        ]);
 
-    // === PERBAIKAN UTAMA: Set default status 'daftar_baru' setelah import ===
-    $this->setDefaultDaftarBaruStatus();
+        if ($exitCode !== 0) {
+            $output = Artisan::output();
+            Log::error("Artisan call gagal", ['output' => $output]);
+            return back()->with('error', 'Import gagal dijalankan.');
+        }
 
-    // Proses tambahan yang sudah ada
-    $this->createPendingRegistrations();
-    $this->fixAllNoCabang();
+        // Proses tambahan
+        $this->setDefaultDaftarBaruStatus();
+        $this->createPendingRegistrations();
+        $this->fixAllNoCabang();
 
-    $message = "✅ Import sheet '{$sheet}' selesai!";
-    if ($unitFilter) {
-        $message .= " (Hanya unit: {$unitFilter})";
+        $message = "✅ Import sheet '{$sheet}' selesai!";
+        if (!$isAdmin && $unitFilter) {
+            $message .= " (Hanya unit: {$unitFilter})";
+        }
+
+        return back()->with('success', $message);
+
+    } catch (\Exception $e) {
+        Log::error("Exception saat import", [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        return back()->with('error', 'Terjadi kesalahan: ' . $e->getMessage());
     }
-
-    return back()->with('success', $message);
 }
 
     /**
@@ -960,46 +986,58 @@ protected function setDefaultDaftarBaruStatus(): void
 }
 
 /**
-     * Buat Registration otomatis untuk murid Direct (non-trial)
-     */
-    protected function createPendingRegistrations(): void
-    {
-        $directStudents = Student::where('source', 'direct')
-            ->whereDoesntHave('registrations', function ($q) {
-                $q->whereIn('status', ['pending', 'verified', 'accepted']);
-            })
-            ->get();
+ * Buat Registration otomatis untuk murid Direct (non-trial)
+ * FIXED: Respect unique constraint student_id + tahun_ajaran
+ */
+protected function createPendingRegistrations(): void
+{
+    $currentYear = Registration::currentAcademicYear() ?? date('Y') . '/' . (date('Y') + 1);
 
-        $created = 0;
+    $directStudents = Student::where('source', 'direct')
+        ->whereDoesntHave('registrations', function ($q) use ($currentYear) {
+            $q->where('tahun_ajaran', $currentYear)
+              ->whereIn('status', ['pending', 'verified', 'accepted']);
+        })
+        ->get();
 
-        foreach ($directStudents as $student) {
-            $hasActive = \App\Models\Registration::where('student_id', $student->id)
-                ->whereIn('status', ['pending', 'verified', 'accepted'])
-                ->exists();
+    $created = 0;
 
-            if (!$hasActive) {
-                $payload = [
-                    'student_id'     => $student->id,
-                    'status'         => 'pending',
-                    'tanggal_daftar' => now(),
-                    'source'         => $student->source,
-                    'created_by'     => \Illuminate\Support\Facades\Auth::id() ?? null,
-                ];
+    foreach ($directStudents as $student) {
+        // Double check inside loop (safer)
+        $hasActiveThisYear = Registration::where('student_id', $student->id)
+            ->where('tahun_ajaran', $currentYear)
+            ->whereIn('status', ['pending', 'verified', 'accepted'])
+            ->exists();
 
-                // Tambahkan tahun ajaran jika kolom ada
-                if (\Illuminate\Support\Facades\Schema::hasColumn('registrations', 'tahun_ajaran')) {
-                    $payload['tahun_ajaran'] = \App\Models\Registration::currentAcademicYear() ?? null;
-                }
+        if (!$hasActiveThisYear) {
+            $payload = [
+                'student_id'     => $student->id,
+                'status'         => 'pending',
+                'tanggal_daftar' => now(),
+                'source'         => $student->source,
+                'created_by'     => Auth::id() ?? null,
+                'tahun_ajaran'   => $currentYear,
+            ];
 
-                \App\Models\Registration::create(array_filter($payload));
+            try {
+                Registration::create($payload);
                 $created++;
+            } catch (\Exception $e) {
+                // Ignore duplicate errors (in case of race condition)
+                if (!str_contains($e->getMessage(), 'Duplicate entry')) {
+                    Log::error("Failed creating pending registration", [
+                        'student_id' => $student->id,
+                        'error' => $e->getMessage()
+                    ]);
+                }
             }
         }
-
-        if ($created > 0) {
-            \Illuminate\Support\Facades\Log::info("createPendingRegistrations: {$created} registrasi baru dibuat.");
-        }
     }
+
+    if ($created > 0) {
+        Log::info("createPendingRegistrations: {$created} registrasi baru dibuat untuk tahun {$currentYear}.");
+    }
+}
 
 
 protected function preventDuplicateStudents(): void
@@ -1055,58 +1093,141 @@ protected function preventDuplicateStudents(): void
         return response()->json(['data' => $data]);
     }
 
-    protected function ensureTrialRelation(Student $student, string $status = 'aktif'): void
+    protected function ensureTrialRelation(Student $student, string $status = 'baru'): void
 {
-    // Jika bukan trial, keluar
     if ($student->source !== 'trial') {
         return;
     }
 
-    // Jika sudah punya relasi trial, PASTIKAN unit & cabangnya benar (update jika kosong/salah)
     if ($student->murid_trial_id) {
         $trial = $student->muridTrial;
-        $needsUpdate = false;
         $updates = [];
 
         if (empty($trial->bimba_unit) && !empty($student->bimba_unit)) {
             $updates['bimba_unit'] = $student->bimba_unit;
-            $needsUpdate = true;
         }
         if (empty($trial->no_cabang) && !empty($student->no_cabang)) {
             $updates['no_cabang'] = $student->no_cabang;
-            $needsUpdate = true;
         }
 
-        if ($needsUpdate) {
+        if (!empty($updates)) {
             $trial->update($updates);
         }
         return;
     }
 
-    // Jika belum ada → buat baru, dan PASTIKAN unit & cabang ikut
-    $trial = MuridTrial::create([
-    'nama'         => $student->nama,
-    'status_trial' => $status,
-    'kelas'        => $student->kelas ?? null,
-    'tgl_lahir'    => $student->tgl_lahir ?? null,
-    'usia'         => $student->usia ?? null,
-    'orangtua'     => $student->orangtua ?? null,
-    'no_telp'      => $student->no_telp ?? null,
-    'alamat'       => $student->alamat ?? null,
-    'guru_trial'   => $student->guru_wali ?? null,
+    try {
+        $trial = MuridTrial::create([
+            'nama'               => $student->nama,
+            'status_trial'       => $status,
+            'kelas'              => $student->kelas ?? 'Reguler',
+            'tgl_lahir'          => $student->tgl_lahir,
+            'usia'               => $student->usia,
+            'orangtua'           => $student->orangtua,
+            'no_telp'            => $student->no_telp,
+            'alamat'             => $student->alamat,
+            'guru_trial'         => $student->guru_wali,
+            'bimba_unit'         => $student->bimba_unit,
+            'no_cabang'          => $student->no_cabang,
+            'tanggal_trial_baru' => $student->tanggal_masuk 
+                ? Carbon::parse($student->tanggal_masuk)->format('Y-m-d') 
+                : now()->format('Y-m-d'),
+        ]);
 
-    'bimba_unit'   => $student->bimba_unit,
-    'no_cabang'    => $student->no_cabang,
+        $student->murid_trial_id = $trial->id;
+        $student->saveQuietly();
 
-    'tanggal_trial_baru' => $student->tanggal_masuk
-    ? Carbon::parse($student->tanggal_masuk)->format('Y-m-d')
-    : ($student->created_at
-        ? Carbon::parse($student->created_at)->format('Y-m-d')
-        : now()->format('Y-m-d')),
-]);
+        // Buat Humas dengan aman
+        $this->createHumasSafely($student);
 
-    $student->murid_trial_id = $trial->id;
-    $student->saveQuietly(); // gunakan saveQuietly agar tidak trigger event berulang
+    } catch (\Throwable $e) {
+        Log::error('Gagal create MuridTrial', [
+            'nama'  => $student->nama,
+            'error' => $e->getMessage()
+        ]);
+    }
+}
+
+/**
+ * Buat Humas dengan NIH unik & otomatis increment
+ * Jika 05141020001 sudah ada → jadi 05141020002, dst.
+ */
+protected function createHumasSafely(Student $student): void
+{
+    if (empty($student->informasi_humas_nama)) {
+        return;
+    }
+
+    try {
+        $noCabang = trim($student->no_cabang ?? '05141');
+
+        DB::transaction(function () use ($student, $noCabang) {
+
+            // Cek apakah humas dengan nama yang sama sudah ada
+            $existing = DB::table('humas')
+                ->where('nama', 'LIKE', "%{$student->informasi_humas_nama}%")
+                ->where('no_cabang', $noCabang)
+                ->first();
+
+            if ($existing) {
+                Log::info("Humas sudah ada, dilewati", [
+                    'nih'  => $existing->nih,
+                    'nama' => $existing->nama
+                ]);
+                return;
+            }
+
+            // Ambil NIH tertinggi di cabang ini
+            $lastNih = DB::table('humas')
+                        ->where('no_cabang', $noCabang)
+                        ->whereRaw('LENGTH(nih) = 9')
+                        ->lockForUpdate()
+                        ->orderByRaw('CAST(SUBSTRING(nih, 6, 4) AS UNSIGNED) DESC')
+                        ->value('nih');
+
+            $lastSeq = 20000; // mulai dari 20000 jika belum ada
+
+            if ($lastNih) {
+                $lastSeq = (int) substr($lastNih, 5); // ambil 4 digit setelah no_cabang
+            }
+
+            $newSeq = $lastSeq + 1;
+            $nih = $noCabang . str_pad($newSeq, 4, '0', STR_PAD_LEFT);
+
+            // Anti-collision (jika ada yang cepat insert)
+            while (DB::table('humas')->where('nih', $nih)->exists()) {
+                $newSeq++;
+                $nih = $noCabang . str_pad($newSeq, 4, '0', STR_PAD_LEFT);
+            }
+
+            // Insert Humas
+            DB::table('humas')->insert([
+                'tgl_reg'     => now()->format('Y-m-d'),
+                'nih'         => $nih,
+                'nama'        => $student->informasi_humas_nama,
+                'no_telp'     => $student->hp_ibu ?? $student->hp_ayah ?? $student->no_telp,
+                'status'      => 'baru',
+                'pekerjaan'   => null,
+                'alamat'      => $student->alamat,
+                'bimba_unit'  => $student->bimba_unit,
+                'no_cabang'   => $noCabang,
+                'created_at'  => now(),
+                'updated_at'  => now(),
+            ]);
+
+            Log::info("✅ Humas berhasil dibuat dengan NIH baru", [
+                'nih'  => $nih,
+                'nama' => $student->informasi_humas_nama
+            ]);
+
+        });
+
+    } catch (\Throwable $e) {
+        Log::warning("Gagal create humas", [
+            'nama'  => $student->nama ?? 'unknown',
+            'error' => $e->getMessage()
+        ]);
+    }
 }
 
     protected function buildBukuIndukPayload(Student $student, bool $forCreate = false): array

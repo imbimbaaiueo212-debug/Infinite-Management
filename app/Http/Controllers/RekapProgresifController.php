@@ -106,63 +106,126 @@ class RekapProgresifController extends Controller
 
 public function index(Request $request)
 {
-    $periode = $request->get('periode');
+    $periode     = $request->get('periode');
+    $nama        = $request->get('nama');           // tambahan filter nama
+    $monthFrom   = $request->get('month_from');
+    $monthTo     = $request->get('month_to');
 
-    if (!$periode) {
-        // Default: bulan SEBELUMNYA
-        $defaultDate = Carbon::now()->subMonth()->startOfMonth();
-        $periode = $defaultDate->format('Y-m');   // contoh: sekarang Maret → "2026-02"
-    }
-
+    // ====================== PARSING PERIODE ======================
     $selectedTahun = null;
+    $selectedBulan = null;
     $selectedBulanNama = null;
 
-    if ($periode && preg_match('/^\d{4}-\d{2}$/', $periode)) {
+    if ($monthFrom && $monthTo) {
+        try {
+            $from = Carbon::parse($monthFrom);
+            $to   = Carbon::parse($monthTo);
+            $selectedTahun = $from->year;   // Untuk sementara pakai tahun dari month_from
+        } catch (\Exception $e) {}
+    } 
+    elseif ($periode && preg_match('/^\d{4}-\d{2}$/', $periode)) {
         try {
             $date = Carbon::createFromFormat('Y-m', $periode);
             $selectedTahun = $date->year;
-            $selectedBulanNama = $this->getIndonesianMonthName($date->format('m'));
-        } catch (\Exception $e) {
-            // fallback ke sekarang kalau format salah
-            $date = Carbon::now();
-            $selectedTahun = $date->year;
-            $selectedBulanNama = $this->getIndonesianMonthName($date->format('m'));
-        }
+            $selectedBulan = $date->format('m');
+            $selectedBulanNama = $this->getIndonesianMonthName($selectedBulan);
+        } catch (\Exception $e) {}
+    } else {
+        // Default: bulan sebelumnya
+        $defaultDate = Carbon::now()->subMonth()->startOfMonth();
+        $selectedTahun = $defaultDate->year;
+        $selectedBulan = $defaultDate->format('m');
+        $selectedBulanNama = $this->getIndonesianMonthName($selectedBulan);
+        $periode = $defaultDate->format('Y-m');
     }
 
-    $query = RekapProgresif::query();
+    // ====================== AMBIL PROFILE (Aktif + Magang) ======================
+    $profilesQuery = Profile::query()
+        ->whereIn('status_karyawan', ['Aktif', 'Magang'])
+        ->orWhereNull('status_karyawan')
+        ->where(function ($q) {
+            $q->whereNull('tgl_masuk')
+              ->orWhere('tgl_masuk', '>=', '2010-01-01');
+        });
 
-    // Filter utama: hanya Guru dan Kepala Unit (case-insensitive)
-    $query->where(function ($q) {
-        $q->whereRaw('LOWER(jabatan) LIKE ?', ['%guru%'])
-          ->orWhereRaw('LOWER(jabatan) LIKE ?', ['%pengajar%'])
-          ->orWhereRaw('LOWER(jabatan) LIKE ?', ['%tutor%'])
-          ->orWhereRaw('LOWER(jabatan) = ?', ['kepala unit'])
-          ->orWhereRaw('LOWER(jabatan) LIKE ?', ['%kepala bimba%'])
-          ->orWhereRaw('LOWER(jabatan) LIKE ?', ['%kepala sekolah%'])
-          ->orWhereRaw('LOWER(jabatan) = ?', ['ku']);
-    });
+    if ($nama) {
+        $profilesQuery->where('nama', 'LIKE', "%{$nama}%");
+    }
+
+    $profiles = $profilesQuery->orderBy('bimba_unit')
+                              ->orderBy('nama')
+                              ->get();
+
+    // ====================== AMBIL REKAP PROGRESIF ======================
+    $rekapQuery = RekapProgresif::query();
 
     if ($selectedTahun) {
-        $query->where('tahun', $selectedTahun);
+        $rekapQuery->where('tahun', $selectedTahun);
     }
-
     if ($selectedBulanNama) {
-        $query->where('bulan', $selectedBulanNama);
+        $rekapQuery->where('bulan', $selectedBulanNama);
+    } elseif ($monthFrom && $monthTo) {
+        // Jika pakai range, ambil semua bulan di range (opsional)
+        $rekapQuery->whereBetween('tahun', [$from->year, $to->year]);
     }
 
-    $rekaps = $query->orderByDesc('tahun')
-                    ->orderByDesc('bulan')
-                    ->paginate(25);
+    $rekapList = $rekapQuery->get()->keyBy('nama');
+
+    // ====================== MAPPING DATA ======================
+    $rekapProgresifs = $profiles->map(function ($profile) use ($rekapList, $selectedBulanNama, $selectedTahun) {
+
+        $rekap = $rekapList->get($profile->nama);
+
+        return (object) [
+            'id'            => $rekap?->id,
+            'nama'          => $profile->nama,
+            'jabatan'       => $profile->jabatan ?? $rekap?->jabatan ?? '-',
+            'status'        => $profile->status_karyawan ?? $rekap?->status ?? 'Aktif',
+            'departemen'    => $profile->departemen ?? $rekap?->departemen ?? '-',
+            'masa_kerja'    => $this->formatMasaKerja($profile->masa_kerja ?? $rekap?->masa_kerja),
+            'bimba_unit'    => $profile->biMBA_unit ?? $profile->bimba_unit ?? $rekap?->bimba_unit ?? '-',
+            'no_cabang'     => $profile->no_cabang ?? $rekap?->no_cabang ?? '-',
+
+            // Data Rekap
+            'bulan'         => $rekap?->bulan ?? $selectedBulanNama,
+            'tahun'         => $rekap?->tahun ?? $selectedTahun,
+            'spp_bimba'     => $rekap?->spp_bimba ?? 0,
+            'am1'           => $rekap?->am1 ?? 0,
+            'am2'           => $rekap?->am2 ?? 0,
+            'total_fm'      => $rekap?->total_fm ?? 0,
+            'progresif'     => $rekap?->progresif ?? 0,
+            'spp_english'   => $rekap?->spp_english ?? 0,
+            'komisi'        => $rekap?->komisi ?? 0,
+            'dibayarkan'    => $rekap?->dibayarkan ?? 0,
+
+            'has_rekap'     => !is_null($rekap),   // untuk penanda apakah sudah ada rekap
+        ];
+    })->sortBy('bimba_unit')->sortBy('nama')->values();
 
     $isAdmin = $this->isCurrentUserAdmin();
 
+    // Data untuk dropdown
+    $allProfiles = Profile::whereIn('status_karyawan', ['Aktif', 'Magang'])
+                          ->orWhereNull('status_karyawan')
+                          ->orderBy('nama')
+                          ->pluck('nama');
+
+    $allPeriods = RekapProgresif::selectRaw("CONCAT(tahun, '-', LPAD(MONTH(STR_TO_DATE(bulan, '%M')), 2, '0')) as periode")
+                                ->distinct()
+                                ->orderByDesc('tahun')
+                                ->pluck('periode');
+
     return view('rekap-progresif.index', compact(
-        'rekaps',
+        'rekapProgresifs',
         'isAdmin',
-        'periode',             // <-- kirimkan ini
-        'selectedTahun',       // optional, kalau mau tampilkan di view
-        'selectedBulanNama'    // optional
+        'periode',
+        'nama',
+        'monthFrom',
+        'monthTo',
+        'selectedTahun',
+        'selectedBulanNama',
+        'allProfiles',
+        'allPeriods'
     ));
 }
 
@@ -268,11 +331,9 @@ public function index(Request $request)
     | EDIT
     |--------------------------------------------------------------------------
     */
-
-public function edit($id)
+public function edit($id)  // atau RekapProgresif $rekap_progresif
 {
     $rekap_progresif = RekapProgresif::findOrFail($id);
-
     return view('rekap-progresif.edit', compact('rekap_progresif'));
 }
 

@@ -126,19 +126,21 @@
                             <td>Rp. {{ number_format($p['lain_lain'] ?? 0, 0, ',', '.') }}</td>
                             <td class="fw-bold">Rp. {{ number_format($p['total'] ?? 0, 0, ',', '.') }}</td>
 
-                            <td>
+                           <td>
                                 @if(!empty($p['id']))
-                                    <a href="{{ route('pendapatan-tunjangan.edit', $p['id']) }}"
-                                       class="btn btn-sm btn-warning">Edit</a>
-
                                     @if (auth()->user()?->role === 'admin')
+                                        <a href="{{ route('pendapatan-tunjangan.edit', $p['id']) }}"
+                                        class="btn btn-sm btn-warning">Edit</a>
+
                                         <form action="{{ route('pendapatan-tunjangan.destroy', $p['id']) }}" method="POST"
-                                              style="display:inline-block">
+                                            style="display:inline-block">
                                             @csrf
                                             @method('DELETE')
                                             <button type="submit" class="btn btn-sm btn-danger"
                                                     onclick="return confirm('Apakah yakin ingin dihapus?')">Hapus</button>
                                         </form>
+                                    @else
+                                        <span class="badge bg-secondary">Tidak dapat diubah</span>
                                     @endif
                                 @else
                                     <span class="badge bg-info text-dark">Otomatis</span>

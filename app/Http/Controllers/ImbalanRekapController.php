@@ -862,6 +862,13 @@ if (array_key_exists('installment_id', $fields)) {
     $split = explode(' ', $labelBulan);
     $bulanFormatYm = ($split[1] ?? date('Y')) . '-' . ($monthMap[$split[0]] ?? date('m'));
 
+    // ================= DEFINISI PERIODE (26 s.d 25) =================
+    $year  = (int) ($split[1] ?? date('Y'));
+    $month = (int) ($monthMap[$split[0]] ?? date('m'));
+
+    $startDate = Carbon::create($year, $month, 1)->subMonth()->day(26);
+    $endDate   = Carbon::create($year, $month, 25);
+
     // Sync Potongan
     try {
         app(\App\Http\Controllers\PotonganTunjanganController::class)
@@ -915,7 +922,6 @@ if (array_key_exists('installment_id', $fields)) {
 
     foreach ($profiles as $p) {
         try {
-            // === firstOrNew dengan profile_id + bulan ===
             $rekap = ImbalanRekap::firstOrNew([
                 'profile_id' => $p->id,
                 'bulan'      => $labelBulan
@@ -924,26 +930,80 @@ if (array_key_exists('installment_id', $fields)) {
             $isNew = !$rekap->exists;
             $isMagang = strtolower(trim($p->status_karyawan ?? '')) === 'magang';
 
-            // RB Awal
+            // ==================== PERHITUNGAN HARI KERJA TRANSPORT ====================
+$hariKerjaMaksimal = 25;
+$tglMasuk = !empty($p->tgl_masuk)
+    ? Carbon::parse($p->tgl_masuk)->startOfDay()
+    : null;
+
+$hariKerjaEfektif = $hariKerjaMaksimal;
+
+if (
+    $tglMasuk &&
+    $tglMasuk->gte($startDate) &&
+    $tglMasuk->lte($endDate)
+) {
+    $hariTerlewat = 0;
+
+    $cursor = $startDate->copy();
+
+    while ($cursor < $tglMasuk) {
+
+        // Minggu tidak dihitung
+        if ($cursor->dayOfWeek !== Carbon::SUNDAY) {
+            $hariTerlewat++;
+        }
+
+        $cursor->addDay();
+    }
+
+    $hariKerjaEfektif = max(
+        0,
+        $hariKerjaMaksimal - $hariTerlewat
+    );
+}
+
+// ==================== POTONGAN ABSENSI ====================
+$hariDipotong = 0;
+
+$potongan = PotonganTunjangan::where('nama', $p->nama)
+    ->where('bulan', $bulanFormatYm)
+    ->first();
+
+if ($potongan) {
+
+    $totalPotong =
+        ($potongan->sakit ?? 0) +
+        ($potongan->izin ?? 0) +
+        ($potongan->alpa ?? 0) +
+        ($potongan->tidak_aktif ?? 0) +
+        ($potongan->lain_lain ?? 0);
+
+    $hariDipotong = (int) floor($totalPotong / 24000);
+}
+
+$hariTransport = max(
+    0,
+    $hariKerjaEfektif - $hariDipotong
+);
+
+$tambahan_transport = $hariTransport * 24000;
+
+Log::info([
+    'nama' => $p->nama,
+    'tgl_masuk' => $p->tgl_masuk,
+    'hari_efektif' => $hariKerjaEfektif,
+    'hari_potong' => $hariDipotong,
+    'hari_transport' => $hariTransport,
+]);
+
+            // ==================== RB & DURASI ====================
             $rbAwal = (str_contains(strtolower($p->jabatan ?? ''), 'kepala')) ? 40 : 30;
             $rbAwal = $extractRbNumber($p->rb ?? $p->rb_tambahan ?? '', $rbAwal);
 
             $ktrInput = trim($p->ktr ?? $p->ktr_tambahan ?? '');
 
             $durasiFull = $rbConfig[$rbAwal]['jam_label'] ?? 140;
-
-            // Potongan Absensi
-            $hariDipotong = 0;
-            $potongan = PotonganTunjangan::where('nama', $p->nama)
-                ->where('bulan', $bulanFormatYm)
-                ->first();
-
-            if ($potongan) {
-                $totalPotong = ($potongan->sakit ?? 0) + ($potongan->izin ?? 0)
-                             + ($potongan->alpa ?? 0) + ($potongan->tidak_aktif ?? 0)
-                             + ($potongan->lain_lain ?? 0);
-                $hariDipotong = (int) floor($totalPotong / 24000);
-            }
 
             $jamEfektif = max(0, $durasiFull - ($hariDipotong * 7));
 
@@ -978,7 +1038,7 @@ if (array_key_exists('installment_id', $fields)) {
                 }
             }
 
-            // Fill Data
+            // ==================== FILL DATA ====================
             $rekap->fill([
                 'nama'                => $p->nama,
                 'bulan'               => $labelBulan,
@@ -1001,8 +1061,10 @@ if (array_key_exists('installment_id', $fields)) {
                 'ktr'                 => $ktrInput ?: null,
                 'imbalan_pokok'       => round($imbalanPokokFull),
 
-                'tambahan_transport'  => max(0, 25 - $hariDipotong) * 24000,
-                'at_hari'             => max(0, 25 - $hariDipotong),
+                // TRANSPORT DINAMIS BERDASARKAN TGL MASUK
+                'tambahan_transport'  => $tambahan_transport,
+                'at_hari'             => $hariTransport,
+
                 'imbalan_lainnya'     => $p->imbalan_lainnya_default ?? 0,
                 'insentif_mentor'     => $p->insentif_mentor ?? 0,
                 'cicilan'             => $p->cicilan_default ?? 0,

@@ -130,15 +130,21 @@
                         <select name="status" class="form-select" required>
                             <option value="pending"  {{ ($useOld ? old('status') : $registration->status) === 'pending' ? 'selected' : '' }}>Pending</option>
                             <option value="verified" {{ ($useOld ? old('status') : $registration->status) === 'verified' ? 'selected' : '' }}>Verified</option>
-                            @if ($isAdmin)
-                                <option value="accepted" {{ ($useOld ? old('status') : $registration->status) === 'accepted' ? 'selected' : '' }}>Accepted</option>
-                            @else
-                                @if (($useOld ? old('status') : $registration->status) === 'accepted')
-                                    <option value="accepted" selected>Accepted (Hanya Admin)</option>
-                                @endif
-                            @endif
+                            
+                            <!-- ACCEPTED DIBUKA UNTUK SEMUA USER -->
+                            <option value="accepted" 
+                                    {{ ($useOld ? old('status') : $registration->status) === 'accepted' ? 'selected' : '' }}>
+                                Accepted
+                            </option>
+                            
                             <option value="rejected" {{ ($useOld ? old('status') : $registration->status) === 'rejected' ? 'selected' : '' }}>Rejected</option>
                         </select>
+                        
+                        @if (!$isAdmin)
+                            <small class="text-info">
+                                <i class="fas fa-info-circle"></i> Semua user dapat mengubah status ke Accepted
+                            </small>
+                        @endif
                     </div>
 
                     <div class="col-md-6 mb-3">

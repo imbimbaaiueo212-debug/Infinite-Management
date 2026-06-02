@@ -41,48 +41,100 @@ class PotonganTunjanganController extends Controller
      * Index
      */
     public function index(Request $request)
-    {
+{
+    $this->runSyncFromAbsensi(); // AUTO SINKRON
 
-        $this->runSyncFromAbsensi(); // AUTO SINKRON
+    $monthFrom     = $request->input('month_from');
+    $monthTo       = $request->input('month_to');
+    $statusFilter  = $request->input('status_filter', 'aktif');
 
-    $query = PotonganTunjangan::with('pendapatan');
-    
-        $query = PotonganTunjangan::with('pendapatan');
+    // Parsing bulan
+    try {
+        if ($monthFrom) $monthFrom = Carbon::parse($monthFrom)->format('Y-m');
+    } catch (\Throwable $e) { $monthFrom = null; }
 
-        $monthFrom = $request->input('month_from');
-        $monthTo   = $request->input('month_to');
+    try {
+        if ($monthTo) $monthTo = Carbon::parse($monthTo)->format('Y-m');
+    } catch (\Throwable $e) { $monthTo = null; }
 
-        try {
-            if ($monthFrom && !preg_match('/^\d{4}-\d{2}$/', $monthFrom)) {
-                $monthFrom = Carbon::parse($monthFrom)->format('Y-m');
-            }
-        } catch (\Throwable $e) {
-            $monthFrom = null;
-        }
-        try {
-            if ($monthTo && !preg_match('/^\d{4}-\d{2}$/', $monthTo)) {
-                $monthTo = Carbon::parse($monthTo)->format('Y-m');
-            }
-        } catch (\Throwable $e) {
-            $monthTo = null;
-        }
+    // === AMBIL PROFILE ===
+    $profiles = Profile::select([
+            'id', 'nik', 'nama', 'jabatan', 'status_karyawan as status',
+            'departemen', 'biMBA_unit', 'no_cabang'
+        ])
+        ->whereIn('jabatan', ['Kepala Unit', 'Asisten KU', 'Guru', 'Asisten Guru', 'Staff Mobile', 'Admin', 'Bendahara', 'Satpam', 'Office Boy', 'Office Girl'])
+        ->when($request->filled('bimba_unit'), fn($q) => $q->where('biMBA_unit', $request->bimba_unit))
+        ->when($statusFilter === 'aktif', fn($q) => $q->where('status_karyawan', 'Aktif'))
+        ->when($statusFilter === 'non_aktif', fn($q) => $q->whereIn('status_karyawan', ['Non-Aktif', 'Non-Aktif Sementara', 'Resign']))
+        ->orderBy('biMBA_unit')
+        ->orderBy('nama')
+        ->get();
 
-        if ($monthFrom && $monthTo) {
-            $query->whereBetween('bulan', [$monthFrom, $monthTo]);
-        } elseif ($monthFrom) {
-            $query->where('bulan', '>=', $monthFrom);
-        } elseif ($monthTo) {
-            $query->where('bulan', '<=', $monthTo);
-        }
+    // === AMBIL POTONGAN DENGAN RANGE ===
+    $query = PotonganTunjangan::query();
 
-        $potonganTunjangans = $query->orderBy('bulan', 'desc')->get();
-
-        return view('potongan.index', [
-            'potonganTunjangans' => $potonganTunjangans,
-            'filter_month_from'  => $monthFrom,
-            'filter_month_to'    => $monthTo,
-        ]);
+    if ($monthFrom && $monthTo) {
+        $query->whereBetween('bulan', [$monthFrom, $monthTo]);
+    } elseif ($monthFrom) {
+        $query->where('bulan', '>=', $monthFrom);
+    } elseif ($monthTo) {
+        $query->where('bulan', '<=', $monthTo);
     }
+
+    $potonganData = $query->get();
+
+    // Grouping per NIK + akumulasi yang benar
+    $groupedPotongan = $potonganData->groupBy('nik');
+
+    // Gabungkan dengan profile
+    $potonganTunjangans = $profiles->map(function ($profile) use ($groupedPotongan, $monthFrom, $monthTo) {
+        $records = $groupedPotongan->get($profile->nik) ?? collect();
+
+        $total = [
+            'sakit'             => $records->sum('sakit'),
+            'izin'              => $records->sum('izin'),
+            'alpa'              => $records->sum('alpa'),
+            'tidak_aktif'       => $records->sum('tidak_aktif'),
+            'kelebihan_nominal' => $records->sum('kelebihan_nominal') + $records->sum('kelebihan'),
+            'lain_lain'         => $records->sum('lain_lain'),
+            'cash_advance_nominal' => $records->sum('cash_advance_nominal'),
+        ];
+
+        // Ambil bulan pertama untuk referensi (opsional)
+        $firstRecord = $records->first();
+
+        return (object) [
+            'id'                => $firstRecord?->id,
+            'nik'               => $profile->nik ?? '-',
+            'nama'              => $profile->nama,
+            'jabatan'           => $profile->jabatan,
+            'status'            => $profile->status,
+            'departemen'        => $profile->departemen,
+            'bimba_unit'        => $profile->biMBA_unit,
+            'no_cabang'         => $profile->no_cabang,
+
+            'sakit'             => $total['sakit'],
+            'izin'              => $total['izin'],
+            'alpa'              => $total['alpa'],
+            'tidak_aktif'       => $total['tidak_aktif'],
+            'kelebihan_nominal' => $total['kelebihan_nominal'],
+            'kelebihan_bulan'   => $firstRecord?->kelebihan_bulan,
+            'lain_lain'         => $total['lain_lain'],
+            'cash_advance_nominal' => $total['cash_advance_nominal'],
+
+            // Info tambahan
+            'jumlah_bulan'      => $records->count(),           // berapa bulan ada datanya
+            'bulan_range'       => $monthFrom && $monthTo ? "$monthFrom s/d $monthTo" : null,
+        ];
+    });
+
+    return view('potongan.index', [
+        'potonganTunjangans' => $potonganTunjangans,
+        'filter_month_from'  => $monthFrom,
+        'filter_month_to'    => $monthTo,
+        'status_filter'      => $statusFilter,
+    ]);
+}
 
     /**
      * Create form
