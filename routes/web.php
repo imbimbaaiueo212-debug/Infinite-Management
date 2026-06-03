@@ -268,6 +268,7 @@ Route::post('/students/{student}/reactivate', [StudentController::class, 'reacti
      ->name('students.reactivate');
 Route::post('/students/{student}/reactivate', [StudentController::class, 'reactivate'])
      ->name('students.reactivate');
+     Route::get('/students/{student}', [StudentController::class, 'show'])->name('students.show');
 
 //Buku Induk Router
 Route::resource('buku_induk', BukuIndukController::class)->middleware('auth');

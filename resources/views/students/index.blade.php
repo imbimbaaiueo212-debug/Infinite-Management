@@ -137,21 +137,8 @@
                     <tr>
                         <th>NIM</th>
                         <th>Nama Murid</th>
-                        <th>Tanggal Lahir</th>
-                        <th>Cabang</th> {{-- BARU --}}
-                        <th>Unit biMBA</th> {{-- BARU --}}
-                        <th>Ayah</th>
-                        <th>Ibu</th>
-                        <th>No. Telepon</th>
-                        <th>Alamat</th>
-                        <th>Email</th>
-                        <th>Sumber</th>
-                        <th>Jadwal</th>
-                        <th>Informasi</th>
                         <th>Info Humas</th>
-                        <th>Tgl Daftar</th>
                         <th>Status Pendaftaran</th>
-                        <th>Tgl. Input</th>
                         <!-- TAMBAHAN BARU: FOTO KK -->
                         <th class="text-center">Foto KK</th>
                         <th class="text-center">Foto Mutasi</th>
@@ -190,53 +177,6 @@
                         <tr>
                             <td>{{ $student->nim ?? '—' }}</td>
                             <td>{{ $student->nama }}</td>
-                            <td>
-                                {{ $student->tgl_lahir 
-                                    ? \Carbon\Carbon::parse($student->tgl_lahir)->format('d/m/Y') 
-                                    : '-' }}
-                            </td>
-
-                            {{-- BARU: Cabang --}}
-                            <td><span class="badge bg-primary">{{ $student->no_cabang ?? '—' }}</span></td>
-
-                            {{-- BARU: Unit biMBA --}}
-                            <td>{{ $student->bimba_unit ?? '—' }}</td>
-
-                            {{-- Ayah --}}
-                            <td>
-                                @if($student->nama_ayah)
-                                    {{ $student->nama_ayah }}
-                                @else
-                                    —
-                                @endif
-                            </td>
-
-                            {{-- Ibu --}}
-                            <td>
-                                @if($student->nama_ibu)
-                                    {{ $student->nama_ibu }}
-                                    @if($student->hp_ibu)
-                                        <div class="text-muted small mt-1">HP: {{ $student->hp_ibu }}</div>
-                                    @endif
-                                @else
-                                    —
-                                @endif
-                            </td>
-
-                            <td>{{ $telp ?? '—' }}</td>
-                            <td>{{ $student->alamat ?? '—' }}</td>
-                            <td>{{ $student->email ?? '—' }}</td>
-
-                            <td>
-                                @if($sumberRaw)
-                                    <span class="badge {{ $sumberBadgeClass }}">{{ $sumberRaw }}</span>
-                                @else
-                                    —
-                                @endif
-                            </td>
-
-                            <td>{{ $jadwal }}</td>
-                            <td>{{ $student->informasi_bimba ?? '—' }}</td>
 
                             {{-- Info Humas (100% sama seperti asli kamu) --}}
                             <td>
@@ -271,7 +211,7 @@
                                                 style="opacity: 0; position: absolute; left: -9999px;">
                                         </div>
 
-                                        <small class="text-muted">Klik tombol untuk menyalin link spin ke clipboard.</small>
+                                        <small class="text-muted">Salin link.</small>
 
                                         @push('scripts')
                                             <script>
@@ -317,16 +257,12 @@
                                 @endif
                             </td>
 
-                            <td>{{ $student->tanggal_masuk ? \Illuminate\Support\Carbon::parse($student->tanggal_masuk)->format('d M Y') : '—' }}
-                            </td>
+                           
 
                             {{-- Status Trial --}}
                             <td class="text-center align-middle">
                                 <span class="badge {{ $statusClass }}">{{ $labelStatus }}</span>
                             </td>
-
-                            <td>{{ optional($student->created_at)->format('d M Y') }}</td>
-
                             <!-- FOTO KK -->
                             <!-- FOTO KK -->
                             <td class="text-center">
@@ -375,25 +311,30 @@
                             </td>
 
                             <td class="text-center">
-                                <button type="button" class="btn btn-sm btn-info text-white me-1 btn-show-history"
-                                    data-bs-toggle="modal" data-bs-target="#historyModal" 
-                                    data-student-id="{{ $student->id }}"
-                                    data-student-name="{{ $student->nama }}"
-                                    data-history-url="{{ route('students.history.json', $student) }}">
-                                    Histori
-                                </button>
+    {{-- TOMBOL DETAIL BARU --}}
+    <a href="{{ route('students.show', $student) }}" 
+       class="btn btn-sm btn-primary me-1"
+       title="Lihat Detail Murid">
+        <i class="bi bi-eye"></i> Detail
+    </a>
 
-                                <a href="{{ route('students.edit', $student) }}" class="btn btn-sm btn-warning">Edit</a>
+    <button type="button" class="btn btn-sm btn-info text-white me-1 btn-show-history"
+        data-bs-toggle="modal" data-bs-target="#historyModal" 
+        data-student-id="{{ $student->id }}"
+        data-student-name="{{ $student->nama }}"
+        data-history-url="{{ route('students.history.json', $student) }}">
+        Histori
+    </button>
 
-                                @if(auth()->check() && auth()->user()->is_admin)   <!-- ← sesuaikan dengan field admin kamu -->
-                                    <form action="{{ route('students.destroy', $student) }}" method="POST" class="d-inline"
-                                        onsubmit="return confirm('Apakah Anda yakin ingin menghapus murid {{ $student->nama }}?');">
-                                        @csrf
-                                        @method('DELETE')
-                                        <button type="submit" class="btn btn-sm btn-danger">Hapus</button>
-                                    </form>
-                                @endif
-                            </td>
+    @if(auth()->check() && auth()->user()->is_admin)
+        <form action="{{ route('students.destroy', $student) }}" method="POST" class="d-inline"
+            onsubmit="return confirm('Apakah Anda yakin ingin menghapus murid {{ $student->nama }}?');">
+            @csrf
+            @method('DELETE')
+            <button type="submit" class="btn btn-sm btn-danger">Hapus</button>
+        </form>
+    @endif
+</td>
                         </tr>
                     @empty
                         <tr>

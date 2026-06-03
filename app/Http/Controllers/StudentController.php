@@ -1482,4 +1482,11 @@ public function reactivate(Student $student)
 
         return $header;
     }
+    public function show(Student $student)
+{
+    // Load relasi jika diperlukan
+    $student->load(['muridTrial']);
+
+    return view('students.show', compact('student'));
+}
 }

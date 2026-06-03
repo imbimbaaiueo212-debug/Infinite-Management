@@ -618,37 +618,51 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 });
 
-
+// upload file
 document.addEventListener('DOMContentLoaded', function() {
     const attachmentInput = document.getElementById('attachment');
     const statusSelect    = document.getElementById('status');
     const acceptedOption  = document.getElementById('opt-accepted');
+    const verifiedOption  = document.querySelector('option[value="verified"]');
 
-    const normalText   = 'Accepted';
-    const disabledText = 'Accepted (Upload Bukti Pembayaran Terlebih Dahulu)';
+    const normalAcceptedText   = 'Accepted';
+    const disabledAcceptedText = 'Accepted ';
 
-    function toggleAcceptedOption() {
+    function toggleStatusOptions() {
         const hasFile = attachmentInput.files.length > 0;
 
         if (hasFile) {
+            // File sudah diupload
             acceptedOption.disabled = false;
-            acceptedOption.textContent = normalText;
+            acceptedOption.textContent = normalAcceptedText;
+            
+            verifiedOption.disabled = true;        // Tutup Verified
         } else {
+            // Belum ada file
             acceptedOption.disabled = true;
-            acceptedOption.textContent = disabledText;
+            acceptedOption.textContent = disabledAcceptedText;
+            
+            verifiedOption.disabled = false;       // Buka Verified
+        }
 
-            // Jika sedang memilih Accepted tapi belum ada file, pindah ke Verified
-            if (statusSelect.value === 'accepted') {
-                statusSelect.value = 'verified';
-            }
+        // Auto adjust value jika pilihan yang aktif sedang disabled
+        const currentValue = statusSelect.value;
+
+        if (hasFile && currentValue === 'verified') {
+            // Kalau sudah upload file tapi masih Verified, otomatis pindah ke Accepted
+            statusSelect.value = 'accepted';
+        } 
+        else if (!hasFile && currentValue === 'accepted') {
+            // Kalau belum upload tapi memilih Accepted, pindah ke Verified
+            statusSelect.value = 'verified';
         }
     }
 
-    // Event listener
-    attachmentInput.addEventListener('change', toggleAcceptedOption);
+    // Event listeners
+    attachmentInput.addEventListener('change', toggleStatusOptions);
     
-    // Jalankan saat pertama kali load (penting untuk Edit form)
-    toggleAcceptedOption();
+    // Jalankan saat halaman load (penting untuk Edit form)
+    toggleStatusOptions();
 });
 
 document.addEventListener('DOMContentLoaded', function () {

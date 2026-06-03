@@ -247,53 +247,105 @@
 
                 {{-- Jenis KBM & Level --}}
                 <div class="row">
+                    <!-- Jenis KBM -->
                     <div class="col-md-4 mb-3">
                         <label class="form-label fw-bold">Jenis KBM</label>
-                        <select name="bi[jenis_kbm]" class="form-control">
-                            <option value="">-- Pilih Jenis KBM --</option>
-                            @foreach($jenisKbmOptions ?? [] as $jk)
-                                <option value="{{ $jk }}" {{ ($useOld ? old('bi.jenis_kbm') : ($bi['jenis_kbm'] ?? '')) === $jk ? 'selected' : '' }}>{{ $jk }}</option>
-                            @endforeach
-                        </select>
+                        @php 
+                            $val = $bi['jenis_kbm'] ?? old('bi.jenis_kbm') ?? $biPrefill['jenis_kbm'] ?? '';
+                        @endphp
+                        @if($val)
+                            <p class="form-control bg-light border rounded p-2 mb-0 fw-medium">{{ $val }}</p>
+                            <input type="hidden" name="bi[jenis_kbm]" value="{{ $val }}">
+                        @else
+                            <select name="bi[jenis_kbm]" class="form-control">
+                                <option value="">-- Pilih Jenis KBM --</option>
+                                @foreach($jenisKbmOptions ?? [] as $jk)
+                                    <option value="{{ $jk }}" {{ old('bi.jenis_kbm') == $jk ? 'selected' : '' }}>{{ $jk }}</option>
+                                @endforeach
+                            </select>
+                        @endif
                     </div>
 
+                    <!-- Level -->
                     <div class="col-md-4 mb-3">
                         <label class="form-label fw-bold">Level</label>
-                        <select name="bi[level]" id="level" class="form-control">
-                            <option value="">-- Pilih Level --</option>
-                            @foreach($levelOptions ?? [] as $l)
-                                <option value="{{ $l }}" {{ ($useOld ? old('bi.level') : ($bi['level'] ?? '')) === $l ? 'selected' : '' }}>{{ $l }}</option>
-                            @endforeach
-                        </select>
+                        @php 
+                            $val = $bi['level'] ?? old('bi.level') ?? $biPrefill['level'] ?? '';
+                        @endphp
+                        @if($val)
+                            <p class="form-control bg-light border rounded p-2 mb-0 fw-medium">{{ $val }}</p>
+                            <input type="hidden" name="bi[level]" value="{{ $val }}">
+                        @else
+                            <select name="bi[level]" id="level" class="form-control">
+                                @foreach($levelOptions ?? [] as $l)
+                                    <option value="{{ $l }}" {{ old('bi.level') == $l ? 'selected' : '' }}>{{ $l }}</option>
+                                @endforeach
+                            </select>
+                        @endif
                     </div>
 
-                    <div class="col-md-4 mb-3" id="tgl_level_wrapper" style="display: none;">
+                    <!-- Tanggal Level -->
+                    <div class="col-md-4 mb-3" id="tgl_level_wrapper">
                         <label class="form-label fw-bold text-success">Tanggal Level</label>
-                        <input type="date" name="bi[tgl_level]" id="tgl_level" class="form-control"
-                               value="{{ $useOld ? old('bi.tgl_level') : ($bi['tgl_level'] ?? '') }}">
+                        @php 
+                            $val = $bi['tgl_level'] ?? old('bi.tgl_level') ?? $biPrefill['tgl_level'] ?? '';
+                        @endphp
+                        @if($val)
+                            <p class="form-control bg-light border rounded p-2 mb-0 fw-medium">
+                                {{ \Carbon\Carbon::parse($val)->format('d-m-Y') }}
+                            </p>
+                            <input type="hidden" name="bi[tgl_level]" value="{{ $val }}">
+                        @else
+                            <input type="date" name="bi[tgl_level]" id="tgl_level" class="form-control">
+                        @endif
                     </div>
                 </div>
 
                 <hr class="my-4">
-                <h5 class="mb-3">Supply Modul & Keterangan</h5>
+                    <h5 class="mb-3">Supply Modul & Keterangan</h5>
 
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label fw-bold">Asal Modul</label>
-                        <select name="bi[asal_modul]" class="form-control">
-                            <option value="">-- Pilih Asal Modul --</option>
-                            @foreach($asalModulOptions ?? [] as $am)
-                                <option value="{{ $am }}" {{ ($useOld ? old('bi.asal_modul') : ($bi['asal_modul'] ?? '')) === $am ? 'selected' : '' }}>{{ $am }}</option>
-                            @endforeach
-                        </select>
-                    </div>
+                    <div class="row">
+                        <!-- Asal Modul -->
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold">Asal Modul</label>
+                            @php 
+                                $val = $bi['asal_modul'] 
+                                    ?? old('bi.asal_modul') 
+                                    ?? $biPrefill['asal_modul'] 
+                                    ?? $registration->asal_modul 
+                                    ?? '';
+                            @endphp
+                            @if($val)
+                                <p class="form-control bg-light border rounded p-2 mb-0 fw-medium">{{ $val }}</p>
+                                <input type="hidden" name="bi[asal_modul]" value="{{ $val }}">
+                            @else
+                                <select name="bi[asal_modul]" class="form-control">
+                                    <option value="">-- Pilih Asal Modul --</option>
+                                    @foreach($asalModulOptions ?? [] as $am)
+                                        <option value="{{ $am }}" {{ old('bi.asal_modul') == $am ? 'selected' : '' }}>{{ $am }}</option>
+                                    @endforeach
+                                </select>
+                            @endif
+                        </div>
 
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label fw-bold">Keterangan Optional</label>
-                        <input type="text" name="bi[keterangan_optional]" class="form-control"
-                               value="{{ $useOld ? old('bi.keterangan_optional') : ($bi['keterangan_optional'] ?? '') }}">
+                        <!-- Keterangan Optional -->
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold">Keterangan Optional</label>
+                            @php 
+                                $val = $bi['keterangan_optional'] 
+                                    ?? old('bi.keterangan_optional') 
+                                    ?? $biPrefill['keterangan_optional'] 
+                                    ?? '';
+                            @endphp
+                            @if($val)
+                                <p class="form-control bg-light border rounded p-2 mb-0 fw-medium">{{ $val }}</p>
+                                <input type="hidden" name="bi[keterangan_optional]" value="{{ $val }}">
+                            @else
+                                <input type="text" name="bi[keterangan_optional]" class="form-control"
+                                    value="{{ old('bi.keterangan_optional') }}">
+                            @endif
+                        </div>
                     </div>
-                </div>
 
                 
 

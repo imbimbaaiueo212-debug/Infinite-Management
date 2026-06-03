@@ -880,6 +880,14 @@ public function store(Request $request)
         'kode_jadwal'  => $registration->kode_jadwal ?? optional($biMaster)->kode_jadwal,
         'hari'         => $registration->hari  ?? optional($biMaster)->hari ?? $student?->hari ?? $trial?->hari,
         'jam'          => $registration->jam   ?? optional($biMaster)->jam  ?? $student?->jam  ?? $trial?->jam,
+       
+        // === TAMBAHKAN INI ===
+        'jenis_kbm'         => $registration->jenis_kbm ?? optional($biMaster)->jenis_kbm,
+        'level'             => $registration->level ?? optional($biMaster)->level,
+        'tgl_level'         => $registration->tgl_level ?? optional($biMaster)->tgl_level,
+        'asal_modul'        => $registration->asal_modul ?? optional($biMaster)->asal_modul,
+        'keterangan_optional' => $registration->keterangan_optional ?? optional($biMaster)->keterangan_optional,
+        // =====================
 
         'tempat_lahir' => optional($biMaster)->tempat_lahir ?? $student?->tempat_lahir ?? $trial?->tempat_lahir,
         'tanggal_lahir'=> optional($biMaster)->tgl_lahir   ?? $student?->tgl_lahir   ?? $trial?->tgl_lahir,
