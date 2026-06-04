@@ -9,6 +9,7 @@ use App\Models\Adjustment;
 use App\Models\CashAdvanceInstallment;
 use App\Models\CashAdvance;
 use App\Models\DurasiKegiatan;
+use App\Models\ProfileHistory;
 use App\Models\Ktr;
 use App\Models\Profile;
 use App\Models\PotonganTunjangan;
@@ -27,15 +28,33 @@ class ImbalanRekapController extends Controller
     public function index(Request $request)
 {
     /* ======================================================
-     * 1. FILTER PARAM
+     * 1. FILTER PARAM + DEFAULT LOGIKA PERIODE
      * ====================================================== */
-    $start_bulan = $request->get('start_bulan', now()->format('m'));
-    $start_tahun = $request->get('start_tahun', now()->format('Y'));
+    $start_bulan = $request->get('start_bulan');
+    $start_tahun = $request->get('start_tahun');
     $end_bulan   = $request->get('end_bulan', $start_bulan);
     $end_tahun   = $request->get('end_tahun', $start_tahun);
     $bimba_unit  = $request->get('bimba_unit');
     $nama        = $request->get('nama');
     $showAll     = $request->has('all');
+
+    Carbon::setLocale('id');
+
+    // Jika tidak ada filter, default ke bulan SEBELUMNYA (karena periode 26 s.d 25)
+    if (!$start_bulan || !$start_tahun) {
+        $default = now()->subMonth(); // Bulan lalu
+        $start_bulan = $default->format('m');
+        $start_tahun = $default->format('Y');
+        $end_bulan   = $start_bulan;
+        $end_tahun   = $start_tahun;
+    }
+
+    Log::info('=== ImbalanRekap INDEX FILTER ===', [
+        'start_bulan' => $start_bulan,
+        'start_tahun' => $start_tahun,
+        'end_bulan'   => $end_bulan,
+        'end_tahun'   => $end_tahun,
+    ]);
 
     /* ======================================================
      * 2. RANGE TANGGAL
@@ -44,35 +63,35 @@ class ImbalanRekapController extends Controller
         $startDate = Carbon::createFromFormat('Y-m', "$start_tahun-$start_bulan")->startOfMonth();
         $endDate   = Carbon::createFromFormat('Y-m', "$end_tahun-$end_bulan")->endOfMonth();
     } catch (\Exception $e) {
-        $startDate = now()->startOfMonth();
-        $endDate   = now()->endOfMonth();
+        $startDate = now()->subMonth()->startOfMonth();
+        $endDate   = now()->subMonth()->endOfMonth();
     }
 
     /* ======================================================
-     * 3. LIST BULAN
+     * 3. LIST BULAN LABELS
      * ====================================================== */
     $bulanLabels = [];
     $tmp = $startDate->copy();
     while ($tmp <= $endDate) {
-        $bulanLabels[] = $tmp->locale('id')->translatedFormat('F Y');
+        $bulanLabels[] = $tmp->translatedFormat('F Y');
         $tmp->addMonth();
     }
 
+    Log::info('Bulan Labels untuk filter:', $bulanLabels);
+
     /* ======================================================
-     * 4. LABEL PERIODE
+     * 4. LABEL PERIODE (untuk tampilan)
      * ====================================================== */
-    $periodeLabel = $startDate->locale('id')->translatedFormat('F Y');
+    $periodeLabel = $startDate->translatedFormat('F Y');
     if (!$startDate->isSameMonth($endDate)) {
-        $periodeLabel .= ' — ' . $endDate->locale('id')->translatedFormat('F Y');
+        $periodeLabel .= ' — ' . $endDate->translatedFormat('F Y');
     }
 
     /* ======================================================
      * 5. CEK ADMIN
      * ====================================================== */
     $user = Auth::user();
-    $isAdmin = $user && (
-        $user->role === 'admin' || ($user->is_admin ?? false)
-    );
+    $isAdmin = $user && ($user->role === 'admin' || ($user->is_admin ?? false));
 
     /* ======================================================
      * 6. UNIT OPTIONS
@@ -90,7 +109,7 @@ class ImbalanRekapController extends Controller
         ->distinct()
         ->orderBy('profiles.nama');
 
-    if (!$showAll) {
+    if (!$showAll && !empty($bulanLabels)) {
         $namaOptionsQuery->whereIn('imbalan_rekaps.bulan', $bulanLabels);
     }
     if ($bimba_unit) {
@@ -100,7 +119,7 @@ class ImbalanRekapController extends Controller
     $namaOptions = $namaOptionsQuery->pluck('nama');
 
     /* ======================================================
-     * 8. QUERY UTAMA
+     * 8. QUERY UTAMA (FILTER LEBIH AMAN)
      * ====================================================== */
     $query = \App\Models\ImbalanRekap::query()
         ->with('profile')
@@ -114,9 +133,13 @@ class ImbalanRekapController extends Controller
         ->orderByRaw("CAST(profiles.nik AS UNSIGNED) ASC")
         ->orderBy('imbalan_rekaps.nama', 'ASC');
 
-    if (!$showAll) {
-        $query->whereIn('imbalan_rekaps.bulan', $bulanLabels);
+    if (!$showAll && !empty($bulanLabels)) {
+        $query->where(function($q) use ($bulanLabels) {
+            $q->whereIn('imbalan_rekaps.bulan', $bulanLabels)
+              ->orWhereIn(DB::raw("TRIM(imbalan_rekaps.bulan)"), $bulanLabels);
+        });
     }
+
     if ($bimba_unit) {
         $query->where('profiles.biMBA_unit', $bimba_unit);
     }
@@ -129,42 +152,46 @@ class ImbalanRekapController extends Controller
      * ====================================================== */
     $rekaps = $showAll ? $query->get() : $query->paginate(50);
 
+    Log::info('Data yang ditampilkan:', [
+        'total' => $rekaps->count(),
+        'bulan_pertama' => $rekaps->first()?->bulan ?? 'TIDAK ADA'
+    ]);
+
     /* ======================================================
-     * 10. FIX DATA (SUPER PENTING)
-     * ====================================================== */
-    foreach ($rekaps as $r) {
-        // FIX STATUS
-        $r->status = $r->profile_status ?? $r->status;
+ * 10. FIX DATA
+ * ====================================================== */
+foreach ($rekaps as $r) {
+    // Prioritas status: imbalan_rekaps → profile
+    $statusFinal = trim($r->status ?? $r->profile_status ?? '');
 
-        // FIX MASA KERJA
-        if (!empty($r->masa_kerja)) {
-            $r->masa_kerja_formatted = $this->formatMasaKerja((int)$r->masa_kerja);
-        } elseif (!empty($r->profile_masa_kerja)) {
-            $r->masa_kerja_formatted = $this->formatMasaKerja((int)$r->profile_masa_kerja);
-        } elseif (!empty($r->profile_tgl_masuk)) {
-            $r->masa_kerja_formatted = $this->hitungMasaKerja($r->profile_tgl_masuk);
-        } else {
-            $r->masa_kerja_formatted = '-';
-        }
+    $r->status = !empty($statusFinal) ? $statusFinal : '-';
 
-        // FIX MAGANG
-        if (strtolower(trim($r->status ?? '')) === 'magang') {
-            $r->imbalan_pokok = 0;
-            $r->total_imbalan = 0;
-            $r->yang_dibayarkan = 0;
-        }
+    // Masa Kerja
+    if (!empty($r->masa_kerja)) {
+        $r->masa_kerja_formatted = $this->formatMasaKerja((int)$r->masa_kerja);
+    } elseif (!empty($r->profile_masa_kerja)) {
+        $r->masa_kerja_formatted = $this->formatMasaKerja((int)$r->profile_masa_kerja);
+    } elseif (!empty($r->profile_tgl_masuk)) {
+        $r->masa_kerja_formatted = $this->hitungMasaKerja($r->profile_tgl_masuk);
+    } else {
+        $r->masa_kerja_formatted = '-';
     }
 
+    // Khusus Magang
+    if (strtolower($r->status) === 'magang') {
+        $r->imbalan_pokok = 0;
+        $r->total_imbalan = 0;
+        $r->yang_dibayarkan = 0;
+    }
+}
+
     /* ======================================================
-     * 11. PROSES ADJUSTMENT (BARU DITAMBAHKAN)
+     * 11. PROSES ADJUSTMENT
      * ====================================================== */
     if ($rekaps->isNotEmpty()) {
         $namaList = $rekaps->pluck('nama')->map(fn($n) => strtoupper(trim($n)))->unique()->toArray();
 
-        $adjustments = Adjustment::whereIn(
-                DB::raw('TRIM(UPPER(nama))'), 
-                $namaList
-            )
+        $adjustments = Adjustment::whereIn(DB::raw('TRIM(UPPER(nama))'), $namaList)
             ->whereBetween('month', [$startDate->month, $endDate->month])
             ->whereBetween('year', [$startDate->year, $endDate->year])
             ->get()
@@ -192,17 +219,14 @@ class ImbalanRekapController extends Controller
                 }
             }
 
-            // Simpan data adjustment
             $r->total_kekurangan_adj = $totalKekuranganAdj;
             $r->total_kelebihan_adj  = $totalKelebihanAdj;
             $r->keterangan_kekurangan_adj = $ketKekurangan ? implode(' | ', $ketKekurangan) : null;
             $r->keterangan_kelebihan_adj  = $ketKelebihan ? implode(' | ', $ketKelebihan) : null;
 
-            // Merge ke kolom utama
             $r->kekurangan = ($r->kekurangan ?? 0) + $totalKekuranganAdj;
             $r->kelebihan  = ($r->kelebihan ?? 0) + $totalKelebihanAdj;
 
-            // Hitung ulang total
             $r->total_imbalan = 
                 ($r->imbalan_pokok ?? 0) +
                 ($r->imbalan_lainnya ?? 0) +
@@ -222,9 +246,6 @@ class ImbalanRekapController extends Controller
         $rekaps->appends($request->all());
     }
 
-    /* ======================================================
-     * 12. RETURN
-     * ====================================================== */
     return view('imbalan_rekap.index', compact(
         'rekaps',
         'periodeLabel',
@@ -467,114 +488,6 @@ if (array_key_exists('installment_id', $fields)) {
         'cicilan'             => $rekap->cicilan ?? 0,
         'keterangan_cicilan'  => $rekap->keterangan_cicilan ?? '',
         'catatan'             => $rekap->catatan ?? '',
-    ]);
-}
-
-
-
-
-    public function slip(Request $request, $id)
-{
-    $rekap = ImbalanRekap::findOrFail($id);
-    $profile = Profile::where('nama', $rekap->nama)->first();
-
-    // === MASA KERJA ===
-    $masaKerja = '-';
-    if ($profile?->tgl_masuk) {
-        $masaKerja = $this->hitungMasaKerja($profile->tgl_masuk);
-    } elseif ($rekap->masa_kerja && is_numeric($rekap->masa_kerja)) {
-        $masaKerja = $this->formatMasaKerja((int) $rekap->masa_kerja);
-    }
-
-    // === PERIODE ===
-    $now = Carbon::now()->startOfMonth();
-    $months = [];
-    for ($i = 0; $i < 12; $i++) {
-        $m = $now->copy()->subMonths($i);
-        $months[] = [
-            'value' => $m->format('Y-m'),
-            'label' => $m->locale('id')->translatedFormat('F Y'),
-        ];
-    }
-
-    $defaultPeriode = $rekap->bulan
-        ? Carbon::createFromFormat('F Y', $rekap->bulan, 'id')->format('Y-m')
-        : Carbon::now()->format('Y-m');
-
-    $selectedPeriode = $request->query('periode') ?? $defaultPeriode;
-
-    $periodeLabel = Carbon::createFromFormat('Y-m', $selectedPeriode)
-        ->locale('id')
-        ->translatedFormat('F Y');
-
-    // === AMBIL POTONGAN (hanya untuk ditampilkan) ===
-    $potongan = PotonganTunjangan::where('nama', $rekap->nama)
-        ->where('bulan', $selectedPeriode)
-        ->first();
-
-    $totalPotongan = ($potongan->sakit ?? 0) +
-        ($potongan->izin ?? 0) +
-        ($potongan->alpa ?? 0) +
-        ($potongan->tidak_aktif ?? 0) +
-        ($potongan->cash_advance_nominal ?? 0) +
-        ($potongan->lainnya ?? 0);
-
-    // === HITUNG TOTAL PENDAPATAN ===
-    $imbalanPokok      = $rekap->imbalan_pokok ?? 0;
-    $imbalanLainnya    = $rekap->imbalan_lainnya ?? 0;
-    $insentifMentor    = $rekap->insentif_mentor ?? 0;
-    $tambahanTransport = $rekap->tambahan_transport ?? 0;
-
-    // Total Pendapatan = Jumlah penuh (potongan absensi sudah diakomodasi di transport)
-    $totalPendapatan = $imbalanPokok + $imbalanLainnya + $insentifMentor + $tambahanTransport;
-
-    // Yang Dibayarkan = Total Pendapatan - hanya cicilan & kelebihan
-    $yangDibayarkan = $totalPendapatan 
-                      + ($rekap->jumlah_bagi_hasil ?? 0) 
-                      - ($rekap->kelebihan ?? 0) 
-                      - ($rekap->cicilan ?? 0);
-
-    // === TANGGAL MASUK ===
-    $tglMasuk = $profile?->tgl_masuk
-        ? Carbon::parse($profile->tgl_masuk)->locale('id')->translatedFormat('d F Y')
-        : '-';
-
-    // === ADMIN CHECK ===
-    $isAdmin = Auth::check() && (
-        Auth::user()->role === 'admin' || 
-        Auth::user()->is_admin || 
-        Auth::user()->hasRole('admin')
-    );
-
-    $units = $isAdmin ? \App\Models\Unit::orderBy('biMBA_unit')->get() : collect();
-
-    $allRekaps = ImbalanRekap::orderBy('nama')->get(['id', 'nama', 'unit_id']);
-
-    return view('imbalan_rekap.slip', [
-        'rekap'             => $rekap,
-        'profile'           => $profile,
-        'masaKerja'         => $masaKerja,
-        'periode'           => $periodeLabel,
-        'periodeValue'      => $selectedPeriode,
-        'periodeOptions'    => $months,
-        'tanggalMasuk'      => $tglMasuk,
-
-        'unit'              => $rekap->biMBA_unit ?? $rekap->unit ?? 'biMBA AIUEO',
-        'no_cabang'         => $rekap->no_cabang ?? '-',
-
-        'noRekening'        => $profile?->no_rekening ?? '-',
-        'bank'              => $profile?->bank ?? '-',
-        'atasNama'          => $profile?->nama_rekening ?? $rekap->nama,
-
-        // DATA HITUNGAN - WAJIB DIKIRIM
-        'potongan'          => $potongan,
-        'totalPotongan'     => $totalPotongan,
-        'totalPendapatan'   => $totalPendapatan,     // ← PENTING!
-        'yangDibayarkan'    => $yangDibayarkan,
-
-        'allRekaps'         => $allRekaps,
-        'isAdmin'           => $isAdmin,
-        'units'             => $units,
     ]);
 }
 
@@ -877,21 +790,15 @@ if (array_key_exists('installment_id', $fields)) {
         Log::warning("Gagal sync potongan: " . $e->getMessage());
     }
 
-    // ==================== AMBIL PROFILE ====================
-    $profiles = Profile::where(function ($q) {
-            $q->whereNull('status_karyawan')
-              ->orWhere('status_karyawan', '')
-              ->orWhere('status_karyawan', 'Aktif')
-              ->orWhere('status_karyawan', 'aktif')
-              ->orWhere('status_karyawan', 'Magang')
-              ->orWhere('status_karyawan', 'magang')
-              ->orWhere('status_karyawan', 'Kepala Unit')
-              ->orWhere('status_karyawan', 'Kepala');
-        })
-        ->orderBy('nama')
-        ->get();
+    // ==================== AMBIL PROFILE & HISTORY ====================
+    $profiles = Profile::orderBy('nama')->get();
 
-    Log::info("Generate Rekap {$labelBulan} - Jumlah Profile: " . $profiles->count());
+    // Ambil SELURUH history untuk periode ini (sangat penting!)
+    $histories = ProfileHistory::where('periode', $bulanFormatYm)
+        ->get()
+        ->keyBy('profile_id');
+
+    Log::info("Generate Rekap {$labelBulan} - Jumlah Profile: {$profiles->count()}, History ditemukan: {$histories->count()}");
 
     if ($profiles->isEmpty()) {
         return [
@@ -928,74 +835,78 @@ if (array_key_exists('installment_id', $fields)) {
             ]);
 
             $isNew = !$rekap->exists;
-            $isMagang = strtolower(trim($p->status_karyawan ?? '')) === 'magang';
+
+            /*
+            |--------------------------------------------------------------------------
+            | AMBIL STATUS DARI PROFILE_HISTORY (PRIORITAS UTAMA)
+            |--------------------------------------------------------------------------
+            */
+            $history = $histories->get($p->id);
+
+            $statusKaryawan = trim(
+                $history?->status_karyawan 
+                ?? $p->status_karyawan 
+                ?? ''
+            );
+
+            $statusLower = strtolower($statusKaryawan);
+
+            // Debug log untuk setiap pegawai (bisa di-comment setelah berhasil)
+            Log::info("Profile: {$p->nama} | ID: {$p->id} | Periode: {$bulanFormatYm} | Status History: " . 
+                      ($history?->status_karyawan ?? 'NULL') . " | Status Final: {$statusKaryawan}");
+
+            /*
+            |--------------------------------------------------------------------------
+            | Hanya proses status yang diperbolehkan
+            |--------------------------------------------------------------------------
+            */
+            if (!in_array($statusLower, ['aktif', 'magang', 'kepala', 'kepala unit'])) {
+                Log::info("Profile {$p->nama} dilewati karena status: {$statusKaryawan}");
+                continue;
+            }
+
+            $isMagang = $statusLower === 'magang';
 
             // ==================== PERHITUNGAN HARI KERJA TRANSPORT ====================
-$hariKerjaMaksimal = 25;
-$tglMasuk = !empty($p->tgl_masuk)
-    ? Carbon::parse($p->tgl_masuk)->startOfDay()
-    : null;
+            $hariKerjaMaksimal = 25;
+            $tglMasuk = !empty($p->tgl_masuk)
+                ? Carbon::parse($p->tgl_masuk)->startOfDay()
+                : null;
 
-$hariKerjaEfektif = $hariKerjaMaksimal;
+            $hariKerjaEfektif = $hariKerjaMaksimal;
 
-if (
-    $tglMasuk &&
-    $tglMasuk->gte($startDate) &&
-    $tglMasuk->lte($endDate)
-) {
-    $hariTerlewat = 0;
+            if ($tglMasuk && $tglMasuk->gte($startDate) && $tglMasuk->lte($endDate)) {
+                $hariTerlewat = 0;
+                $cursor = $startDate->copy();
 
-    $cursor = $startDate->copy();
+                while ($cursor < $tglMasuk) {
+                    if ($cursor->dayOfWeek !== Carbon::SUNDAY) {
+                        $hariTerlewat++;
+                    }
+                    $cursor->addDay();
+                }
 
-    while ($cursor < $tglMasuk) {
+                $hariKerjaEfektif = max(0, $hariKerjaMaksimal - $hariTerlewat);
+            }
 
-        // Minggu tidak dihitung
-        if ($cursor->dayOfWeek !== Carbon::SUNDAY) {
-            $hariTerlewat++;
-        }
+            // ==================== POTONGAN ABSENSI ====================
+            $hariDipotong = 0;
+            $potongan = PotonganTunjangan::where('nama', $p->nama)
+                ->where('bulan', $bulanFormatYm)
+                ->first();
 
-        $cursor->addDay();
-    }
+            if ($potongan) {
+                $totalPotong = ($potongan->sakit ?? 0) +
+                               ($potongan->izin ?? 0) +
+                               ($potongan->alpa ?? 0) +
+                               ($potongan->tidak_aktif ?? 0) +
+                               ($potongan->lain_lain ?? 0);
 
-    $hariKerjaEfektif = max(
-        0,
-        $hariKerjaMaksimal - $hariTerlewat
-    );
-}
+                $hariDipotong = (int) floor($totalPotong / 24000);
+            }
 
-// ==================== POTONGAN ABSENSI ====================
-$hariDipotong = 0;
-
-$potongan = PotonganTunjangan::where('nama', $p->nama)
-    ->where('bulan', $bulanFormatYm)
-    ->first();
-
-if ($potongan) {
-
-    $totalPotong =
-        ($potongan->sakit ?? 0) +
-        ($potongan->izin ?? 0) +
-        ($potongan->alpa ?? 0) +
-        ($potongan->tidak_aktif ?? 0) +
-        ($potongan->lain_lain ?? 0);
-
-    $hariDipotong = (int) floor($totalPotong / 24000);
-}
-
-$hariTransport = max(
-    0,
-    $hariKerjaEfektif - $hariDipotong
-);
-
-$tambahan_transport = $hariTransport * 24000;
-
-Log::info([
-    'nama' => $p->nama,
-    'tgl_masuk' => $p->tgl_masuk,
-    'hari_efektif' => $hariKerjaEfektif,
-    'hari_potong' => $hariDipotong,
-    'hari_transport' => $hariTransport,
-]);
+            $hariTransport = max(0, $hariKerjaEfektif - $hariDipotong);
+            $tambahan_transport = $hariTransport * 24000;
 
             // ==================== RB & DURASI ====================
             $rbAwal = (str_contains(strtolower($p->jabatan ?? ''), 'kepala')) ? 40 : 30;
@@ -1044,7 +955,7 @@ Log::info([
                 'bulan'               => $labelBulan,
                 'profile_id'          => $p->id,
                 'posisi'              => $p->jabatan,
-                'status'              => $p->status_karyawan,
+                'status'              => $statusKaryawan,                    // ← Diperbaiki
                 'departemen'          => $p->departemen,
                 'bimba_unit'          => $p->bimba_unit ?? $p->biMBA_unit,
                 'no_cabang'           => $p->no_cabang,
@@ -1052,7 +963,7 @@ Log::info([
                 'nik'                 => $p->nik,
                 'jabatan'             => $p->jabatan,
                 'kategori'            => $p->kategori,
-                'status_karyawan'     => $p->status_karyawan,
+                'status_karyawan'     => $statusKaryawan,                    // ← Diperbaiki
 
                 'waktu_mgg'           => 'RB ' . $rbFinal,
                 'waktu_bln'           => $durasiFinal . ' Jam',
@@ -1061,7 +972,6 @@ Log::info([
                 'ktr'                 => $ktrInput ?: null,
                 'imbalan_pokok'       => round($imbalanPokokFull),
 
-                // TRANSPORT DINAMIS BERDASARKAN TGL MASUK
                 'tambahan_transport'  => $tambahan_transport,
                 'at_hari'             => $hariTransport,
 
@@ -1078,6 +988,7 @@ Log::info([
 
             $rekap->yang_dibayarkan = $rekap->total_imbalan - ($rekap->cicilan ?? 0);
 
+            // Khusus Magang
             if ($isMagang) {
                 $rekap->imbalan_pokok = 0;
                 $rekap->total_imbalan = 0;
@@ -1214,22 +1125,21 @@ Log::info([
     $profile = $rekap ? Profile::where('nama', $rekap->nama)->first() : null;
 
     /* ======================================================
-     * 🔥 FIX STATUS & KATEGORI (PALING PENTING)
+     * 🔥 PERBAIKAN STATUS - PRIORITAS DARI REKAP
      * ====================================================== */
-    $statusFinal = $profile->status_karyawan 
-        ?? $profile->status 
-        ?? $rekap->status 
-        ?? 'Aktif';
+    $statusFinal = trim($rekap->status ?? $rekap->status_karyawan ?? 
+                       $profile?->status_karyawan ?? $profile?->status ?? 'Aktif');
 
-    $kategoriFinal = strtolower(trim($statusFinal)) === 'magang'
-        ? 'Magang'
-        : 'Aktif';
+    $kategoriFinal = strtolower(trim($statusFinal)) === 'magang' ? 'Magang' : 'Aktif';
 
-    // override biar blade lama tetap aman
+    // Override ke rekap agar blade konsisten
     if ($rekap) {
-        $rekap->status   = $statusFinal;
-        $rekap->kategori = $kategoriFinal;
+        $rekap->status     = $statusFinal;
+        $rekap->kategori   = $kategoriFinal;
+        $rekap->status_karyawan = $statusFinal; // tambahan
     }
+
+    Log::info("INDEX SLIP STATUS - {$rekap?->nama} | Status Final: {$statusFinal} | Bulan: {$rekap?->bulan}");
 
     /* ======================================================
      * POTONGAN
@@ -1265,7 +1175,7 @@ Log::info([
     }
 
     /* ======================================================
-     * ADJUSTMENT (ANTI ERROR)
+     * ADJUSTMENT
      * ====================================================== */
     $adjustments = collect();
     $totalKekuranganAdj = 0;
@@ -1291,22 +1201,16 @@ Log::info([
 
                 if (str_contains($type, 'tambah')) {
                     $totalKekuranganAdj += $nominal;
-
                     if (!empty($adj->keterangan)) {
-                        $keteranganKekuranganAdj .=
-                            ($keteranganKekuranganAdj ? ' | ' : '') . $adj->keterangan;
+                        $keteranganKekuranganAdj .= ($keteranganKekuranganAdj ? ' | ' : '') . $adj->keterangan;
                     }
-
                 } elseif (str_contains($type, 'potong')) {
                     $totalKelebihanAdj += $nominal;
-
                     if (!empty($adj->keterangan)) {
-                        $keteranganKelebihanAdj .=
-                            ($keteranganKelebihanAdj ? ' | ' : '') . $adj->keterangan;
+                        $keteranganKelebihanAdj .= ($keteranganKelebihanAdj ? ' | ' : '') . $adj->keterangan;
                     }
                 }
             }
-
         } catch (\Exception $e) {
             Log::warning('Adjustment error: ' . $e->getMessage());
         }
@@ -1364,9 +1268,10 @@ Log::info([
         'totalPendapatan'         => $totalPendapatan,
         'yangDibayarkan'          => $yangDibayarkan,
 
-        // 🔥 tambahan biar fleksibel di blade
+        // 🔥 STATUS YANG DIPERBAIKI
         'statusFinal'             => $statusFinal,
         'kategoriFinal'           => $kategoriFinal,
+        'statusKaryawan'          => $statusFinal,   // tambahan untuk blade
     ]);
 }
 

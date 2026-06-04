@@ -311,31 +311,31 @@
                             </td>
 
                             <td class="text-center">
-    {{-- TOMBOL DETAIL BARU --}}
-    <a href="{{ route('students.show', $student) }}" 
-       class="btn btn-sm btn-primary me-1"
-       title="Lihat Detail Murid">
-        <i class="bi bi-eye"></i> Detail
-    </a>
+                            {{-- TOMBOL DETAIL BARU --}}
+                            <a href="{{ route('students.show', $student) }}" 
+                            class="btn btn-sm btn-primary me-1"
+                            title="Lihat Detail Murid">
+                                <i class="bi bi-eye"></i> Detail
+                            </a>
 
-    <button type="button" class="btn btn-sm btn-info text-white me-1 btn-show-history"
-        data-bs-toggle="modal" data-bs-target="#historyModal" 
-        data-student-id="{{ $student->id }}"
-        data-student-name="{{ $student->nama }}"
-        data-history-url="{{ route('students.history.json', $student) }}">
-        Histori
-    </button>
+                            <button type="button" class="btn btn-sm btn-info text-white me-1 btn-show-history"
+                                data-bs-toggle="modal" data-bs-target="#historyModal" 
+                                data-student-id="{{ $student->id }}"
+                                data-student-name="{{ $student->nama }}"
+                                data-history-url="{{ route('students.history.json', $student) }}">
+                                Histori
+                            </button>
 
-    @if(auth()->check() && auth()->user()->is_admin)
-        <form action="{{ route('students.destroy', $student) }}" method="POST" class="d-inline"
-            onsubmit="return confirm('Apakah Anda yakin ingin menghapus murid {{ $student->nama }}?');">
-            @csrf
-            @method('DELETE')
-            <button type="submit" class="btn btn-sm btn-danger">Hapus</button>
-        </form>
-    @endif
-</td>
-                        </tr>
+                            @if(auth()->check() && auth()->user()->is_admin)
+                                <form action="{{ route('students.destroy', $student) }}" method="POST" class="d-inline"
+                                    onsubmit="return confirm('Apakah Anda yakin ingin menghapus murid {{ $student->nama }}?');">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" class="btn btn-sm btn-danger">Hapus</button>
+                                </form>
+                            @endif
+                        </td>
+                                                </tr>
                     @empty
                         <tr>
                             <td colspan="17" class="text-center text-muted py-4">Tidak ada data murid yang ditemukan.</td>

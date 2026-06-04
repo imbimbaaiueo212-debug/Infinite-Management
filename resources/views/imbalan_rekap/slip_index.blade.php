@@ -220,6 +220,15 @@
             <div class="col left">
                 <div class="meta-table">
                     <table style="width:100%">
+                        <tr>
+<tr>
+    <td class="label">Status Relawan</td>
+    <td class="value">
+        <strong class="{{ strtolower($statusKaryawan ?? $rekap->status ?? 'Aktif') === 'magang' ? 'text-danger' : 'text-success' }}">
+            {{ $statusKaryawan ?? $rekap->status ?? $rekap->status_karyawan ?? 'Aktif' }}
+        </strong>
+    </td>
+</tr>
                         <tr><td class="label">Waktu /Mgg</td><td class="value"><strong>{{ optional($rekap)->waktu_mgg ?? '-' }}</strong></td></tr>
                         <tr><td class="label">Waktu /Bln</td><td class="value"><strong>{{ optional($rekap)->waktu_bln ?? '-' }}</strong></td></tr>
                         <tr><td class="label">Kategori</td><td class="value">{{ $rekap->ktr ?? optional($rekap)->status ?? '-' }}</td></tr>

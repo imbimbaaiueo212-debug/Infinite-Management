@@ -204,9 +204,17 @@
         <div class="table-left">
             <div class="table-title">Informasi Kinerja</div>
             <table>
+                <tr>
+                    <td class="label">Status Relawan</td>
+                    <td class="value text-end">
+                        <strong class="{{ strtolower($statusKaryawan ?? $rekap->status ?? 'Aktif') === 'magang' ? 'text-danger' : 'text-success' }}">
+                            {{ $statusKaryawan ?? $rekap->status ?? $rekap->status_karyawan ?? 'Aktif' }}
+                        </strong>
+                    </td>
+                </tr>
                 <tr><td>Waktu /Minggu</td><td class="text-end">{{ $rekap->waktu_mgg ?? '-' }}</td></tr>
                 <tr><td>Waktu /Bulan</td><td class="text-end">{{ $rekap->waktu_bln ?? '-' }}</td></tr>
-                <tr><td>Kategori</td><td class="text-end">{{ strtoupper($rekap->kategori ?? $rekap->status_karyawan ?? '-') }}</td></tr>
+                <tr><td>Kategori</td><td class="text-end">{{ $rekap->ktr ?? optional($rekap)->status ?? '-' }}</td></tr>
                 <tr><td>Durasi Kerja</td><td class="text-end">{{ $rekap->durasi_kerja ?? $masaKerja ?? '-' }}</td></tr>
                 <tr><td>Persentase</td><td class="text-end">{{ $rekap->persen ?? '-' }} %</td></tr>
                 <tr><td>Imbalan Pokok</td><td class="text-end">Rp {{ $rupiah($pokok) }}</td></tr>
