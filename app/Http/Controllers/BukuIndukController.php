@@ -23,7 +23,8 @@ use App\Services\GoogleFormService;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB; // Tambahan untuk ambil data units
-use Illuminate\Support\Facades\Auth; // Tambahan untuk cek user login
+use Illuminate\Support\Facades\Auth; // Tambahan untuk cek user login.
+use Illuminate\Support\Facades\Log; // Tambahan untuk logging
 
 class BukuIndukController extends Controller
 {
@@ -33,14 +34,29 @@ public function index(Request $request)
     $now = Carbon::now();
 
     // ========================================================
-    // AUTO UPDATE STATUS BARU → AKTIF (30 hari)
-    // ========================================================
-    BukuInduk::where('status', 'Baru')
-        ->whereNotNull('tgl_masuk')
-        ->whereDate('tgl_masuk', '<=', $now->copy()->subDays(30))
-        ->update([
-            'status' => 'Aktif'
-        ]);
+// AUTO UPDATE STATUS BARU → AKTIF (Pergantian Bulan)
+// ========================================================
+$updated = BukuInduk::where('status', 'Baru')
+    ->whereNotNull('tgl_masuk')
+    ->where(function ($q) {
+        // Kondisi 1: Bulan masuk sudah lewat (bulan sebelum bulan sekarang)
+        $q->whereRaw('DATE_FORMAT(tgl_masuk, "%Y-%m") < DATE_FORMAT(NOW(), "%Y-%m")')
+          
+          // Kondisi 2: Sudah masuk bulan berikutnya walaupun tanggal masih awal
+          ->orWhere(function ($sub) {
+              $sub->whereRaw('DATE_FORMAT(tgl_masuk, "%Y-%m") = DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 1 MONTH), "%Y-%m")');
+          });
+    })
+    ->update([
+        'status' => 'Aktif'
+    ]);
+
+if ($updated > 0) {
+    Log::info("✅ Auto Update Baru → Aktif berhasil", [
+        'jumlah' => $updated,
+        'bulan_sekarang' => now()->format('Y-m')
+    ]);
+}
 
     // ========================================================
 // AUTO UPDATE STATUS CUTI → AKTIF

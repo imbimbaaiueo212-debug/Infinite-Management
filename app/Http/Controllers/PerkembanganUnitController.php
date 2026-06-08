@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use App\Models\BukuInduk;
 use App\Models\Unit;
 use App\Models\MuridTrial;
+use App\Models\Student;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -49,7 +50,7 @@ class PerkembanganUnitController extends Controller
         }
     }
 
-    if ($bimba_unit_norm === '' || empty($no_cabang) || !$unitTerpilih) {
+    if (empty($bimba_unit_norm) || empty($no_cabang) || !$unitTerpilih) {
         return view('perkembangan_units.index', [
             'unitTerpilih' => null,
             'bimba_unit'   => $bimba_unit_input,
@@ -77,11 +78,7 @@ class PerkembanganUnitController extends Controller
              ->where('no_cabang', $no_cabang);
     }
 
-    // ... (MA1, MB, MK, MA, MTB, MTA tetap sama seperti sebelumnya) ...
-
-    // =============================================
-    // 1. MA1 = Kumulatif Aktif Awal Tahun
-    // =============================================
+    // MA1, MB, MK, MA (tetap sama)
     $ma1 = array_fill(0, 12, 0);
     $runningTotal = $base->clone()
         ->where('tgl_masuk', '<', Carbon::create($tahunMulai, 1, 1))
@@ -111,7 +108,6 @@ class PerkembanganUnitController extends Controller
         $ma1[$m - 1] = $runningTotal;
     }
 
-    // MB, MK, MA, MTB, MTA (tetap sama)
     $mb = array_fill(0, 12, 0);
     $queryBaru = $base->clone()->whereYear('tgl_masuk', $tahunMulai);
     if ($bulan !== null) $queryBaru->whereMonth('tgl_masuk', $bulan);
@@ -139,95 +135,98 @@ class PerkembanganUnitController extends Controller
             ->count();
     }
 
-    // MTB & MTA (tetap)
+    // =============================================
+    // MTB = Trial Baru (Student) - FILTER LEBIH FLEKSIBEL
+    // =============================================
     $mtb = array_fill(0, 12, 0);
-    $trialBaruQuery = MuridTrial::query()
-        ->whereYear('tanggal_trial_baru', $tahunMulai)
-        ->whereIn('status_trial', ['daftar_baru', 'baru', 'Trial Baru']);
+    $trialBaruQuery = Student::query()
+        ->where('source', 'trial')
+        ->where('trial_status', 'baru')
+        ->whereYear('created_at', $tahunMulai);
 
     if (!$isAdmin) {
-        $trialBaruQuery->where('bimba_unit', $user->bimba_unit)
-                       ->where('no_cabang', $user->no_cabang);
+        $trialBaruQuery->where(function ($q) use ($user) {
+            $q->where('bimba_unit', 'LIKE', "%{$user->bimba_unit}%")
+              ->orWhere('no_cabang', $user->no_cabang);
+        });
     } else {
-        $trialBaruQuery->whereRaw('TRIM(UPPER(bimba_unit)) = ?', [$bimba_unit_norm])
-                       ->where('no_cabang', $no_cabang);
+        $trialBaruQuery->where(function ($q) use ($bimba_unit_norm, $no_cabang) {
+            $q->whereRaw('TRIM(UPPER(bimba_unit)) = ?', [$bimba_unit_norm])
+              ->orWhere('bimba_unit', 'LIKE', "%{$bimba_unit_norm}%")
+              ->orWhere('no_cabang', $no_cabang);
+        });
     }
-    if ($bulan !== null) $trialBaruQuery->whereMonth('tanggal_trial_baru', $bulan);
-    $trialBaruData = $trialBaruQuery->selectRaw('MONTH(tanggal_trial_baru) as bulan, COUNT(*) as jumlah')
-                                    ->groupBy('bulan')->pluck('jumlah', 'bulan');
-    foreach ($trialBaruData as $bln => $jumlah) $mtb[$bln - 1] = (int) $jumlah;
 
+    if ($bulan !== null) {
+        $trialBaruQuery->whereMonth('created_at', $bulan);
+    }
+
+    $trialBaruData = $trialBaruQuery
+        ->selectRaw('MONTH(created_at) as bulan, COUNT(*) as jumlah')
+        ->groupBy('bulan')
+        ->pluck('jumlah', 'bulan');
+
+    foreach ($trialBaruData as $bln => $jumlah) {
+        $mtb[$bln - 1] = (int) $jumlah;
+    }
+
+    // =============================================
+    // MTA = Trial Aktif (MuridTrial) - FILTER LEBIH FLEKSIBEL
+    // =============================================
     $mta = array_fill(0, 12, 0);
     $trialAktifQuery = MuridTrial::query()
-        ->whereYear('tanggal_aktif', $tahunMulai)
-        ->where('status_trial', 'aktif')
-        ->whereNotNull('tanggal_aktif');
+        ->where('status_trial', 'aktif');
+
+    $trialAktifQuery->where(function ($q) use ($tahunMulai) {
+        $q->whereYear('tanggal_aktif', $tahunMulai)
+          ->orWhereYear('created_at', $tahunMulai);
+    });
 
     if (!$isAdmin) {
-        $trialAktifQuery->where('bimba_unit', $user->bimba_unit)
-                        ->where('no_cabang', $user->no_cabang);
+        $trialAktifQuery->where(function ($q) use ($user) {
+            $q->where('bimba_unit', 'LIKE', "%{$user->bimba_unit}%")
+              ->orWhere('no_cabang', $user->no_cabang);
+        });
     } else {
-        $trialAktifQuery->whereRaw('TRIM(UPPER(bimba_unit)) = ?', [$bimba_unit_norm])
-                        ->where('no_cabang', $no_cabang);
+        $trialAktifQuery->where(function ($q) use ($bimba_unit_norm, $no_cabang) {
+            $q->whereRaw('TRIM(UPPER(bimba_unit)) = ?', [$bimba_unit_norm])
+              ->orWhere('bimba_unit', 'LIKE', "%{$bimba_unit_norm}%")
+              ->orWhere('no_cabang', $no_cabang);
+        });
     }
-    if ($bulan !== null) $trialAktifQuery->whereMonth('tanggal_aktif', $bulan);
-    $trialAktifData = $trialAktifQuery->selectRaw('MONTH(tanggal_aktif) as bulan, COUNT(*) as jumlah')
-                                      ->groupBy('bulan')->pluck('jumlah', 'bulan');
-    foreach ($trialAktifData as $bln => $jumlah) $mta[$bln - 1] = (int) $jumlah;
-
-    // =============================================
-    // BNF = S3B1, S3B2, S3B3
-    // =============================================
-    $bnf = array_fill(0, 12, 0);
-    $bnfQuery = $base->clone()
-        ->whereIn('gol', ['S3B1', 'S3B2', 'S3B3']);
 
     if ($bulan !== null) {
-        $bnfQuery->whereMonth('tgl_masuk', $bulan);
+        $trialAktifQuery->where(function ($q) use ($bulan) {
+            $q->whereMonth('tanggal_aktif', $bulan)
+              ->orWhereMonth('created_at', $bulan);
+        });
     }
 
+    $trialAktifData = $trialAktifQuery
+        ->selectRaw('MONTH(COALESCE(tanggal_aktif, created_at)) as bulan, COUNT(*) as jumlah')
+        ->groupBy('bulan')
+        ->pluck('jumlah', 'bulan');
+
+    foreach ($trialAktifData as $bln => $jumlah) {
+        $mta[$bln - 1] = (int) $jumlah;
+    }
+
+    // BNF & D (tetap)
+    $bnf = array_fill(0, 12, 0);
+    $bnfQuery = $base->clone()->whereIn('gol', ['S3B1', 'S3B2', 'S3B3']);
+    if ($bulan !== null) $bnfQuery->whereMonth('tgl_masuk', $bulan);
     $bnfData = $bnfQuery->selectRaw('MONTH(tgl_masuk) as bulan, COUNT(*) as jumlah')
                         ->groupBy('bulan')->pluck('jumlah', 'bulan');
+    foreach ($bnfData as $bln => $jumlah) $bnf[$bln - 1] = (int) $jumlah;
 
-    foreach ($bnfData as $bln => $jumlah) {
-        $bnf[$bln - 1] = (int) $jumlah;
-    }
-
-    // =============================================
-    // D = Dhuafa (Golongan D)
-    // =============================================
     $d = array_fill(0, 12, 0);
-    $dhuafaQuery = $base->clone()
-        ->where('gol', 'D');
-
-    if ($bulan !== null) {
-        $dhuafaQuery->whereMonth('tgl_masuk', $bulan);
-    }
-
+    $dhuafaQuery = $base->clone()->where('gol', 'D');
+    if ($bulan !== null) $dhuafaQuery->whereMonth('tgl_masuk', $bulan);
     $dhuafaData = $dhuafaQuery->selectRaw('MONTH(tgl_masuk) as bulan, COUNT(*) as jumlah')
                               ->groupBy('bulan')->pluck('jumlah', 'bulan');
+    foreach ($dhuafaData as $bln => $jumlah) $d[$bln - 1] = (int) $jumlah;
 
-    foreach ($dhuafaData as $bln => $jumlah) {
-        $d[$bln - 1] = (int) $jumlah;
-    }
-
-    // =============================================
-    // TOTAL ALL TIME (Untuk Card di bawah)
-    // =============================================
-    $totalBnfAllTime = $base->clone()
-        ->whereIn('gol', ['S3B1', 'S3B2', 'S3B3'])
-        ->count();
-
-    $totalDhuafaAllTime = $base->clone()
-        ->where('gol', 'D')
-        ->count();
-        
-
-    $sppPerBulan = $this->getSppPerBulan($tahunMulai, $bulan, $bimba_unit_norm);
-
-    // =============================================
-    // TOTAL BARIS (per tahun)
-    // =============================================
+    // TOTAL
     $total_mb  = array_sum($mb);
     $total_mk  = array_sum($mk);
     $total_ma  = !empty($ma)  ? end($ma)  : 0;
@@ -237,9 +236,9 @@ class PerkembanganUnitController extends Controller
     $total_bnf = !empty($bnf) ? end($bnf) : 0;
     $total_d   = !empty($d)   ? end($d)   : 0;
 
-    
+    $totalMuridKeseluruhan = $total_ma1 + $total_mk;
 
-    $totalMuridKeseluruhan = $total_ma1 + $total_mk;   // MA1 akhir + semua yang pernah keluar
+    $sppPerBulan = $this->getSppPerBulan($tahunMulai, $bulan, $bimba_unit_norm);
 
     return view('perkembangan_units.index', [
         'unitTerpilih'       => $unitTerpilih,
@@ -256,15 +255,7 @@ class PerkembanganUnitController extends Controller
         'bnf'  => $bnf,
         'd'    => $d,
         'sppPerBulan'        => $sppPerBulan,
-
-        // Total All Time
-        'totalBnfAllTime'    => $totalBnfAllTime,
-        'totalDhuafaAllTime' => $totalDhuafaAllTime,
-
-        // Tambahkan ini:
         'totalMuridKeseluruhan' => $totalMuridKeseluruhan,
-
-        // Total per tahun
         'total_mb'  => $total_mb,
         'total_mk'  => $total_mk,
         'total_ma'  => $total_ma,
