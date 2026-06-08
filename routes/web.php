@@ -255,8 +255,9 @@ Route::get('/murid-trials/{murid_trial}/mutasi-masuk', [MuridTrialController::cl
 Route::post('/murid-trials/{murid_trial}/mutasi-masuk', [MuridTrialController::class, 'storeMutationFromTrial'])
     ->name('murid_trials.mutation_store')->middleware('auth');
 
+// Route untuk update guru trial
 Route::patch('/murid-trials/{murid_trial}/guru', [MuridTrialController::class, 'updateGuru'])
-    ->name('murid_trials.update_guru')->middleware('auth');
+     ->name('murid_trials.update_guru');
 
 Route::resource('students', StudentController::class)->only(['index', 'create', 'store'])->middleware('auth');
 Route::post('students/{student}/mutasi-masuk', [StudentController::class, 'mutasiMasuk'])
@@ -842,6 +843,7 @@ Route::post('/students/import/google', [StudentController::class, 'importFromShe
     ->name('students.import')->middleware('auth');
 Route::patch('students/{student}/phone', [StudentController::class, 'updatePhone'])
     ->name('students.updatePhone');
+    
 
 Route::resource('mutations', MutationController::class)->middleware('auth');
 

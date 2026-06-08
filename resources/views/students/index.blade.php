@@ -267,31 +267,35 @@
         $statusClass = 'bg-secondary text-dark';
 
         if ($student->source === 'trial') {
-            if ($student->trial_status === 'baru') {
-                $statusText = 'Trial Baru';
-                $statusClass = 'bg-warning text-dark';
-            } elseif ($student->trial_status === 'aktif') {
-                $statusText = 'Trial Aktif';
-                $statusClass = 'bg-info text-dark';
-            } else {
-                $statusText = 'Trial';
-                $statusClass = 'bg-primary text-white';
-            }
-        } 
-        elseif ($student->murid_trial_id) {
-            $trialStatus = optional($student->muridTrial)->status_trial ?? 'aktif';
-            $statusText = match($trialStatus) {
-                'lanjut_daftar' => 'Lanjut Daftar',
-                'batal'         => 'Trial Batal',
-                'mutasi'        => 'Mutasi',
-                default         => 'Trial Aktif'
-            };
-            $statusClass = match($trialStatus) {
-                'lanjut_daftar' => 'bg-success text-white',
-                'batal'         => 'bg-danger text-white',
-                default         => 'bg-info text-dark',
-            };
-        }
+
+    switch(strtolower($student->trial_status ?? '')) {
+
+        case 'baru':
+            $statusText = 'Trial Baru';
+            $statusClass = 'bg-warning text-dark';
+            break;
+
+        case 'aktif':
+            $statusText = 'Trial Aktif';
+            $statusClass = 'bg-info text-dark';
+            break;
+
+        case 'batal':
+            $statusText = 'Trial Batal';
+            $statusClass = 'bg-danger text-white';
+            break;
+
+        case 'lanjut_daftar':
+            $statusText = 'Lanjut Daftar';
+            $statusClass = 'bg-success text-white';
+            break;
+
+        default:
+            $statusText = 'Trial';
+            $statusClass = 'bg-primary text-white';
+            break;
+    }
+}
     @endphp
 
     <span class="badge {{ $statusClass }}">{{ $statusText }}</span>

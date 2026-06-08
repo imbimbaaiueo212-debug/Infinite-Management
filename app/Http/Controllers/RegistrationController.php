@@ -623,6 +623,7 @@ public function store(Request $request)
             $year  = $m[3];
             return "{$year}-{$month}-{$day}";
         }
+        
 
         return null;
     };
@@ -773,6 +774,11 @@ public function store(Request $request)
             );
         }
     });
+
+    // Setelah simpan registrasi
+    if ($reg) {
+        $this->syncRegistrationToTrial($reg);
+    }
 
     $this->createOrUpdateHumaFromStudent($student);
 
@@ -1055,6 +1061,7 @@ if ($data['status'] === 'accepted') {
 
         // === TAMBAHKAN INI: Buat/Update HUMAS Otomatis ===
         $this->createOrUpdateHumaFromStudent($student);
+        $this->syncRegistrationToTrial($registration);
     }
 
     // Redirect
@@ -1643,4 +1650,35 @@ protected function createOrUpdateHumaFromStudent(Student $student): void
         ]);
     }
 }
+
+
+    /**
+     * Sinkronisasi status Registration ke MuridTrial
+     */
+    protected function syncRegistrationToTrial(Registration $registration): void
+    {
+        if (!$registration->student || !$registration->student->muridTrial) {
+            return;
+        }
+
+        $trial = $registration->student->muridTrial;
+        $newTrialStatus = match ($registration->status) {
+            'rejected', 'batal' => 'aktif',           // Kembali ke Trial Aktif
+            'accepted'          => 'lanjut_daftar',   // atau 'terdaftar' kalau mau
+            default             => $trial->status_trial,
+        };
+
+        if ($trial->status_trial !== $newTrialStatus) {
+            $trial->update([
+                'status_trial'  => $newTrialStatus,
+                'tanggal_aktif' => $newTrialStatus === 'aktif' ? now()->format('Y-m-d') : null,
+            ]);
+
+            Log::info('🔄 Sinkronisasi Registration → MuridTrial', [
+                'registration_status' => $registration->status,
+                'trial_status_baru'   => $newTrialStatus,
+                'nama'                => $trial->nama,
+            ]);
+        }
+    }
 }

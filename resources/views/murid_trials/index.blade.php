@@ -124,9 +124,14 @@
                                     </td>
 
                                     {{-- GURU TRIAL --}}
-                                    <td>
-    <form action="{{ route('murid_trials.update_guru', $murid->id) }}" method="POST" class="guru-form">
+                                       <td>
+    <form action="{{ route('murid_trials.update_guru', $murid->id) }}" 
+          method="POST" 
+          class="guru-form">
+        
         @csrf
+        @method('PATCH')   {{-- JANGAN DIHAPUS --}}
+
         <div class="input-group input-group-sm">
             <select name="guru_trial" 
                     class="form-select form-select-sm"
@@ -135,9 +140,11 @@
                     style="{{ $murid->is_locked_guru ? 'background-color: #f8f9fa; cursor: not-allowed; opacity: 0.7;' : '' }}">
 
                 <option value="">- Pilih Guru -</option>
+                
                 @foreach($daftarGuru as $key => $label)
                     <option value="{{ $key }}" 
-                            {{ old('guru_trial', $murid->guru_trial) == $key ? 'selected' : '' }}>
+                            {{ old('guru_trial', $murid->guru_trial) == $key || 
+                               $murid->guru_trial == $key ? 'selected' : '' }}>
                         {{ $label }}
                     </option>
                 @endforeach

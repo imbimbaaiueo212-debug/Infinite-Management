@@ -90,9 +90,11 @@ class MuridTrialController extends Controller
         });
     }
 
-$murid_trials = $query->paginate(25)->withQueryString();
+    $murid_trials = $query->paginate(25)->withQueryString();
 
+// FORCE CHECK SEMUA DATA
 foreach ($murid_trials as $murid) {
+    $this->processStatusPromotion($murid);   // ← Tambahkan ini
     $murid->is_locked_guru = $this->isLockedForGuruTrial($murid, $isAdmin);
 }
     // =============================================
@@ -105,52 +107,57 @@ foreach ($murid_trials as $murid) {
             'label' => trim(($u->no_cabang ?? '') . ' - ' . ($u->biMBA_unit ?? '')),
         ]);
 
-    // =============================================
-    // DAFTAR GURU + KEPALA UNIT
-    // =============================================
-    $daftarGuru = ['' => '- Pilih Guru -'];
+   // =============================================
+// DAFTAR GURU + KEPALA UNIT
+// =============================================
+$daftarGuru = [];   // ← JANGAN ISI DEFAULT DI SINI
 
-    $guruQuery = Profile::guru();
-    $kepalaUnitQuery = Profile::whereRaw('LOWER(jabatan) LIKE ?', ['%kepala unit%'])
-                        ->orWhereRaw('LOWER(jabatan) LIKE ?', ['%kepala cabang%'])
-                        ->orWhereRaw('LOWER(jabatan) LIKE ?', ['%kepsek%']);
+// Ambil semua guru
+$guruQuery = Profile::guru();
 
-    // Filter guru sesuai unit user (non-admin)
-    if (!$isAdmin) {
-        $userUnit = trim($user->bimba_unit ?? '');
-        if ($userUnit) {
-            $guruQuery->where('bimba_unit', 'LIKE', "%{$userUnit}%");
-            $kepalaUnitQuery->where('bimba_unit', 'LIKE', "%{$userUnit}%");
-        }
+if (!$isAdmin) {
+    $userUnit = trim($user->bimba_unit ?? '');
+    if ($userUnit) {
+        $guruQuery->where('bimba_unit', 'LIKE', "%{$userUnit}%");
     }
+}
 
-    $gurus       = $guruQuery->get()->unique('nama')->sortBy('nama');
-    $kepalaUnits = $kepalaUnitQuery->get()->unique('nama')->sortBy('nama');
+$gurus = $guruQuery->get();
 
-    // Gabung ke dropdown
-    foreach ($gurus as $g) {
-        $label = trim($g->nama);
-        if ($g->bimba_unit) {
-            $label .= ' - ' . $g->bimba_unit;
-        }
-        $daftarGuru[$g->nama] = $label;
+foreach ($gurus as $g) {
+    if (empty($g->nama)) continue;
+    
+    $label = trim($g->nama);
+    if ($g->bimba_unit) {
+        $label .= ' - ' . trim($g->bimba_unit);
     }
+    
+    $daftarGuru[$g->nama] = $label;
+}
 
-    foreach ($kepalaUnits as $ku) {
-        $label = trim($ku->nama);
-        if ($ku->bimba_unit) {
-            $label .= ' - ' . $ku->bimba_unit;
-        }
-        $label .= ' (Kepala Unit)';
+// Tambahkan Kepala Unit
+$kepalaUnits = Profile::whereRaw('LOWER(jabatan) LIKE ?', ['%kepala unit%'])
+                ->orWhereRaw('LOWER(jabatan) LIKE ?', ['%kepala cabang%'])
+                ->orWhereRaw('LOWER(jabatan) LIKE ?', ['%kepsek%'])
+                ->get();
 
-        $key = $ku->nama;
-        if (isset($daftarGuru[$key])) {
-            $key .= ' (KU)';
-        }
-        $daftarGuru[$key] = $label;
+foreach ($kepalaUnits as $ku) {
+    if (empty($ku->nama)) continue;
+    
+    $label = trim($ku->nama);
+    if ($ku->bimba_unit) {
+        $label .= ' - ' . trim($ku->bimba_unit);
     }
+    $label .= ' (Kepala Unit)';
 
-    asort($daftarGuru);
+    $key = $ku->nama;
+    if (isset($daftarGuru[$key])) {
+        $key .= ' (KU)';
+    }
+    $daftarGuru[$key] = $label;
+}
+
+asort($daftarGuru);   // Urutkan alfabetis
 
     return view('murid_trials.index', compact(
         'murid_trials',
@@ -328,86 +335,111 @@ protected function isLockedForGuruTrial(MuridTrial $murid, bool $isAdmin): bool
         ->with('success', $message);
 }
 
-    protected function processStatusPromotion(MuridTrial $murid_trial): array
-{
-    // === FORCE CHECK PALING KUAT ===
-    if ($murid_trial->student) {
-        $student = $murid_trial->student;
-
-        $sudahBukuInduk = \App\Models\BukuInduk::where('nim', $student->nim)->exists();
-        $sudahAccepted  = $student->registrations()
-                            ->where('status', 'accepted')
-                            ->where('tahun_ajaran', Registration::currentAcademicYear() ?? date('Y'))
-                            ->exists();
-
-        if (($sudahBukuInduk || $sudahAccepted) && $murid_trial->status_trial !== 'lanjut_daftar') {
-            
-            $murid_trial->update([
-                'status_trial'  => 'lanjut_daftar',
-                'tanggal_aktif' => null,
-            ]);
-
-            Log::info('🔄 AUTO UPGRADE ke LANJUT DAFTAR', [
-                'murid_trial_id' => $murid_trial->id,
-                'nama'           => $murid_trial->nama,
-                'nim'            => $student->nim ?? '-',
-                'reason'         => $sudahBukuInduk ? 'Buku Induk' : 'Registration Accepted'
-            ]);
-        }
-    }
-
-    // LANJUT DAFTAR
-    if ($murid_trial->status_trial === 'lanjut_daftar') {
-        $student = $murid_trial->student ?? $this->ensureStudentFor($murid_trial);
-
-        ParentCommitment::updateOrCreate(
-            ['murid_trial_id' => $murid_trial->id],
-            [
-                'parent_name' => $murid_trial->orangtua ?: 'Orang Tua',
-                'child_name'  => $murid_trial->nama,
-                'phone'       => $murid_trial->no_telp,
-                'address'     => $murid_trial->alamat,
-                'agreed'      => true,
-                'signed_at'   => now(),
-                'student_id'  => $student->id,
-            ]
-        );
-
-        return [
-            'type'    => 'success',
-            'message' => "Status Lanjut Daftar - Form pendaftaran siap untuk {$student->nama}",
-            'action'  => 'registration_create',
-            'params'  => [
-                'student_id'   => $student->id,
-                'tahun_ajaran' => Registration::currentAcademicYear(),
-                'from_trial'   => true,
-            ],
-        ];
-    }
-
-    // STATUS LAINNYA (tetap seperti sebelumnya)
-    if ($murid_trial->status_trial === 'baru') {
-        $this->ensureStudentFor($murid_trial);
-        return ['type' => 'success', 'message' => 'Status: BARU'];
-    }
-
-    if ($murid_trial->status_trial === 'aktif') {
-        $this->ensureStudentFor($murid_trial);
-        $tgl = $murid_trial->tanggal_aktif?->format('d-m-Y') ?? 'hari ini';
-        return ['type' => 'info', 'message' => "Trial AKTIF sejak: {$tgl}"];
-    }
-
-    if ($murid_trial->status_trial === 'batal') {
+            protected function processStatusPromotion(MuridTrial $murid_trial): array
+    {
+        // FORCE CHECK LANJUT DAFTAR
         if ($murid_trial->student) {
-            $murid_trial->student->registrations()
-                ->where('tahun_ajaran', Registration::currentAcademicYear())
-                ->update(['status' => 'rejected']);
+            $student = $murid_trial->student;
+
+            $sudahBukuInduk = \App\Models\BukuInduk::where('nim', $student->nim)->exists();
+            $sudahAccepted  = $student->registrations()
+                                ->where('status', 'accepted')
+                                ->exists();
+
+            if (($sudahBukuInduk || $sudahAccepted) && $murid_trial->status_trial !== 'lanjut_daftar') {
+                $murid_trial->update([
+                    'status_trial'  => 'lanjut_daftar',
+                    'tanggal_aktif' => null,
+                ]);
+                Log::info('🔄 AUTO UPGRADE ke LANJUT DAFTAR', [
+                    'murid_trial_id' => $murid_trial->id,
+                    'nama'           => $murid_trial->nama,
+                ]);
+            }
         }
-        return ['type' => 'warning', 'message' => 'Status: BATAL.'];
+
+        // === SINKRONISASI KE STUDENT TABLE ===
+        $this->syncTrialStatusToStudent($murid_trial);
+
+        // SINKRON BATAL KE STUDENT
+        $this->syncBatalToStudent($murid_trial);
+
+        // LANJUT DAFTAR
+        if ($murid_trial->status_trial === 'lanjut_daftar') {
+            $student = $murid_trial->student ?? $this->ensureStudentFor($murid_trial);
+
+            ParentCommitment::updateOrCreate(
+                ['murid_trial_id' => $murid_trial->id],
+                [
+                    'parent_name' => $murid_trial->orangtua ?: 'Orang Tua',
+                    'child_name'  => $murid_trial->nama,
+                    'phone'       => $murid_trial->no_telp,
+                    'address'     => $murid_trial->alamat,
+                    'agreed'      => true,
+                    'signed_at'   => now(),
+                    'student_id'  => $student->id,
+                ]
+            );
+
+            return [
+                'type'    => 'success',
+                'message' => "Status Lanjut Daftar - Form pendaftaran siap",
+                'action'  => 'registration_create',
+                'params'  => [
+                    'student_id'   => $student->id,
+                    'tahun_ajaran' => Registration::currentAcademicYear(),
+                    'from_trial'   => true,
+                ],
+            ];
+        }
+
+        // STATUS LAINNYA
+        if ($murid_trial->status_trial === 'baru') {
+            $this->ensureStudentFor($murid_trial);
+            return ['type' => 'success', 'message' => 'Status: BARU'];
+        }
+
+        if ($murid_trial->status_trial === 'aktif') {
+            $this->ensureStudentFor($murid_trial);
+            $tgl = $murid_trial->tanggal_aktif?->format('d-m-Y') ?? 'hari ini';
+            return ['type' => 'info', 'message' => "Trial AKTIF sejak: {$tgl}"];
+        }
+
+        if ($murid_trial->status_trial === 'batal') {
+            return ['type' => 'warning', 'message' => 'Status: BATAL.'];
+        }
+
+        return ['type' => 'success', 'message' => 'Status diperbarui.'];
     }
 
-    return ['type' => 'success', 'message' => 'Status diperbarui.'];
-}
+    /**
+     * Sinkronisasi status MuridTrial ke Student (khusus lanjut_daftar)
+     */
+    protected function syncTrialStatusToStudent(MuridTrial $murid_trial): void
+    {
+        if (!$murid_trial->student) {
+            return;
+        }
+
+        $newStatus = match ($murid_trial->status_trial) {
+            'lanjut_daftar' => 'lanjut_daftar',
+            'batal'         => 'batal',
+            'aktif'         => 'aktif',
+            default         => $murid_trial->status_trial,
+        };
+
+        if ($murid_trial->student->trial_status !== $newStatus) {
+            $murid_trial->student->update([
+                'trial_status' => $newStatus,
+            ]);
+
+            Log::info('✅ Sinkronisasi status ke Student berhasil', [
+                'nama'          => $murid_trial->nama,
+                'trial_status'  => $murid_trial->status_trial,
+                'student_status'=> $newStatus,
+            ]);
+        }
+    }
 
     protected function ensureStudentFor(MuridTrial $murid_trial): Student
     {
@@ -447,27 +479,24 @@ protected function isLockedForGuruTrial(MuridTrial $murid, bool $isAdmin): bool
 
     public function updateGuru(Request $request, MuridTrial $muridTrial)
 {
-    // Validasi: boleh kosong (nullable), bukan required
     $validated = $request->validate([
-        'guru_trial' => 'nullable|string|max:255',  // ← ubah ke nullable
+        'guru_trial' => 'nullable|string|max:255',
     ]);
 
-    // Ambil nilai dengan aman (default null jika tidak ada)
-    $guruBaru = $request->input('guru_trial');  // atau $validated['guru_trial'] ?? null
+    $guruBaru = $validated['guru_trial'] ?? null;
 
-    // Jika dikirim string kosong → jadikan null
-    if ($guruBaru === '') {
+    // Jika user memilih "- Pilih Guru -" (kosong), simpan sebagai null
+    if ($guruBaru === '' || $guruBaru === '- Pilih Guru -') {
         $guruBaru = null;
     }
 
-    // Update
     $muridTrial->update([
         'guru_trial' => $guruBaru,
     ]);
 
     $message = $guruBaru 
-        ? "Guru trial diperbarui menjadi: {$guruBaru}"
-        : 'Guru trial berhasil dikosongkan';
+        ? "✅ Guru trial diperbarui menjadi: {$guruBaru}"
+        : '✅ Guru trial berhasil dikosongkan';
 
     return back()->with('success', $message);
 }
@@ -523,5 +552,30 @@ protected function isLockedForGuruTrial(MuridTrial $murid, bool $isAdmin): bool
         ]);
     }
 }
+
+
+    /**
+     * Sinkronisasi status batal ke Student
+     */
+    protected function syncBatalToStudent(MuridTrial $murid_trial): void
+    {
+        if ($murid_trial->status_trial === 'batal' && $murid_trial->student) {
+            $murid_trial->student->update([
+                'trial_status' => 'batal',
+            ]);
+
+            // Tolak registrasi yang masih pending
+            $murid_trial->student->registrations()
+                ->where('tahun_ajaran', Registration::currentAcademicYear())
+                ->whereIn('status', ['pending', 'verified'])
+                ->update(['status' => 'rejected']);
+
+            Log::info('Status BATAL disinkronkan ke Student', [
+                'murid_trial_id' => $murid_trial->id,
+                'student_id'     => $murid_trial->student->id,
+                'nama'           => $murid_trial->nama
+            ]);
+        }
+    }
 
 }

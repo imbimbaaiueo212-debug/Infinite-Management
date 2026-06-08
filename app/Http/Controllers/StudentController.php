@@ -439,10 +439,7 @@ if (!$isAdmin) {
             ->with('success', 'Berhasil promote ke Students. Buku Induk akan dibuat saat registrasi di-accept.');
     }
 
-    // -------------------------------------------------------------------------
-    // Accept registration -> create Buku Induk
-    // -------------------------------------------------------------------------
-    public function acceptRegistration(Student $student)
+   public function acceptRegistration(Student $student)
 {
     $bi = BukuInduk::where('nim', $student->nim)->first();
 
@@ -457,19 +454,8 @@ if (!$isAdmin) {
         });
     }
 
-    // === PERBAIKAN UTAMA: Ubah status MuridTrial menjadi LANJUT DAFTAR ===
-    if ($student->muridTrial) {
-        $student->muridTrial->update([
-            'status_trial' => 'lanjut_daftar',
-            // 'tanggal_aktif' => null, // opsional
-        ]);
-
-        Log::info('MuridTrial otomatis diubah ke Lanjut Daftar setelah masuk Buku Induk', [
-            'student_id' => $student->id,
-            'nama'       => $student->nama,
-            'nim'        => $student->nim,
-        ]);
-    }
+    // FORCE UPDATE PALING KUAT
+    $this->forceUpdateTrialToLanjutDaftar($student);
 
     StudentHistory::create([
         'student_id' => $student->id,
@@ -481,7 +467,40 @@ if (!$isAdmin) {
 
     return redirect()
         ->route('students.edit', $student->id)
-        ->with('success', 'Pendaftaran berhasil diterima. Buku Induk telah dibuat & status trial diubah menjadi Lanjut Daftar.');
+        ->with('success', 'Pendaftaran berhasil diterima. Status trial diubah menjadi Lanjut Daftar.');
+}
+
+/**
+ * FORCE UPDATE PALING AGRESIF
+ */
+protected function forceUpdateTrialToLanjutDaftar(Student $student): void
+{
+    DB::transaction(function () use ($student) {
+        // 1. Via relasi
+        if ($student->muridTrial) {
+            $student->muridTrial->update([
+                'status_trial'  => 'lanjut_daftar',
+                'tanggal_aktif' => null,
+            ]);
+            Log::info('[FORCE] MuridTrial updated to lanjut_daftar via relation', ['nama' => $student->nama]);
+            return;
+        }
+
+        // 2. Cari via nama + student_id
+        $trial = MuridTrial::where('nama', 'LIKE', "%{$student->nama}%")
+            ->orWhere('id', function ($q) use ($student) {
+                $q->select('murid_trial_id')->from('students')->where('id', $student->id);
+            })
+            ->first();
+
+        if ($trial) {
+            $trial->update([
+                'status_trial'  => 'lanjut_daftar',
+                'tanggal_aktif' => null,
+            ]);
+            Log::info('[FORCE] MuridTrial updated to lanjut_daftar via search', ['nama' => $student->nama]);
+        }
+    });
 }
 
     // -------------------------------------------------------------------------
@@ -1515,4 +1534,6 @@ public function reactivate(Student $student)
 
     return view('students.show', compact('student'));
 }
+
+
 }
