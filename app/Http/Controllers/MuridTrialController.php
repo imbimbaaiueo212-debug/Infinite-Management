@@ -90,12 +90,11 @@ class MuridTrialController extends Controller
         });
     }
 
-    $murid_trials = $query->paginate(25)->withQueryString();
+$murid_trials = $query->paginate(25)->withQueryString();
 
-    Log::info('DEBUG MURID TRIAL SELESAI', [
-        'total_data_ditemukan' => $murid_trials->total()
-    ]);
-
+foreach ($murid_trials as $murid) {
+    $murid->is_locked_guru = $this->isLockedForGuruTrial($murid, $isAdmin);
+}
     // =============================================
     // UNIT OPTIONS
     // =============================================
@@ -158,8 +157,34 @@ class MuridTrialController extends Controller
         'daftarGuru',
         'unitOptions',
         'plainSearch',
-        'status'
+        'status',
+        'isAdmin'
     ));
+}
+
+/**
+ * Cek apakah field guru_trial harus dikunci
+ */
+protected function isLockedForGuruTrial(MuridTrial $murid, bool $isAdmin): bool
+{
+    if ($isAdmin) {
+        return false; // Admin selalu boleh edit
+    }
+
+    // Jika belum punya relasi student → boleh edit
+    if (!$murid->student || empty($murid->student->nim)) {
+        return false;
+    }
+
+    // Cek apakah sudah masuk Buku Induk
+    $sudahBukuInduk = \App\Models\BukuInduk::where('nim', $murid->student->nim)->exists();
+
+    // Cek apakah registrasi sudah accepted
+    $sudahAccepted = $murid->student->registrations()
+                        ->where('status', 'accepted')
+                        ->exists();
+
+    return $sudahBukuInduk || $sudahAccepted;
 }
 
     public function store(Request $request)
@@ -304,67 +329,85 @@ class MuridTrialController extends Controller
 }
 
     protected function processStatusPromotion(MuridTrial $murid_trial): array
-    {
-        // LANJUT DAFTAR → buka form pendaftaran
-        if ($murid_trial->status_trial === 'lanjut_daftar') {
-            $student = $murid_trial->student ?? $this->ensureStudentFor($murid_trial);
+{
+    // === FORCE CHECK PALING KUAT ===
+    if ($murid_trial->student) {
+        $student = $murid_trial->student;
 
-            ParentCommitment::updateOrCreate(
-                ['murid_trial_id' => $murid_trial->id],
-                [
-                    'parent_name' => $murid_trial->orangtua ?: 'Orang Tua',
-                    'child_name'  => $murid_trial->nama,
-                    'phone'       => $murid_trial->no_telp,
-                    'address'     => $murid_trial->alamat,
-                    'agreed'      => true,
-                    'signed_at'   => now(),
-                    'student_id'  => $student->id,
-                ]
-            );
+        $sudahBukuInduk = \App\Models\BukuInduk::where('nim', $student->nim)->exists();
+        $sudahAccepted  = $student->registrations()
+                            ->where('status', 'accepted')
+                            ->where('tahun_ajaran', Registration::currentAcademicYear() ?? date('Y'))
+                            ->exists();
 
-            return [
-                'type'    => 'success',
-                'message' => "Membuka form pendaftaran untuk {$student->nama}...",
-                'action'  => 'registration_create',
-                'params'  => [
-                    'student_id'   => $student->id,
-                    'tahun_ajaran' => Registration::currentAcademicYear(),
-                    'from_trial'   => true,
-                ],
-            ];
+        if (($sudahBukuInduk || $sudahAccepted) && $murid_trial->status_trial !== 'lanjut_daftar') {
+            
+            $murid_trial->update([
+                'status_trial'  => 'lanjut_daftar',
+                'tanggal_aktif' => null,
+            ]);
+
+            Log::info('🔄 AUTO UPGRADE ke LANJUT DAFTAR', [
+                'murid_trial_id' => $murid_trial->id,
+                'nama'           => $murid_trial->nama,
+                'nim'            => $student->nim ?? '-',
+                'reason'         => $sudahBukuInduk ? 'Buku Induk' : 'Registration Accepted'
+            ]);
         }
-
-        // STATUS BARU → hanya penanda sudah diambil (TIDAK ada tanggal)
-        if ($murid_trial->status_trial === 'baru') {
-            $this->ensureStudentFor($murid_trial);
-            return [
-                'type'    => 'success',
-                'message' => 'Status: BARU – Murid sudah diambil menjadi murid tetap.',
-            ];
-        }
-
-        // STATUS AKTIF → punya tanggal aktif
-        if ($murid_trial->status_trial === 'aktif') {
-            $this->ensureStudentFor($murid_trial);
-            $tgl = $murid_trial->tanggal_aktif?->format('d-m-Y') ?? 'hari ini';
-            return [
-                'type'    => 'info',
-                'message' => "Trial AKTIF sejak: {$tgl}",
-            ];
-        }
-
-        // BATAL
-        if ($murid_trial->status_trial === 'batal') {
-            if ($murid_trial->student) {
-                $murid_trial->student->registrations()
-                    ->where('tahun_ajaran', Registration::currentAcademicYear())
-                    ->update(['status' => 'rejected']);
-            }
-            return ['type' => 'warning', 'message' => 'Status: BATAL.'];
-        }
-
-        return ['type' => 'success', 'message' => 'Status diperbarui.'];
     }
+
+    // LANJUT DAFTAR
+    if ($murid_trial->status_trial === 'lanjut_daftar') {
+        $student = $murid_trial->student ?? $this->ensureStudentFor($murid_trial);
+
+        ParentCommitment::updateOrCreate(
+            ['murid_trial_id' => $murid_trial->id],
+            [
+                'parent_name' => $murid_trial->orangtua ?: 'Orang Tua',
+                'child_name'  => $murid_trial->nama,
+                'phone'       => $murid_trial->no_telp,
+                'address'     => $murid_trial->alamat,
+                'agreed'      => true,
+                'signed_at'   => now(),
+                'student_id'  => $student->id,
+            ]
+        );
+
+        return [
+            'type'    => 'success',
+            'message' => "Status Lanjut Daftar - Form pendaftaran siap untuk {$student->nama}",
+            'action'  => 'registration_create',
+            'params'  => [
+                'student_id'   => $student->id,
+                'tahun_ajaran' => Registration::currentAcademicYear(),
+                'from_trial'   => true,
+            ],
+        ];
+    }
+
+    // STATUS LAINNYA (tetap seperti sebelumnya)
+    if ($murid_trial->status_trial === 'baru') {
+        $this->ensureStudentFor($murid_trial);
+        return ['type' => 'success', 'message' => 'Status: BARU'];
+    }
+
+    if ($murid_trial->status_trial === 'aktif') {
+        $this->ensureStudentFor($murid_trial);
+        $tgl = $murid_trial->tanggal_aktif?->format('d-m-Y') ?? 'hari ini';
+        return ['type' => 'info', 'message' => "Trial AKTIF sejak: {$tgl}"];
+    }
+
+    if ($murid_trial->status_trial === 'batal') {
+        if ($murid_trial->student) {
+            $murid_trial->student->registrations()
+                ->where('tahun_ajaran', Registration::currentAcademicYear())
+                ->update(['status' => 'rejected']);
+        }
+        return ['type' => 'warning', 'message' => 'Status: BATAL.'];
+    }
+
+    return ['type' => 'success', 'message' => 'Status diperbarui.'];
+}
 
     protected function ensureStudentFor(MuridTrial $murid_trial): Student
     {

@@ -124,20 +124,33 @@
                                     </td>
 
                                     {{-- GURU TRIAL --}}
-                                    <td class="text-center">
-                                        <form action="{{ route('murid_trials.update_guru', $murid->id) }}" method="POST"
-                                            class="d-inline">
-                                            @csrf @method('PATCH')
-                                            <select name="guru_trial" class="form-select form-select-sm"
-                                                style="min-width:180px;" onchange="this.form.submit(); this.disabled=true;">
-                                                @foreach($daftarGuru as $nama => $label)
-                                                    <option value="{{ $nama }}" {{ $murid->guru_trial === $nama ? 'selected' : '' }}>
-                                                        {{ $label }}
-                                                    </option>
-                                                @endforeach
-                                            </select>
-                                        </form>
-                                    </td>
+                                    <td>
+    <form action="{{ route('murid_trials.update_guru', $murid->id) }}" method="POST" class="guru-form">
+        @csrf
+        <div class="input-group input-group-sm">
+            <select name="guru_trial" 
+                    class="form-select form-select-sm"
+                    onchange="this.form.submit()"
+                    {{ $murid->is_locked_guru ? 'disabled' : '' }}
+                    style="{{ $murid->is_locked_guru ? 'background-color: #f8f9fa; cursor: not-allowed; opacity: 0.7;' : '' }}">
+
+                <option value="">- Pilih Guru -</option>
+                @foreach($daftarGuru as $key => $label)
+                    <option value="{{ $key }}" 
+                            {{ old('guru_trial', $murid->guru_trial) == $key ? 'selected' : '' }}>
+                        {{ $label }}
+                    </option>
+                @endforeach
+            </select>
+            
+            @if($murid->is_locked_guru)
+                <span class="input-group-text bg-light text-muted" title="Sudah masuk Buku Induk - Tidak dapat diubah">
+                    <i class="fas fa-lock"></i>
+                </span>
+            @endif
+        </div>
+    </form>
+</td>
 
                                     <td>{{ $murid->info ?: '-' }}</td>
                                     <td>{{ $murid->orangtua ?: '-' }}</td>
@@ -147,19 +160,22 @@
                                     {{-- KOLOM STATUS (HANYA DROPDOWN SAJA) --}}
                                     <td class="text-center">
                                         <form action="{{ route('murid_trials.updateStatus', $murid->id) }}" method="POST">
-                                            @csrf @method('PATCH')
+                                            @csrf 
+                                            @method('PATCH')
                                             <select name="status_trial" class="form-select form-select-sm" style="width:150px;"
                                                 onchange="this.form.submit()">
-                                                <option value="daftar_baru" {{ $murid->status_trial === 'daftar_baru' || is_null($murid->status_trial) ? 'selected' : '' }}>
-                                                    Daftar Baru (default)
-                                                </option>
-                                                <option value="baru" {{ $murid->status_trial == 'baru' ? 'selected' : '' }}>Trial
-                                                    Baru</option>
+                                                
                                                 <option value="aktif" {{ $murid->status_trial == 'aktif' ? 'selected' : '' }}>
-                                                    Trial Aktif</option>
-                                                <option value="lanjut_daftar" {{ $murid->status_trial == 'lanjut_daftar' ? 'selected' : '' }}>Lanjut Daftar</option>
+                                                    Trial Aktif
+                                                </option>
+                                                
+                                                <option value="lanjut_daftar" {{ $murid->status_trial == 'lanjut_daftar' ? 'selected' : '' }}>
+                                                    Lanjut Daftar
+                                                </option>
+                                                
                                                 <option value="batal" {{ $murid->status_trial == 'batal' ? 'selected' : '' }}>
-                                                    Batal</option>
+                                                    Batal
+                                                </option>
                                             </select>
                                         </form>
                                     </td>

@@ -443,39 +443,46 @@ if (!$isAdmin) {
     // Accept registration -> create Buku Induk
     // -------------------------------------------------------------------------
     public function acceptRegistration(Student $student)
-    {
-        $bi = BukuInduk::where('nim', $student->nim)->first();
-        if ($bi) {
-            $this->mergeStudentToBukuInduk($student, $bi);
-            return redirect()
-                ->route('students.edit', $student->id)
-                ->with('success', 'Buku Induk sudah ada; data digabung (merge) dengan perubahan dari Student.');
-        }
+{
+    $bi = BukuInduk::where('nim', $student->nim)->first();
 
+    if ($bi) {
+        $this->mergeStudentToBukuInduk($student, $bi);
+    } else {
         $biData = $this->buildBukuIndukPayload($student, true);
         $biData['tanggal_masuk'] = $student->tanggal_masuk ?? Carbon::now()->toDateString();
 
-        try {
-            DB::transaction(function () use ($student, $biData) {
-                $bukuInduk = BukuInduk::create($biData);
-
-                StudentHistory::create([
-                    'student_id' => $student->id,
-                    'user_id' => Auth::id(),
-                    'diff' => ['registration_status' => ['old' => 'Pending/Promoted', 'new' => 'Accepted (Buku Induk Created)']],
-                    'ip' => request()->ip(),
-                    'user_agent' => request()->userAgent(),
-                ]);
-            });
-
-            return redirect()
-                ->route('students.edit', $student->id)
-                ->with('success', 'Pendaftaran berhasil diterima. Buku Induk (NIM: ' . $student->nim . ') telah berhasil dibuat.');
-
-        } catch (\Exception $e) {
-            return back()->with('error', 'Gagal membuat Buku Induk. Error: ' . $e->getMessage());
-        }
+        $bi = DB::transaction(function () use ($student, $biData) {
+            return BukuInduk::create($biData);
+        });
     }
+
+    // === PERBAIKAN UTAMA: Ubah status MuridTrial menjadi LANJUT DAFTAR ===
+    if ($student->muridTrial) {
+        $student->muridTrial->update([
+            'status_trial' => 'lanjut_daftar',
+            // 'tanggal_aktif' => null, // opsional
+        ]);
+
+        Log::info('MuridTrial otomatis diubah ke Lanjut Daftar setelah masuk Buku Induk', [
+            'student_id' => $student->id,
+            'nama'       => $student->nama,
+            'nim'        => $student->nim,
+        ]);
+    }
+
+    StudentHistory::create([
+        'student_id' => $student->id,
+        'user_id' => Auth::id(),
+        'diff' => ['registration_status' => ['old' => 'Pending/Promoted', 'new' => 'Accepted (Buku Induk Created)']],
+        'ip' => request()->ip(),
+        'user_agent' => request()->userAgent(),
+    ]);
+
+    return redirect()
+        ->route('students.edit', $student->id)
+        ->with('success', 'Pendaftaran berhasil diterima. Buku Induk telah dibuat & status trial diubah menjadi Lanjut Daftar.');
+}
 
     // -------------------------------------------------------------------------
     // EDIT FORM
@@ -1130,6 +1137,7 @@ protected function preventDuplicateStudents(): void
     try {
         $trial = MuridTrial::create([
             'nama'               => $student->nama,
+            'tgl_mulai'          => $student->tanggal_masuk ?? now()->format('Y-m-d'),
             'status_trial'       => 'aktif',           // langsung aktif
             'kelas'              => $student->kelas ?? 'Reguler',
             'tgl_lahir'          => $student->tgl_lahir,
@@ -1140,8 +1148,9 @@ protected function preventDuplicateStudents(): void
             'guru_trial'         => $student->guru_wali,
             'bimba_unit'         => $student->bimba_unit,
             'no_cabang'          => $student->no_cabang,
-            'tanggal_trial_baru' => $student->tanggal_masuk 
-                ? Carbon::parse($student->tanggal_masuk)->format('Y-m-d') 
+            'tanggal_aktif'     => now()->format('Y-m-d'),
+            'tanggal_trial_baru' => $student->trial_started_at
+                ? Carbon::parse($student->trial_started_at)->format('Y-m-d')
                 : now()->format('Y-m-d'),
         ]);
 
