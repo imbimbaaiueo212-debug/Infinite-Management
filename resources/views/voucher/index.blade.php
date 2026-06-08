@@ -596,13 +596,18 @@
         setTimeout(() => { alert.classList.add('fade'); alert.addEventListener('transitionend', () => alert.remove()); }, 1800);
       }
 
-      async function sendInlineUpdate(id, field, value, inputEl) {
+                      async function sendInlineUpdate(id, field, value, inputEl) {
         const url = "{{ url('/voucher') }}/" + id + "/inline";
-        const payloadValue = (value === null || value === 'null' || value === '') ? null : value;
+        const payloadValue = (value === null || value === '' || value === 'null') ? null : value;
+
+        console.log('🟢 DEBUG JS →', { id, field, value: payloadValue });
 
         inputEl.classList.remove('is-invalid');
         const errorEl = document.getElementById('error-' + field + '-' + id);
-        if (errorEl) { errorEl.classList.add('d-none'); errorEl.innerText = ''; }
+        if (errorEl) { 
+            errorEl.classList.add('d-none'); 
+            errorEl.innerText = ''; 
+        }
 
         inputEl.disabled = true;
         let spinner = inputEl.parentNode.querySelector('.input-spinner');
@@ -616,87 +621,93 @@
         spinner.classList.add('show');
 
         try {
-          const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-        'X-CSRF-TOKEN': csrfToken,
-        'Accept': 'application/json'
-    },
-    body: formData
-});
+            const formData = new FormData();
+            formData.append('field', field);
+            formData.append('value', payloadValue !== null ? payloadValue : '');
 
-          const data = await res.json();
+            const res = await fetch(url, {
+                method: 'POST',                    // ← Ubah ke POST
+                headers: {
+                    'X-CSRF-TOKEN': csrfToken,
+                    'Accept': 'application/json'
+                },
+                body: formData
+            });
 
-          if (!res.ok) {
-            if (data && data.message) throw new Error(data.message);
-            throw new Error('Terjadi kesalahan saat menyimpan');
-          }
+            const data = await res.json();
+            console.log('🟡 Server Response:', data);
 
-          if (field === 'tanggal_penyerahan') {
-            const small = document.querySelector('.tanggal-format-' + id);
-            if (small) {
-              small.innerText = data.data.tanggal_penyerahan_formatted || 'Belum diisi';
+            if (!res.ok) {
+                throw new Error(data.message || 'Gagal menyimpan');
             }
 
-            const statusCell = document.querySelector('.status-cell-' + id);
-            if (statusCell) {
-              const newStatus = data.data.status;
-              let badgeHtml;
-              if (newStatus === 'Digunakan') {
-                badgeHtml = '<span class="badge bg-dark">Digunakan (Habis)</span>';
-              } else if (newStatus === 'penyerahan') {
-                badgeHtml = '<span class="badge bg-success">Penyerahan</span>';
-              } else {
-                badgeHtml = '<span class="badge bg-danger">Belum Diserahkan</span>';
-              }
-              statusCell.innerHTML = badgeHtml;
-            }
-          }
+            if (field === 'tanggal_penyerahan') {
+                const small = document.querySelector('.tanggal-format-' + id);
+                if (small) small.innerText = data.data.tanggal_penyerahan_formatted || 'Belum diisi';
 
-          inputEl.setAttribute('data-original', payloadValue === null ? '' : payloadValue);
-          showToast('Tersimpan', 'success');
+                const statusCell = document.querySelector('.status-cell-' + id);
+                if (statusCell && data.data.status) {
+                    let badgeHtml = '<span class="badge bg-danger">Belum Diserahkan</span>';
+                    if (data.data.status === 'Digunakan') badgeHtml = '<span class="badge bg-dark">Digunakan</span>';
+                    else if (data.data.status === 'penyerahan') badgeHtml = '<span class="badge bg-success">Penyerahan</span>';
+                    statusCell.innerHTML = badgeHtml;
+                }
+            }
+
+            inputEl.setAttribute('data-original', payloadValue === null ? '' : payloadValue);
+            showToast('✅ Tersimpan', 'success');
+
         } catch (err) {
-          console.error(err);
-          showToast(err.message || 'Gagal menyimpan', 'error');
+            console.error('❌ Error:', err);
+            showToast(err.message || 'Gagal menyimpan', 'error');
 
-          if (err.message && err.message.toLowerCase().includes('validation')) {
             inputEl.classList.add('is-invalid');
-            if (errorEl) { errorEl.classList.remove('d-none'); errorEl.innerText = err.message; }
-          }
-
-          inputEl.value = inputEl.getAttribute('data-original') ?? inputEl.value;
+            if (errorEl) { 
+                errorEl.classList.remove('d-none'); 
+                errorEl.innerText = err.message; 
+            }
+            inputEl.value = inputEl.getAttribute('data-original') ?? inputEl.value;
         } finally {
-          spinner.classList.remove('show');
-          inputEl.disabled = false;
+            spinner.classList.remove('show');
+            inputEl.disabled = false;
         }
       }
 
-      document.querySelectorAll('.inline-edit').forEach(input => {
+            document.querySelectorAll('.inline-edit').forEach(input => {
         input.setAttribute('data-original', input.value);
 
         const field = input.dataset.field;
         const id = input.dataset.id;
 
         if (input.type === 'date') {
-          input.addEventListener('change', function () {
-            const val = this.value ? this.value : null;
-            sendInlineUpdate(id, field, val, this);
-          });
+          // Tanggal: simpan hanya saat keluar field (blur) atau tekan Enter
           input.addEventListener('blur', function () {
             const val = this.value ? this.value : null;
             if (this.getAttribute('data-original') !== (val || '')) {
               sendInlineUpdate(id, field, val, this);
             }
           });
+
+          input.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              this.blur(); // trigger simpan
+            }
+          });
         } else {
+          // Field teks (No Voucher)
           input.addEventListener('blur', function () {
             const val = this.value.trim() === '' ? null : this.value.trim();
             if (this.getAttribute('data-original') !== (val || '')) {
               sendInlineUpdate(id, field, val, this);
             }
           });
+
           input.addEventListener('keydown', function (e) {
-            if (e.key === 'Enter') { e.preventDefault(); this.blur(); }
+            if (e.key === 'Enter') { 
+              e.preventDefault(); 
+              this.blur(); 
+            }
           });
         }
       });

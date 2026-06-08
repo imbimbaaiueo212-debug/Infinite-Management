@@ -800,31 +800,32 @@ public function store(Request $request)
     }
 }
 
-    // ----------------------------------------------------------------------------- 
-// Inline update (no_voucher or tanggal_penyerahan)
-public function updateInline(Request $request, $id)
+  public function updateInline(Request $request, $id)
 {
     try {
-        $allowed = ['no_voucher', 'tanggal_penyerahan'];
         $field = $request->input('field');
-        $rawValue = $request->input('value', null);
+        $rawValue = $request->input('value');
+
+        // DEBUG (sementara)
+        Log::info('updateInline called', [
+            'id' => $id,
+            'field_received' => $field,
+            'value_received' => $rawValue,
+            'all_input' => $request->all()
+        ]);
+
+        $allowed = ['no_voucher', 'tanggal_penyerahan'];
 
         if (!in_array($field, $allowed, true)) {
             return response()->json([
                 'status' => 'error', 
-                'message' => 'Field tidak diizinkan'
+                'message' => 'Field tidak diizinkan: ' . $field
             ], 422);
         }
 
-        $voucher = VoucherLama::find($id);
-        if (!$voucher) {
-            return response()->json([
-                'status' => 'error', 
-                'message' => 'Voucher tidak ditemukan'
-            ], 404);
-        }
+        $voucher = VoucherLama::findOrFail($id);
 
-        $normalized = ($rawValue === '' || $rawValue === 'null' || $rawValue === 'undefined' || $rawValue === null) 
+        $normalized = ($rawValue === '' || $rawValue === 'null' || $rawValue === null) 
                         ? null : trim($rawValue);
 
         // Validasi
@@ -838,10 +839,7 @@ public function updateInline(Request $request, $id)
             $rules['value'] = ['nullable', 'date'];
         }
 
-        $validator = Validator::make($validatorData, $rules, [
-            'value.date'  => 'Format tanggal tidak valid.',
-            'value.unique'=> 'Nomor voucher sudah digunakan.'
-        ]);
+        $validator = Validator::make($validatorData, $rules);
 
         if ($validator->fails()) {
             return response()->json([
@@ -850,11 +848,10 @@ public function updateInline(Request $request, $id)
             ], 422);
         }
 
-        // Proses Update
+        // Update Logic
         if ($field === 'no_voucher') {
             $voucher->no_voucher = $normalized;
         } else {
-            // tanggal_penyerahan
             $tanggal = $normalized ? Carbon::parse($normalized)->toDateString() : null;
             $voucher->tanggal_penyerahan = $tanggal;
             $voucher->status = $this->statusFromTanggalPenyerahan($tanggal);
@@ -869,13 +866,7 @@ public function updateInline(Request $request, $id)
 
         $formatted = $voucher->tanggal_penyerahan 
             ? Carbon::parse($voucher->tanggal_penyerahan)->format('d-m-Y') 
-            : null;
-
-        $statusDisplay = match($voucher->status) {
-            'penyerahan' => 'Penyerahan',
-            'Digunakan'  => 'Digunakan',
-            default      => 'Belum diserahkan'
-        };
+            : 'Belum diisi';
 
         return response()->json([
             'status'  => 'ok',
@@ -885,23 +876,19 @@ public function updateInline(Request $request, $id)
                 'tanggal_penyerahan'          => $voucher->tanggal_penyerahan,
                 'tanggal_penyerahan_formatted'=> $formatted,
                 'status'                      => $voucher->status,
-                'status_display'              => $statusDisplay,
-                'no_voucher'                  => $voucher->no_voucher,
             ],
         ]);
 
     } catch (\Throwable $e) {
         Log::error('updateInline Error', [
-            'id'     => $id,
-            'field'  => $request->input('field'),
-            'value'  => $request->input('value'),
-            'error'  => $e->getMessage(),
-            'trace'  => $e->getTraceAsString()
+            'id' => $id,
+            'field' => $request->input('field'),
+            'error' => $e->getMessage()
         ]);
 
         return response()->json([
             'status'  => 'error',
-            'message' => 'Terjadi kesalahan sistem. Silakan refresh halaman dan coba lagi.'
+            'message' => 'Terjadi kesalahan sistem.'
         ], 500);
     }
 }

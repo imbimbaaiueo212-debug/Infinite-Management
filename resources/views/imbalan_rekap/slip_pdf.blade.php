@@ -77,9 +77,7 @@
     $docRoot = $_SERVER['DOCUMENT_ROOT'];
 
     function getBase64Image($fullPath) {
-        if (!file_exists($fullPath)) {
-            return '';
-        }
+        if (!file_exists($fullPath)) return '';
         $type = pathinfo($fullPath, PATHINFO_EXTENSION);
         $data = file_get_contents($fullPath);
         return 'data:image/' . $type . ';base64,' . base64_encode($data);
@@ -98,17 +96,16 @@
     $lainnya    = $rekap->imbalan_lainnya ?? 0;
     $insentif   = $rekap->insentif_mentor ?? 0;
     $transport  = $rekap->tambahan_transport ?? 0;
-
-    // Kekurangan dari Adjustment (tambahan dibayar)
     $kekurangan = $rekap->kekurangan ?? 0;
 
-    // ==================== TOTAL PENDAPATAN ====================
-    // Jumlah penuh - potongan absensi sudah diakomodasi di tambahan_transport
-    $totalPendapatan = $pokok + $lainnya + $insentif + $transport 
-                       + $kekurangan 
-                       + ($totalKekuranganAdj ?? 0);
+    // ==================== GUNAKAN NILAI DARI CONTROLLER ====================
+    $totalPendapatan    = $totalPendapatan    ?? ($pokok + $lainnya + $insentif + $transport + $kekurangan + ($totalKekuranganAdj ?? 0) + ($totalNominalLembur ?? 0));
+    $totalPotongan      = $totalPotongan      ?? 0;
+    $yangDibayarkan     = $yangDibayarkan     ?? 0;
+    $totalNominalLembur = $totalNominalLembur ?? 0;
+    $totalJamLembur     = $totalJamLembur     ?? 0;
 
-    // ==================== TOTAL POTONGAN (Hanya untuk tampilan) ====================
+    // ==================== TOTAL POTONGAN ====================
     $totalPotonganTetap = 0;
     if ($potongan) {
         $totalPotonganTetap += 
@@ -126,11 +123,10 @@
     $totalPotongan = $totalPotonganTetap + $cicilanNilai + ($totalKelebihanAdj ?? 0);
 
     // ==================== YANG DIBAYARKAN ====================
-    // TIDAK dikurangi potongan absensi lagi!
     $yangDibayarkan = $totalPendapatan 
                       + ($rekap->jumlah_bagi_hasil ?? 0) 
                       - ($rekap->kelebihan ?? 0) 
-                      - ($rekap->cicilan ?? 0);
+                      - $cicilanNilai;
 
     // Data lain
     $unitName = $rekap->bimba_unit ?? $rekap->biMBA_unit ?? $profile?->bimba_unit ?? $profile?->unit ?? '-';
@@ -221,21 +217,63 @@
             </table>
 
             <div class="table-title success-title">PENDAPATAN</div>
-            <table>
-                <tr><td>Imbalan Lainnya</td><td class="text-end">Rp {{ $rupiah($lainnya) }}</td></tr>
-                <tr><td>Insentif Mentor</td><td class="text-end">Rp {{ $rupiah($insentif) }}</td></tr>
-                <tr><td>Tambahan Transport</td><td class="text-end">Rp {{ $rupiah($transport) }}</td></tr>
-                @if($totalKekuranganAdj > 0)
-                    <tr style="background:#e8f5e9;">
-                        <td>Tambahan Dibayar (Adjustment)</td>
-                        <td class="text-end text-success font-weight-bold">Rp {{ $rupiah($totalKekuranganAdj) }}</td>
-                    </tr>
-                @endif
-                <tr style="font-weight:bold;background:#f2f2f2;">
-                    <td>Total Pendapatan</td>
-                    <td class="text-end">Rp {{ $rupiah($totalPendapatan) }}</td>
-                </tr>
-            </table>
+            <table class="table table-borderless">
+    <!-- Baris normal (2 kolom → diubah jadi 3 kolom agar rata) -->
+    <tr>
+        <td>Imbalan Lainnya</td>
+        <td class="text-center"></td>
+        <td class="text-end">Rp {{ $rupiah($lainnya ?? 0) }}</td>
+    </tr>
+    <tr>
+        <td>Insentif Mentor</td>
+        <td class="text-center"></td>
+        <td class="text-end">Rp {{ $rupiah($insentif ?? 0) }}</td>
+    </tr>
+
+    <!-- Tambahan Transport -->
+    @if($transport > 0)
+    <tr style="background:#e8f5e9;">
+        <td>Tambahan Transport</td>
+        <td class="text-center text-success font-weight-bold">
+            <span style="font-size:0.9em;">@</span>{{ $rekap->at_hari ?? 0 }} Hari
+        </td>
+        <td class="text-end text-success font-weight-bold">
+            : Rp {{ $rupiah($transport) }}
+        </td>
+    </tr>
+    @endif
+
+    <!-- LEMBUR -->
+    @if($totalNominalLembur > 0)
+    <tr style="background:#e8f5e9;">
+        <td>Lembur</td>
+        <td class="text-center text-success font-weight-bold">
+            <span style="font-size:0.9em;">@</span>{{ number_format($totalJamLembur, 0, '.', '.') }} Jam
+        </td>
+        <td class="text-end text-success font-weight-bold">
+            : Rp {{ $rupiah($totalNominalLembur) }}
+        </td>
+    </tr>
+    @endif
+
+    <!-- Adjustment -->
+    @if($totalKekuranganAdj > 0)
+    <tr style="background:#e8f5e9;">
+        <td>Tambahan Dibayar (Adjustment)</td>
+        <td class="text-center"></td>
+        <td class="text-end text-success font-weight-bold">
+            Rp {{ $rupiah($totalKekuranganAdj) }}
+        </td>
+    </tr>
+    @endif
+
+    <!-- Total -->
+    <tr style="font-weight:bold; background:#f2f2f2;">
+        <td>Total Pendapatan</td>
+        <td class="text-center"></td>
+        <td class="text-end">Rp {{ $rupiah($totalPendapatan) }}</td>
+    </tr>
+</table>
         </div>
 
         <!-- KANAN -->

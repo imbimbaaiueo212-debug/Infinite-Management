@@ -341,7 +341,7 @@
                         name="bi[tgl_level]" 
                         id="tgl_level" 
                         class="form-control"
-                        value="{{ old('bi.tgl_level') }}">
+                        value="{{ old('bi.tgl_level') }}" required>
                 </div>
             </div>
 

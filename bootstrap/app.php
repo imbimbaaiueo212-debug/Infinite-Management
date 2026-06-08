@@ -33,6 +33,14 @@ return Application::configure(basePath: dirname(__DIR__))
              ->withoutOverlapping()
              ->runInBackground()
              ->description('Auto Activate Trial');
+
+    // ================== TRIAL AUTO PROMOTE ==================
+    $schedule->command('trial:auto-promote')
+             ->dailyAt('00:01')
+             ->withoutOverlapping()
+             ->runInBackground()
+             ->description('Auto Promote Trial');
+
 })
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->use([

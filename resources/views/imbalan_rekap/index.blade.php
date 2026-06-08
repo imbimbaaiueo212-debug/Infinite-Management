@@ -204,6 +204,7 @@
                     <thead>
                         <tr class="text-white fw-bold text-center">
                             <th colspan="3" class="bg-primary text-dark">PROFIL RELAWAN</th>
+                            <th colspan="2" class="bg-info text-dark">LEMBUR</th>
                             <th colspan="8" class="bg-success text-dark">IMBALAN POKOK</th>
                             <th colspan="2" class="bg-warning text-dark">INSENTIF MENTOR</th>
                             <th colspan="2" class="bg-warning text-dark">TRANSPORT</th>
@@ -217,6 +218,8 @@
                             <th>NIK</th>
                             <th>NAMA</th>
                             <th class="text-center" style="min-width: 140px;">INFO</th>
+                             <th class="bg-info text-dark">LEMBUR</th>
+                            <th class="bg-info text-dark">NOMINAL LEMBUR</th>
                             <th>WAKTU/MGG</th>
                             <th>WAKTU/BLN</th>
                             <th>DURASI</th>
@@ -289,6 +292,14 @@
                                             data-bulan="{{ $r->bulan ?? '-' }}">
                                         <i class="bi bi-info-circle"></i> Info
                                     </button>
+                                </td>
+
+                                <!-- LEMBUR -->
+                                <td class="text-center text-primary fw-bold">
+                                    {{ $r->lembur_jam ?? 0 }} Jam
+                                </td>
+                                <td class="text-end text-primary fw-bold">
+                                    Rp {{ number_format($r->lembur_nominal ?? 0, 0, ',', '.') }}
                                 </td>
 
                                 <td class="text-center">{{ $r->waktu_mgg ?? '-' }}</td>

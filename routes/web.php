@@ -77,6 +77,7 @@ use App\Http\Controllers\{
     BukuIndukStatistikController,
     AdminRekapPengeluaranController,
     CutiMuridController,
+    LemburController,
     
 
 
@@ -720,7 +721,8 @@ Route::post('/voucher-lama/import', [VoucherLamaController::class, 'import'])->n
 
 Route::post('/voucher/store-from-spin', [\App\Http\Controllers\VoucherLamaController::class, 'storeFromSpin'])
     ->name('voucher.storeFromSpin');
-Route::patch('/voucher/{id}/inline', [App\Http\Controllers\VoucherLamaController::class, 'updateInline'])->name('voucher.updateInline');
+Route::match(['patch', 'post'], '/voucher/{id}/inline', [VoucherLamaController::class, 'updateInline'])
+     ->name('voucher.updateInline');
 Route::post('/voucher/upload-bukti-by-nim', [App\Http\Controllers\VoucherLamaController::class, 'uploadBuktiByNim'])
     ->name('voucher.uploadBuktiByNim');
 Route::get('/voucher/bukti/{id}', [App\Http\Controllers\VoucherLamaController::class, 'serveBukti'])->name('voucher.serveBukti');
@@ -1029,3 +1031,9 @@ Route::post('/system/auto-activate-trial', function () {
         'updated' => $trials->count()
     ]);
 })->middleware('auth'); // penting supaya tidak bisa diakses publik
+// Route khusus AJAX - HARUS DITARUH SEBELUM resource
+Route::get('/lembur/get-profiles-by-unit', [LemburController::class, 'getProfilesByUnit'])
+     ->name('lembur.getProfilesByUnit');
+
+// Resource Route (standar CRUD)
+Route::resource('lembur', LemburController::class);

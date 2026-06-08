@@ -13,7 +13,7 @@ class HargaSaptataruna extends Model
 
     protected $fillable = [
         'kategori', 'sub_kategori', 'kode', 'nama', 'duafa', 'promo_2019', 'daftar_ulang',
-        'spesial', 'umum1', 'umum2', 'harga', 'a', 'b', 'c', 'd', 'e', 'f'
+        'spesial', 'umum1', 'umum2', 'harga', 'a', 'b', 'c', 'd', 'e', 'f', 'promo_umum',
     ];
 }
 

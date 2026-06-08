@@ -342,7 +342,7 @@ public function updateUkuranKaos(Request $request)
                 'harga_daftar'  => (float)($item->daftar_ulang ?? 0),
                 'harga_spesial' => (float)($item->spesial ?? 0),
                 'harga_umum1'   => (float)($item->umum1 ?? 0),
-                'harga_umum2'   => (float)($item->umum2 ?? 0),
+                'harga_promo_umum'   => (float)($item->promo_umum ?? 0),
             ];
         });
 
@@ -902,6 +902,7 @@ public function store(Request $request)
 {
     // Murid aktif/baru + normalisasi SPP
     $murids = BukuInduk::whereIn(DB::raw('LOWER(status)'), ['aktif', 'baru'])
+        ->orderBy('nama')
         ->get()
         ->map(function ($m) {
             $nominal = $this->cleanMoneyInput($m->spp);
@@ -912,285 +913,212 @@ public function store(Request $request)
             return $m;
         });
 
-    // Daftar voucher yang masih tersedia
-    $vouchers = VoucherLama::where('jumlah_voucher', '>', 0)
-        ->where(function ($q) use ($penerimaan) {
-            $q->whereNull('nim')->orWhere('nim', $penerimaan->nim);
-        })
+    // ==================== DAFTAR LIST ====================
+$daftarList = HargaSaptataruna::where(function($q) {
+        $q->whereIn('kode', ['bA', 'Eb'])
+          ->orWhere('nama', 'LIKE', '%biMBA-AIUEO%');
+    })
+    ->where('nama', 'NOT LIKE', '%English%')   // ← Tambahkan ini
+    ->orderBy('nama')
+    ->get()
+    ->map(function ($item) {
+        return [
+            'kode'          => $item->kode,
+            'nama'          => $item->nama,
+            'harga_duafa'   => (float)($item->duafa ?? 0),
+            'harga_promo'   => (float)($item->promo_2019 ?? 0),
+            'harga_daftar'  => (float)($item->daftar_ulang ?? 0),
+            'harga_spesial' => (float)($item->spesial ?? 0),
+            'harga_umum1'   => (float)($item->umum1 ?? 0),
+            'harga_promo_umum' => (float)($item->promo_umum ?? 0),
+        ];
+    });
+
+    // ==================== HARGA KAOS ====================
+    $hargaKaos = HargaSaptataruna::where('kategori', 'PENJUALAN')
+        ->where('nama', 'LIKE', '%kaos%')
         ->get();
 
-    // Bulan-tahun SPP yang sudah dibayar (kecuali record ini)
-    $sppLunas = Penerimaan::where('spp', '>', 0)
-        ->where('nim', $penerimaan->nim)
-        ->where('id', '<>', $penerimaan->id)
-        ->select('nim', 'bulan', 'tahun')
-        ->get()
-        ->map(fn($r) => strtolower("{$r->nim}-{$r->bulan}-{$r->tahun}"))
-        ->unique()
-        ->toArray();
+    $kaosPendekList = $hargaKaos->filter(function ($item) {
+        return stripos($item->nama, 'pendek') !== false || 
+               stripos($item->nama, 'lengan pendek') !== false;
+    })->map(function ($item) {
+        return ['kode' => $item->kode, 'harga' => (float)$item->harga];
+    })->values();
 
-    // Daftar unit & cabang
-    $units = BukuInduk::query()
-        ->whereNotNull('bimba_unit')
-        ->whereRaw("TRIM(bimba_unit) <> ''")
-        ->select('bimba_unit', 'no_cabang')
-        ->distinct()
-        ->orderBy('bimba_unit')
-        ->get();
+    $kaosPanjangList = $hargaKaos->filter(function ($item) {
+        return stripos($item->nama, 'panjang') !== false || 
+               stripos($item->nama, 'lengan panjang') !== false;
+    })->map(function ($item) {
+        return ['kode' => $item->kode, 'harga' => (float)$item->harga];
+    })->values();
 
-    // Opsi RBAS, BCABS01, BCABS02
-    $rbasOptions = Penerimaan::whereNotNull('RBAS')
-        ->whereRaw("TRIM(COALESCE(RBAS,'')) <> ''")
-        ->distinct()
-        ->orderBy('RBAS')
-        ->pluck('RBAS')
-        ->toArray();
+    // ==================== LIST LAINNYA ====================
+    $kpkList       = $this->getHargaList('KPK');
+    $tasList       = $this->getHargaList('TAS');
+    $sertifikatList= $this->getHargaList('SERTIFIKAT');
+    $stpbList      = $this->getHargaList('STPB');
+    $rbasList      = $this->getHargaList('RBAS');
+    $bcabs01List   = $this->getHargaList('BCABS.01');
+    $bcabs02List   = $this->getHargaList('BCABS.02');
 
-    $bcabs01Options = Penerimaan::whereNotNull('BCABS01')
-        ->whereRaw("TRIM(COALESCE(BCABS01,'')) <> ''")
-        ->distinct()
-        ->orderBy('BCABS01')
-        ->pluck('BCABS01')
-        ->toArray();
+    $vouchers = VoucherLama::where(function ($q) use ($penerimaan) {
+        $q->where('jumlah_voucher', '>', 0)
+          ->orWhere('no_voucher', $penerimaan->voucher ?? ''); 
+    })
+    ->where(function ($q) use ($penerimaan) {
+        $q->whereNull('nim')->orWhere('nim', $penerimaan->nim);
+    })
+    ->select('id', 'no_voucher', 'jumlah_voucher')
+    ->orderBy('no_voucher')
+    ->get();
 
-    $bcabs02Options = Penerimaan::whereNotNull('BCABS02')
-        ->whereRaw("TRIM(COALESCE(BCABS02,'')) <> ''")
-        ->distinct()
-        ->orderBy('BCABS02')
-        ->pluck('BCABS02')
-        ->toArray();
+        $existingKaosPendek  = $penerimaan->ukuran_kaos_pendek;
+    $existingKaosPanjang = $penerimaan->ukuran_kaos_panjang;
 
-    // Cek hak akses admin
-    $user = Auth::user();
-    $isAdmin = $user && ($user->role === 'admin' || ($user->is_admin ?? false));
+    // Existing data untuk semua item
+    $existingKpk        = $penerimaan->kpk ?? $penerimaan->kpk_kode ?? '';
+    $existingTas        = $penerimaan->tas ?? $penerimaan->tas_kode ?? '';
+    $existingSertifikat = $penerimaan->sertifikat ?? $penerimaan->sertifikat_kode ?? '';
+    $existingStpb       = $penerimaan->stpb ?? $penerimaan->stpb_kode ?? '';
+    $existingRbas       = $penerimaan->rbas ?? $penerimaan->rbas_kode ?? '';
+    $existingBcabs01    = $penerimaan->bcabs01 ?? $penerimaan->bcabs01_kode ?? '';
+    $existingBcabs02    = $penerimaan->bcabs02 ?? $penerimaan->bcabs02_kode ?? '';
 
     return view('penerimaan.edit', compact(
         'penerimaan',
         'murids',
+        'daftarList',
+        'kaosPendekList',
+        'kaosPanjangList',
+        'kpkList',
+        'tasList',
+        'sertifikatList',
+        'stpbList',
+        'rbasList',
+        'bcabs01List',
+        'bcabs02List',
         'vouchers',
-        'sppLunas',
-        'units',
-        'isAdmin',
-        'rbasOptions',
-        'bcabs01Options',
-        'bcabs02Options'
+        'existingKaosPendek',
+        'existingKaosPanjang',
+        'existingKpk',
+        'existingTas',
+        'existingSertifikat',
+        'existingStpb',
+        'existingRbas',
+        'existingBcabs01',
+        'existingBcabs02'
     ));
+}
+// Helper baru (opsional, taruh di class)
+private function getHargaList($keyword)
+{
+    return HargaSaptataruna::where('nama', 'LIKE', "%{$keyword}%")
+        ->orWhere('kode', 'LIKE', "%{$keyword}%")
+        ->orderBy('nama')
+        ->get()
+        ->map(fn($item) => [
+            'kode'  => $item->kode,
+            'harga' => (float)$item->harga,
+        ])->values();
 }
 
 public function update(Request $request, Penerimaan $penerimaan)
 {
-    // ================= 1. NORMALISASI NOMINAL =================
-    $spp         = $this->cleanMoneyInput($request->input('spp'));
-    $daftar      = $this->cleanMoneyInput($request->input('daftar'));
-    $kaosPendek  = $this->cleanMoneyInput($request->input('kaos_pendek'));
-    $kaosPanjang = $this->cleanMoneyInput($request->input('kaos_panjang'));
-    $kpk         = $this->cleanMoneyInput($request->input('kpk'));
-    $sertifikat  = $this->cleanMoneyInput($request->input('sertifikat'));
-    $stpb        = $this->cleanMoneyInput($request->input('stpb'));
-    $tas         = $this->cleanMoneyInput($request->input('tas'));
-    $event       = $this->cleanMoneyInput($request->input('event'));
-    $lainLain    = $this->cleanMoneyInput($request->input('lain_lain'));
-
-    if ($spp > 0 && $spp < 1000) {
-        $spp *= 1000;
-    }
-
-    // ================= 2. UKURAN KAOS =================
-    $ukuranPendekInput = array_filter($request->input('ukuran_kaos_pendek', []));
-    $ukuranKaosPendekString = $ukuranPendekInput ? implode(',', array_unique($ukuranPendekInput)) : null;
-
-    $kaosPendekDetails = [];
-    foreach ($ukuranPendekInput as $u) {
-        $kaosPendekDetails[$u] = ($kaosPendekDetails[$u] ?? 0) + 1;
-    }
-    $kaosPendekDetails = $kaosPendekDetails ?: null;
-
-    $ukuranPanjangInput = array_filter($request->input('ukuran_kaos_panjang', []));
-    $ukuranKaosPanjangString = $ukuranPanjangInput ? implode(',', array_unique($ukuranPanjangInput)) : null;
-
-    $kaosPanjangDetails = [];
-    foreach ($ukuranPanjangInput as $u) {
-        $kaosPanjangDetails[$u] = ($kaosPanjangDetails[$u] ?? 0) + 1;
-    }
-    $kaosPanjangDetails = $kaosPanjangDetails ?: null;
-
-    // ================= 3. LOGIKA DASAR =================
-    $tanggalPenyerahan = $request->filled('tanggal_penyerahan')
-        ? $request->tanggal_penyerahan
-        : $penerimaan->tanggal_penyerahan;
-
-    $totalBiayaLainBaru = $daftar + $kaosPendek + $kaosPanjang + $kpk + $sertifikat + $stpb + $tas + $event + $lainLain;
-    $adaBiayaLainBaru   = $totalBiayaLainBaru > 0;
-
-    $isRecordSppMurni = $penerimaan->spp > 0 &&
-        ($penerimaan->kaos ?? 0) == 0 &&
-        ($penerimaan->kaos_lengan_panjang ?? 0) == 0 &&
-        $penerimaan->daftar == 0 &&
-        $penerimaan->kpk == 0 &&
-        $penerimaan->tas == 0 &&
-        $penerimaan->event == 0 &&
-        $penerimaan->lain_lain == 0;
-
-    $baseKwitansi = Str::before($penerimaan->kwitansi, '-');
-    $tanggal      = Carbon::parse($request->tanggal);
-
-    // ================= VALIDASI FILE =================
-    $rules = [
-        'hapus_bukti_lama' => 'nullable|boolean',
-        'catatan_bukti'    => 'nullable|string|max:500',
-    ];
-
-    if ($request->hasFile('bukti_transfer')) {
-        $rules['bukti_transfer'] = 'file|mimes:jpg,jpeg,png,pdf|max:5120';
-    }
-
-    $request->validate($rules);
-
-    // ================= UPLOAD BUKTI =================
-    $newBuktiPath = $penerimaan->bukti_transfer_path;
-
-    if ($request->hasFile('bukti_transfer')) {
-        if ($penerimaan->bukti_transfer_path) {
-            Storage::disk('public')->delete($penerimaan->bukti_transfer_path);
-        }
-        $newBuktiPath = $request->file('bukti_transfer')->store('bukti_transfer', 'public');
-    }
-
-    if ($request->boolean('hapus_bukti_lama') && !$request->hasFile('bukti_transfer')) {
-        if ($penerimaan->bukti_transfer_path) {
-            Storage::disk('public')->delete($penerimaan->bukti_transfer_path);
-        }
-        $newBuktiPath = null;
-    }
-
-    // ================= TRANSAKSI DB =================
     DB::beginTransaction();
     try {
-        $updateData = $request->except([
-            'bukti_transfer',
-            'hapus_bukti_lama',
-            'ukuran_kaos_pendek',
-            'ukuran_kaos_panjang',
-            'voucher'
-        ]);
+        // Clean Input
+        $spp         = $this->cleanMoneyInput($request->input('spp'));
+        $daftar      = $this->cleanMoneyInput($request->input('daftar'));
+        $kaosPendek  = $this->cleanMoneyInput($request->input('kaos_pendek'));
+        $kaosPanjang = $this->cleanMoneyInput($request->input('kaos_panjang'));
+        $kpk         = $this->cleanMoneyInput($request->input('kpk'));
+        $tas         = $this->cleanMoneyInput($request->input('tas'));
+        $sertifikat  = $this->cleanMoneyInput($request->input('sertifikat'));
+        $stpb        = $this->cleanMoneyInput($request->input('stpb'));
+        $event       = $this->cleanMoneyInput($request->input('event'));
+        $lainLain    = $this->cleanMoneyInput($request->input('lain_lain'));
 
-        // ================= HANDLE VOUCHER =================
-        $diskonVoucher = 0;
-        $voucherKode   = null;
+        if ($spp > 0 && $spp < 1000) $spp *= 1000;
 
-        $noVoucherBaru = null;
-        if ($request->has('voucher') && is_array($request->voucher) && count($request->voucher) > 0) {
-            $noVoucherBaru = trim($request->voucher[0] ?? '');
-        }
+        // ==================== PROSES KAOS ====================
+        $kaosPendekKode = $request->input('kaos_pendek_kode', []);
+        $kaosPendekQty  = $request->input('kaos_pendek_qty', []);
 
-        $voucherLama = $penerimaan->voucher;
+        $kaosPanjangKode = $request->input('kaos_panjang_kode', []);
+        $kaosPanjangQty  = $request->input('kaos_panjang_qty', []);
 
-        if (!empty($noVoucherBaru)) {
-            $voucherKode = $noVoucherBaru;
+        $kaosPendekDetails = [];
+        $ukuranPendekString = '';
+        $kaosPendekKodeArray = [];
 
-            // Kembalikan voucher lama jika diganti
-            if ($voucherLama && $voucherLama !== $noVoucherBaru) {
-                $voucherOld = VoucherLama::where('no_voucher', $voucherLama)
-                    ->where('status', 'penyerahan')
-                    ->first();
-                if ($voucherOld) {
-                    $voucherOld->increment('jumlah_voucher', 1);
-                }
+        foreach ($kaosPendekKode as $i => $kode) {
+            if (!empty($kode) && isset($kaosPendekQty[$i]) && $kaosPendekQty[$i] > 0) {
+                $qty = (int)$kaosPendekQty[$i];
+                $kaosPendekDetails[$kode] = ($kaosPendekDetails[$kode] ?? 0) + $qty;
+                $ukuranPendekString .= $kode . ($qty > 1 ? "×{$qty}" : '') . ', ';
+                $kaosPendekKodeArray[] = $kode;
             }
-
-            // Proses voucher baru (hanya jika benar-benar baru)
-            if (!$voucherLama || $voucherLama !== $noVoucherBaru) {
-                $voucherBaru = VoucherLama::where('no_voucher', $noVoucherBaru)
-                    ->where('status', 'penyerahan')
-                    ->first();
-
-                if ($voucherBaru && $voucherBaru->jumlah_voucher > 0) {
-                    $voucherBaru->decrement('jumlah_voucher', 1);
-
-                    VoucherHistori::create([
-                        'voucher_lama_id'   => $voucherBaru->id,
-                        'voucher'           => $noVoucherBaru,
-                        'nim'               => $request->input('nim'),
-                        'nama_murid'        => $request->input('nama_murid'),
-                        'tanggal'           => $request->input('tanggal'),
-                        'tanggal_pemakaian' => now()->toDateString(),
-                        'jumlah_voucher'    => 1,
-                        'status'            => 'digunakan',
-                    ]);
-                }
-            }
-
-            $diskonVoucher = 50000; // tetap ada diskon jika record ini memang menggunakan voucher
-
-        } 
-        // Hapus voucher
-        elseif ($voucherLama) {
-            $voucherOld = VoucherLama::where('no_voucher', $voucherLama)
-                ->where('status', 'penyerahan')
-                ->first();
-            if ($voucherOld) {
-                $voucherOld->increment('jumlah_voucher', 1);
-            }
-            $diskonVoucher = 0;
         }
+        $ukuranPendekString = rtrim($ukuranPendekString, ', ');
 
-        // ================= UPDATE DATA UTAMA =================
-        $updateData['spp']                  = $spp;
-        $updateData['voucher']              = $voucherKode;
+        $kaosPanjangDetails = [];
+        $ukuranPanjangString = '';
+        $kaosPanjangKodeArray = [];
 
-        // Reset biaya lain
-        $updateData['kaos']                 = 0;
-        $updateData['kaos_lengan_panjang']  = 0;
-        $updateData['daftar']               = 0;
-        $updateData['kpk']                  = 0;
-        $updateData['tas']                  = 0;
-        $updateData['event']                = 0;
-        $updateData['lain_lain']            = 0;
-
-        // ================= HANDLE TOTAL (INI BAGIAN KRUSIAL) =================
-        $sppBerubah = $penerimaan->spp != $spp;
-
-        if ($sppBerubah) {
-            // Jika SPP berubah, hitung ulang dari SPP baru
-            $updateData['total'] = $spp - $diskonVoucher;
-        } 
-        elseif (empty($voucherLama) && !empty($voucherKode)) {
-            // Baru pertama kali memakai voucher
-            $updateData['total'] = $spp - 50000;
-        } 
-        elseif (!empty($voucherLama) && empty($voucherKode)) {
-            // Menghapus voucher
-            $updateData['total'] = $spp;
-        } 
-        else {
-            // Hanya ganti nomor voucher (paling sering terjadi)
-            // → Total tetap sama seperti sebelumnya
-            $updateData['total'] = $penerimaan->total;
+        foreach ($kaosPanjangKode as $i => $kode) {
+            if (!empty($kode) && isset($kaosPanjangQty[$i]) && $kaosPanjangQty[$i] > 0) {
+                $qty = (int)$kaosPanjangQty[$i];
+                $kaosPanjangDetails[$kode] = ($kaosPanjangDetails[$kode] ?? 0) + $qty;
+                $ukuranPanjangString .= $kode . ($qty > 1 ? "×{$qty}" : '') . ', ';
+                $kaosPanjangKodeArray[] = $kode;
+            }
         }
+        $ukuranPanjangString = rtrim($ukuranPanjangString, ', ');
 
-        // Field lainnya
-        $updateData['ukuran_kaos_pendek']   = null;
-        $updateData['ukuran_kaos_panjang']  = null;
-        $updateData['kaos_pendek_details']  = null;
-        $updateData['kaos_panjang_details'] = null;
-        $updateData['bukti_transfer_path']  = $newBuktiPath;
-        $updateData['catatan_bukti']        = $request->input('catatan_bukti', $penerimaan->catatan_bukti);
-        $updateData['tanggal_penyerahan']   = $tanggalPenyerahan;
+        // ==================== UPDATE ====================
+        $updateData = [
+            'via'                     => $request->via,
+            'tanggal'                 => $request->tanggal,
+            'nama_murid'              => $request->nama_murid,
+            'spp'                     => $spp,
+            'daftar'                  => $daftar,
+            'kaos'                    => $kaosPendek,
+            'kaos_lengan_panjang'     => $kaosPanjang,
+            'kpk'                     => $kpk,
+            'tas'                     => $tas,
+            'sertifikat'              => $sertifikat,
+            'stpb'                    => $stpb,
+            'event'                   => $event,
+            'lain_lain'               => $lainLain,
+            'voucher'                 => $request->voucher,
+            'RBAS'                    => $this->cleanMoneyInput($request->RBAS),
+            'BCABS01'                 => $this->cleanMoneyInput($request->BCABS01),
+            'BCABS02'                 => $this->cleanMoneyInput($request->BCABS02),
+
+            // Kaos Details
+            'ukuran_kaos_pendek'      => $ukuranPendekString,
+            'ukuran_kaos_panjang'     => $ukuranPanjangString,
+            'kaos_pendek_details'     => !empty($kaosPendekDetails) ? $kaosPendekDetails : null,
+            'kaos_panjang_details'    => !empty($kaosPanjangDetails) ? $kaosPanjangDetails : null,
+            'kaos_pendek_kode'        => !empty($kaosPendekKodeArray) ? implode(',', $kaosPendekKodeArray) : null,
+            'kaos_panjang_kode'       => !empty($kaosPanjangKodeArray) ? implode(',', $kaosPanjangKodeArray) : null,
+        ];
+
+        $total = $spp + $daftar + $kaosPendek + $kaosPanjang + $kpk + $tas + 
+                 $sertifikat + $stpb + $event + $lainLain + 
+                 $updateData['RBAS'] + $updateData['BCABS01'] + $updateData['BCABS02'] - 
+                 ($request->voucher ? 50000 : 0);
+
+        $updateData['total'] = max(0, $total);
 
         $penerimaan->update($updateData);
 
-        // Split biaya lain (tetap sama)
-        if ($isRecordSppMurni && $adaBiayaLainBaru) {
-            // ... (kode create record lain Anda tetap sama)
-            $last = Penerimaan::where('kwitansi', 'LIKE', $baseKwitansi . '%')
-                ->whereDate('tanggal', $tanggal->toDateString())
-                ->orderByRaw('CAST(SUBSTRING(kwitansi, LENGTH(kwitansi) - 1) AS UNSIGNED) DESC')
-                ->first();
-
-            $next = $last ? ((int) substr($last->kwitansi, -2)) + 1 : 2;
-            $kwitansiBaru = $baseKwitansi . '-' . str_pad($next, 2, '0', STR_PAD_LEFT);
-
-            Penerimaan::create([ /* ... isi seperti kode lama Anda ... */ ]);
+        // Update Bukti Transfer
+        if ($request->hasFile('bukti_transfer')) {
+            $this->deleteBuktiTransferFile($penerimaan->bukti_transfer_path);
+            $penerimaan->bukti_transfer_path = $request->file('bukti_transfer')->store('bukti_transfer', 'public');
+            $penerimaan->save();
         }
 
         DB::commit();
@@ -1203,7 +1131,6 @@ public function update(Request $request, Penerimaan $penerimaan)
         return back()->withErrors(['error' => $e->getMessage()])->withInput();
     }
 }
-
     public function destroy(Penerimaan $penerimaan)
     {
         // Perluas logika destroy jika Anda ingin mengembalikan voucher yang sudah terpakai

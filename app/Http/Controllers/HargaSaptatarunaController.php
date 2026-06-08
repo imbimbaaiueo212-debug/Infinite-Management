@@ -22,41 +22,46 @@ class HargaSaptatarunaController extends Controller
 
     // ================= STORE (CREATE) =================
     public function store(Request $request)
-    {
-        $data = $request->validate([
-            'kategori'      => 'nullable|string|max:255',
-            'sub_kategori'  => 'nullable|string|max:255',
-            'kode'          => 'nullable|string|max:50',
-            'nama'          => 'nullable|string|max:255',
-            'duafa'         => 'nullable|numeric',
-            'promo_2019'    => 'nullable|numeric',
-            'daftar_ulang'  => 'nullable|numeric',
-            'spesial'       => 'nullable|numeric',
-            'umum1'         => 'nullable|numeric',
-            'umum2'         => 'nullable|numeric',
-            'harga'         => 'nullable|numeric',
-            'a'             => 'nullable|numeric',
-            'b'             => 'nullable|numeric',
-            'c'             => 'nullable|numeric',
-            'd'             => 'nullable|numeric',
-            'e'             => 'nullable|numeric',
-            'f'             => 'nullable|numeric',
-        ]);
+{
+    $data = $request->validate([
+        'kategori'      => 'nullable|string|max:255',
+        'sub_kategori'  => 'nullable|string|max:255',
+        'kode'          => 'nullable|string|max:50',
+        'nama'          => 'nullable|string|max:255',
+        'duafa'         => 'nullable|numeric',
+        'promo_2019'    => 'nullable|numeric',
+        'daftar_ulang'  => 'nullable|numeric',
+        'spesial'       => 'nullable|numeric',
+        'umum1'         => 'nullable|numeric',
+        'umum2'         => 'nullable|numeric',
+        'harga'         => 'nullable|numeric',
+        'a'             => 'nullable|numeric',
+        'b'             => 'nullable|numeric',
+        'c'             => 'nullable|numeric',
+        'd'             => 'nullable|numeric',
+        'e'             => 'nullable|numeric',
+        'f'             => 'nullable|numeric',
+        'promo_umum'    => 'nullable|numeric',   // ← Tambahkan ini
+    ]);
 
-        // 🔥 FIX: Ubah empty string menjadi null untuk kolom decimal/numeric
-        $numericFields = ['duafa', 'promo_2019', 'daftar_ulang', 'spesial', 'umum1', 'umum2', 'harga', 'a', 'b', 'c', 'd', 'e', 'f'];
+    // 🔥 FIX: Ubah empty string menjadi null untuk kolom numeric
+    $numericFields = [
+        'duafa', 'promo_2019', 'daftar_ulang', 'spesial', 
+        'umum1', 'umum2', 'harga', 'a', 'b', 'c', 'd', 'e', 'f',
+        'promo_umum'        // ← Tambahkan ini
+    ];
 
-        foreach ($numericFields as $field) {
-            if (isset($data[$field]) && $data[$field] === '') {
-                $data[$field] = null;
-            }
+    foreach ($numericFields as $field) {
+        if (isset($data[$field]) && $data[$field] === '') {
+            $data[$field] = null;
         }
-
-        HargaSaptataruna::create($data);
-
-        return redirect()->route('harga.index')
-                         ->with('success', 'Data berhasil ditambahkan.');
     }
+
+    HargaSaptataruna::create($data);
+
+    return redirect()->route('harga.index')
+                     ->with('success', 'Data berhasil ditambahkan.');
+}
 
     public function show(HargaSaptataruna $hargaSaptataruna)
     {
@@ -69,36 +74,20 @@ class HargaSaptatarunaController extends Controller
     }
 
     // ================= UPDATE =================
-    public function update(Request $request, HargaSaptataruna $harga)
+   public function update(Request $request, HargaSaptataruna $harga)
 {
     $numericFields = [
-        'duafa',
-        'promo_2019',
-        'daftar_ulang',
-        'spesial',
-        'umum1',
-        'umum2',
-        'harga',
-        'a',
-        'b',
-        'c',
-        'd',
-        'e',
-        'f'
+        'duafa', 'promo_2019', 'daftar_ulang', 'spesial',
+        'umum1', 'umum2', 'harga', 'a', 'b', 'c', 'd', 'e', 'f',
+        'promo_umum'        // ← Tambahkan ini
     ];
 
     // Format angka Indonesia
     foreach ($numericFields as $field) {
-
-        // jika kosong → null
         if ($request->$field === null || $request->$field === '') {
             $request[$field] = null;
         } else {
-
-            // hapus titik ribuan
             $request[$field] = str_replace('.', '', $request[$field]);
-
-            // ganti koma jadi titik desimal jika ada
             $request[$field] = str_replace(',', '.', $request[$field]);
         }
     }
@@ -123,6 +112,7 @@ class HargaSaptatarunaController extends Controller
         'd'             => 'nullable|numeric',
         'e'             => 'nullable|numeric',
         'f'             => 'nullable|numeric',
+        'promo_umum'    => 'nullable|numeric',   // ← Tambahkan ini
     ]);
 
     $harga->update($data);

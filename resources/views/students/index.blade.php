@@ -260,9 +260,42 @@
                            
 
                             {{-- Status Trial --}}
-                            <td class="text-center align-middle">
-                                <span class="badge {{ $statusClass }}">{{ $labelStatus }}</span>
-                            </td>
+                            {{-- STATUS PENDAFTARAN (Diperbaiki) --}}
+<td class="text-center align-middle">
+    @php
+        $statusText = 'Tanpa Trial';
+        $statusClass = 'bg-secondary text-dark';
+
+        if ($student->source === 'trial') {
+            if ($student->trial_status === 'baru') {
+                $statusText = 'Trial Baru';
+                $statusClass = 'bg-warning text-dark';
+            } elseif ($student->trial_status === 'aktif') {
+                $statusText = 'Trial Aktif';
+                $statusClass = 'bg-info text-dark';
+            } else {
+                $statusText = 'Trial';
+                $statusClass = 'bg-primary text-white';
+            }
+        } 
+        elseif ($student->murid_trial_id) {
+            $trialStatus = optional($student->muridTrial)->status_trial ?? 'aktif';
+            $statusText = match($trialStatus) {
+                'lanjut_daftar' => 'Lanjut Daftar',
+                'batal'         => 'Trial Batal',
+                'mutasi'        => 'Mutasi',
+                default         => 'Trial Aktif'
+            };
+            $statusClass = match($trialStatus) {
+                'lanjut_daftar' => 'bg-success text-white',
+                'batal'         => 'bg-danger text-white',
+                default         => 'bg-info text-dark',
+            };
+        }
+    @endphp
+
+    <span class="badge {{ $statusClass }}">{{ $statusText }}</span>
+</td>
                             <!-- FOTO KK -->
                             <!-- FOTO KK -->
                             <td class="text-center">

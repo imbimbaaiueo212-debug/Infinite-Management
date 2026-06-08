@@ -9,6 +9,7 @@ use App\Models\PenyesuaianRbGuru;
 use App\Models\Ktr;
 use App\Models\Unit;
 use Illuminate\Http\Request;
+use App\Models\PenyesuaianKtr;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
@@ -635,27 +636,17 @@ public function inlineUpdateKtr(Request $request, Profile $profile)
 
    private function calculateKepalaUnitData(Profile $profile): void
 {
-    $isKepalaUnit = str_contains(strtolower($profile->jabatan ?? ''), 'kepala') ||
-                    str_contains(strtolower($profile->jabatan ?? ''), 'head') ||
-                    str_contains(strtolower($profile->jabatan ?? ''), 'unit');
-
-    if ($isKepalaUnit) {
-        // Kepala Unit → ambil SEMUA murid di unit tersebut
-        $totalMurid = BukuInduk::where('bimba_unit', $profile->biMBA_unit)
-            ->whereIn('status', ['Aktif', 'Baru'])
-            ->count();
-    } else {
-        // Guru biasa
-        $totalMurid = BukuInduk::where('guru', $profile->nama)
-            ->whereIn('status', ['Aktif', 'Baru'])
-            ->count();
-    }
+    $totalMurid = BukuInduk::where('bimba_unit', $profile->biMBA_unit)
+        ->whereIn('status', ['Aktif', 'Baru'])
+        ->count();
 
     $profile->total_murid_bawahan = $totalMurid;
+    $profile->jumlah_murid_jadwal = $totalMurid;
 
     if ($totalMurid <= 0) {
         $profile->rb  = 'RB40';
         $profile->ktr = 'KTR 1B';
+        $profile->ktr_tambahan = null;
     } else {
         if (empty(trim($profile->rb ?? ''))) {
             $profile->rb = 'RB40';
@@ -663,26 +654,25 @@ public function inlineUpdateKtr(Request $request, Profile $profile)
 
         $ktrOtomatis = $this->formatKtrFromCountForKepala($totalMurid);
 
-        if (!empty(trim($profile->ktr_tambahan ?? ''))) {
-            $profile->ktr = $profile->ktr_tambahan;
+        if (empty(trim($profile->ktr_tambahan ?? ''))) {
+            // AUTO
+            $profile->ktr = $ktrOtomatis;
+            $profile->ktr_tambahan = null;
         } else {
-            $profile->ktr = $ktrOtomatis ?? 'KTR 1B';
+            // MANUAL
+            $profile->ktr = $profile->ktr_tambahan;
         }
     }
 
     $profile->rb_tambahan = $profile->rb;
 
-    $finalKtr = !empty(trim($profile->ktr_tambahan ?? '')) 
-        ? $profile->ktr_tambahan 
-        : $profile->ktr;
-
     $profile->rp = $this->resolveRpFromJumlahMuridWithKtr(
         $totalMurid,
-        $finalKtr,
+        $profile->ktr,
         $profile->rb
     );
 
-    $profile->save();
+    $profile->saveQuietly();
 }
 
     private function recalculateProfileData(Profile $profile): void
@@ -924,9 +914,39 @@ public function inlineUpdateKtr(Request $request, Profile $profile)
    private function formatKtrFromCountForKepala(int $count): string
 {
     if ($count <= 0) {
-        return 'KTR 1B';           // ← DEFAULT SESUAI KEINGINAN ANDA
+        return 'KTR 1B';
     }
 
+    // Ambil data dari tabel PenyesuaianKtr
+    $penyesuaian = PenyesuaianKtr::orderBy('id')->get();
+
+    if ($penyesuaian->isEmpty()) {
+        // Fallback ke hardcoded jika tabel kosong
+        return $this->getHardcodedKtrForKepala($count);
+    }
+
+    foreach ($penyesuaian as $p) {
+        [$min, $max] = $this->parseRangeString($p->jumlah_murid) ?: [0, 0];
+        
+        if ($count >= $min && $count <= $max) {
+            return trim($p->penyesuaian_ktr);
+        }
+    }
+
+    // Jika jumlah murid melebihi range tertinggi → ambil yang paling tinggi
+    $highest = $penyesuaian->sortByDesc(function ($p) {
+        [$min, $max] = $this->parseRangeString($p->jumlah_murid) ?: [0, 999999];
+        return $max;
+    })->first();
+
+    return $highest ? trim($highest->penyesuaian_ktr) : 'KTR 10B';
+}
+
+/**
+ * Fallback hardcoded (jika tabel PenyesuaianKtr kosong)
+ */
+private function getHardcodedKtrForKepala(int $count): string
+{
     if ($count <= 25)   return 'KTR 1B';
     if ($count <= 75)   return 'KTR 2A';
     if ($count <= 100)  return 'KTR 2B';
@@ -949,91 +969,21 @@ public function inlineUpdateKtr(Request $request, Profile $profile)
     return 'KTR 10B';
 }
 
-    private function resolveRpFromJumlahMuridWithKtr(
-    int $jumlahMurid,
-    ?string $forcedKtr = null,
-    ?string $forcedRbLabel = null
-): ?float {
-    if (!class_exists(Ktr::class)) return null;
-
-    // === LOGIKA BARU UNTUK 0 MURID ===
-    if ($jumlahMurid <= 0) {
-        $rbLabel = $forcedRbLabel ?? 'RB30';
-        $ktrPriority = $forcedKtr ?? 'KTR 1A';
-    } else {
-        $rbLabel = $forcedRbLabel
-            ?? ($this->resolveRbFromCount($jumlahMurid)
-                ? 'RB' . $this->resolveRbFromCount($jumlahMurid)
-                : 'RB30');
-
-        $ktrPriority = $forcedKtr ?? ($rbLabel ? $this->resolveKtrFromRb($rbLabel) : 'KTR 1A');
-    }
-
-    // === CARI DI TABEL KTR ===
-    if ($rbLabel) {
-        $rbNumber = (int) preg_replace('/\D/', '', $rbLabel);
-        $likeKey = "%RB" . ltrim((string) $rbNumber, '0') . "%";
-        
-        $rows = Ktr::where('waktu', 'like', $likeKey)->orderBy('id')->get();
-
-        if ($rows->isNotEmpty()) {
-            $norm = fn($s) => $s ? preg_replace('/[^A-Z0-9]/', '', strtoupper(trim($s))) : null;
-            $targetNorm = $norm($ktrPriority);
-            $targetShort = $targetNorm && preg_match('/(\d+[A-Z]?)$/', $targetNorm, $m) ? $m[1] : null;
-
-            foreach ($rows as $r) {
-                if ($norm($r->kategori ?? '') === $targetNorm) {
-                    $v = $this->extractRpFromRow($r);
-                    if ($v !== null) return $v;
-                }
-            }
-
-            if ($targetShort) {
-                foreach ($rows as $r) {
-                    if (stripos($norm($r->kategori ?? ''), $targetShort) !== false) {
-                        $v = $this->extractRpFromRow($r);
-                        if ($v !== null) return $v;
-                    }
-                }
-            }
-
-            // Fallback ambil baris pertama
-            foreach ($rows as $r) {
-                $v = $this->extractRpFromRow($r);
-                if ($v !== null) return $v;
-            }
-        }
-    }
-
-    // Fallback range mapping (untuk kasus lain)
-    $mappings = Ktr::orderBy('id')->get();
-    if ($mappings->isNotEmpty()) {
-        foreach ($this->parseRangeMappings($mappings, 'waktu') as $p) {
-            if ($jumlahMurid >= $p['min'] && $jumlahMurid <= $p['max']) {
-                return $this->extractRpFromRow($p['map']);
-            }
-        }
-    }
-
-    return null;
-}
-
     private function parseRangeString(?string $s): ?array
-    {
-        if (
-            !$s
-            || !preg_match(
-                '/^(\d+)-(\d+)$/',
-                preg_replace('/[-\x{2013}\x{2014}\x{2212}]/u', '-', trim($s)),
-                $m
-            )
-        ) {
-            return null;
-        }
+{
+    if (!$s) return null;
+
+    // Bersihkan karakter dash yang berbeda
+    $s = preg_replace('/[-\x{2013}\x{2014}\x{2212}]/u', '-', trim($s));
+
+    if (preg_match('/^(\d+)-(\d+)$/', $s, $m)) {
         $min = (int) $m[1];
         $max = (int) $m[2];
         return [$min > $max ? $max : $min, $min > $max ? $min : $max];
     }
+
+    return null;
+}
 
     private function parseRangeMappings($mappings, $column)
     {
@@ -1262,22 +1212,15 @@ public function export(Request $request)
 
 public function recalculateMuridDanKtr(Profile $profile): void
 {
-    Log::info("REKALKULASI DIPANGGIL", [
-        'nama' => $profile->nama,
-        'jabatan' => $profile->jabatan,
-        'bimba_unit_raw' => $profile->getRawOriginal('bimba_unit') ?? $profile->biMBA_unit
-    ]);
-
     if ($profile->status_karyawan === 'Resign') {
         return;
     }
 
     $totalMurid = 0;
-    $unitName = trim($profile->biMBA_unit ?? $profile->getAttribute('bimba_unit') ?? '');
+    $unitName = trim($profile->biMBA_unit ?? '');
 
     if (empty($unitName)) {
-        // Ambil dari database langsung jika null
-        $unitName = trim(Profile::where('id', $profile->id)->value('bimba_unit') ?? '');
+        $unitName = trim(Profile::where('id', $profile->id)->value('biMBA_unit') ?? '');
     }
 
     if ($profile->jabatan === 'Guru') {
@@ -1287,8 +1230,6 @@ public function recalculateMuridDanKtr(Profile $profile): void
             ->count();
     } 
     elseif (str_contains(strtolower($profile->jabatan ?? ''), 'kepala')) {
-        Log::info("MASUK BLOCK KEPALA UNIT", ['unitName' => $unitName]);
-
         $totalMurid = BukuInduk::withoutGlobalScopes()
             ->where('bimba_unit', '=', $unitName)
             ->whereIn('status', ['Aktif', 'Baru'])
@@ -1300,14 +1241,9 @@ public function recalculateMuridDanKtr(Profile $profile): void
                 ->whereIn('status', ['Aktif', 'Baru'])
                 ->count();
         }
-
-        Log::info("HASIL QUERY KEPALA UNIT", [
-            'unitName' => $unitName,
-            'totalMurid' => $totalMurid
-        ]);
     }
 
-    // Update fields
+    // Update data murid
     $profile->total_murid_bawahan = $totalMurid;
     $profile->jumlah_murid_jadwal = $totalMurid;
     $profile->jumlah_murid_mba    = $totalMurid;
@@ -1316,23 +1252,38 @@ public function recalculateMuridDanKtr(Profile $profile): void
 
     $profile->saveQuietly();
 
-    // Hitung RB & KTR
+    // ====================== KEPALA UNIT ======================
     if (str_contains(strtolower($profile->jabatan ?? ''), 'kepala')) {
+
         if ($totalMurid <= 0) {
             $profile->rb = 'RB40';
             $profile->ktr = 'KTR 1B';
-            $profile->rb_tambahan = 'RB40';
-            $profile->ktr_tambahan = 'KTR 1B';
+            $profile->ktr_tambahan = null;   // pastikan auto
         } else {
-            if (empty(trim($profile->rb ?? ''))) $profile->rb = 'RB40';
+            if (empty(trim($profile->rb ?? ''))) {
+                $profile->rb = 'RB40';
+            }
             $profile->rb_tambahan = $profile->rb;
 
             $ktrOtomatis = $this->formatKtrFromCountForKepala($totalMurid);
-            $profile->ktr = $profile->ktr_tambahan ?? $ktrOtomatis ?? 'KTR 1B';
-            $profile->ktr_tambahan = $profile->ktr;
+
+            // === LOGIKA AUTO / MANUAL ===
+            if (empty(trim($profile->ktr_tambahan ?? ''))) {
+                // MODE AUTO
+                $profile->ktr = $ktrOtomatis;
+                $profile->ktr_tambahan = null;     // penting: null = auto
+            } else {
+                // MODE MANUAL (pertahankan pilihan user)
+                $profile->ktr = $profile->ktr_tambahan;
+            }
         }
 
-        $profile->rp = $this->resolveRpFromJumlahMuridWithKtr($totalMurid, $profile->ktr, $profile->rb);
+        $profile->rp = $this->resolveRpFromJumlahMuridWithKtr(
+            $totalMurid, 
+            $profile->ktr, 
+            $profile->rb
+        );
+
         $profile->saveQuietly();
     }
 }
@@ -1410,4 +1361,74 @@ private function getJumlahMuridAktif(string $namaGuru): int
         ->whereIn('status', ['Aktif', 'Baru'])
         ->count();
 }
+
+    private function resolveRpFromJumlahMuridWithKtr(
+        int $jumlahMurid,
+        ?string $forcedKtr = null,
+        ?string $forcedRbLabel = null
+    ): ?float {
+        if (!class_exists(Ktr::class)) return null;
+
+        // === LOGIKA BARU UNTUK 0 MURID ===
+        if ($jumlahMurid <= 0) {
+            $rbLabel = $forcedRbLabel ?? 'RB30';
+            $ktrPriority = $forcedKtr ?? 'KTR 1A';
+        } else {
+            $rbLabel = $forcedRbLabel
+                ?? ($this->resolveRbFromCount($jumlahMurid)
+                    ? 'RB' . $this->resolveRbFromCount($jumlahMurid)
+                    : 'RB30');
+
+            $ktrPriority = $forcedKtr ?? ($rbLabel ? $this->resolveKtrFromRb($rbLabel) : 'KTR 1A');
+        }
+
+        // === CARI DI TABEL KTR ===
+        if ($rbLabel) {
+            $rbNumber = (int) preg_replace('/\D/', '', $rbLabel);
+            $likeKey = "%RB" . ltrim((string) $rbNumber, '0') . "%";
+            
+            $rows = Ktr::where('waktu', 'like', $likeKey)->orderBy('id')->get();
+
+            if ($rows->isNotEmpty()) {
+                $norm = fn($s) => $s ? preg_replace('/[^A-Z0-9]/', '', strtoupper(trim($s))) : null;
+                $targetNorm = $norm($ktrPriority);
+                $targetShort = $targetNorm && preg_match('/(\d+[A-Z]?)$/', $targetNorm, $m) ? $m[1] : null;
+
+                foreach ($rows as $r) {
+                    if ($norm($r->kategori ?? '') === $targetNorm) {
+                        $v = $this->extractRpFromRow($r);
+                        if ($v !== null) return $v;
+                    }
+                }
+
+                if ($targetShort) {
+                    foreach ($rows as $r) {
+                        if (stripos($norm($r->kategori ?? ''), $targetShort) !== false) {
+                            $v = $this->extractRpFromRow($r);
+                            if ($v !== null) return $v;
+                        }
+                    }
+                }
+
+                // Fallback ambil baris pertama
+                foreach ($rows as $r) {
+                    $v = $this->extractRpFromRow($r);
+                    if ($v !== null) return $v;
+                }
+            }
+        }
+
+        // Fallback range mapping
+        $mappings = Ktr::orderBy('id')->get();
+        if ($mappings->isNotEmpty()) {
+            foreach ($this->parseRangeMappings($mappings, 'waktu') as $p) {
+                if ($jumlahMurid >= $p['min'] && $jumlahMurid <= $p['max']) {
+                    return $this->extractRpFromRow($p['map']);
+                }
+            }
+        }
+
+        return null;
+    }
+
 }

@@ -4,7 +4,7 @@
 
 @section('content')
     <div class="container-fluid py-4">
-        <h1 class="mb-4 fw-bold text-center text-primary">Tambah Penerimaan Produk (Multi Item - Satu Faktur)</h1>
+        <h1 class="mb-4 fw-bold text-center text-primary">Tambah Penerimaan Produk</h1>
 
         <form action="{{ route('penerimaan_produk.store_multi') }}" method="POST">
             @csrf
@@ -27,7 +27,7 @@
             <!-- Data Umum -->
             <div class="card mb-4 shadow-lg border-0 rounded-4">
                 <div class="card-header bg-gradient bg-primary text-white py-3 rounded-top-4">
-                    <h5 class="mb-0 text-center">Data Umum Penerimaan</h5>
+                    <h5 class="mb-0 text-center">Data Penerimaan</h5>
                 </div>
                 <div class="card-body p-4">
                     <div class="row g-4 align-items-end">
@@ -158,7 +158,7 @@
                     <td><input type="text" name="items[0][nama_produk]" class="form-control form-control-sm bg-light nama-field" readonly></td>
 
                     <td>
-                        <input type="number" class="form-control form-control-sm text-center bg-light order-field" value="0" readonly>
+                        <input type="number" class="form-control form-control-sm text-center bg-light order-field" value="0">
                     </td>
 
                     <td>

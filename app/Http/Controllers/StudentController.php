@@ -1093,12 +1093,24 @@ protected function preventDuplicateStudents(): void
         return response()->json(['data' => $data]);
     }
 
-    protected function ensureTrialRelation(Student $student, string $status = 'baru'): void
+    public function ensureTrialRelation(Student $student, string $status = 'baru'): void
 {
     if ($student->source !== 'trial') {
         return;
     }
 
+    // === LOGIKA BARU: Jangan langsung buat MuridTrial kalau status masih 'baru' ===
+    if ($status === 'baru' || $student->trial_status === 'baru') {
+        // Hanya update timestamp mulai trial
+        if (empty($student->trial_started_at)) {
+            $student->trial_started_at = now();
+            $student->trial_status = 'baru';
+            $student->saveQuietly();
+        }
+        return; // JANGAN buat MuridTrial dulu
+    }
+
+    // === Kalau sudah 'aktif' baru buat MuridTrial ===
     if ($student->murid_trial_id) {
         $trial = $student->muridTrial;
         $updates = [];
@@ -1109,7 +1121,6 @@ protected function preventDuplicateStudents(): void
         if (empty($trial->no_cabang) && !empty($student->no_cabang)) {
             $updates['no_cabang'] = $student->no_cabang;
         }
-
         if (!empty($updates)) {
             $trial->update($updates);
         }
@@ -1119,7 +1130,7 @@ protected function preventDuplicateStudents(): void
     try {
         $trial = MuridTrial::create([
             'nama'               => $student->nama,
-            'status_trial'       => $status,
+            'status_trial'       => 'aktif',           // langsung aktif
             'kelas'              => $student->kelas ?? 'Reguler',
             'tgl_lahir'          => $student->tgl_lahir,
             'usia'               => $student->usia,
@@ -1135,10 +1146,16 @@ protected function preventDuplicateStudents(): void
         ]);
 
         $student->murid_trial_id = $trial->id;
+        $student->trial_status   = 'aktif';
         $student->saveQuietly();
 
-        // Buat Humas dengan aman
         $this->createHumasSafely($student);
+
+        Log::info('MuridTrial berhasil dibuat otomatis', [
+            'student_id' => $student->id,
+            'nama'       => $student->nama,
+            'status'     => 'aktif'
+        ]);
 
     } catch (\Throwable $e) {
         Log::error('Gagal create MuridTrial', [

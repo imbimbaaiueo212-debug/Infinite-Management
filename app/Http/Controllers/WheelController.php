@@ -331,14 +331,13 @@ class WheelController extends Controller
         ->whereRaw("TRIM({$humasCol}) <> ''")
         ->select([
             'students.id as student_id',
-            'students.nim as nim_murid',           // jelas murid
+            'students.nim as nim_murid',
             DB::raw("TRIM({$humasCol}) as humas_name_raw"),
             DB::raw("TRIM({$studentNameCol}) as student_name"),
             'registrations.bimba_unit',
             'registrations.no_cabang',
             DB::raw("'student' as source")
         ])
-        ->orderBy('humas_name_raw')
         ->get();
 
     // ==================== 2. DATA DARI BUKU INDUK ====================
@@ -348,7 +347,7 @@ class WheelController extends Controller
         ->whereRaw("TRIM(nama_humas) <> ''")
         ->select([
             DB::raw('NULL as student_id'),
-            'nim as nim_murid',                    // NIM murid
+            'nim as nim_murid',
             DB::raw('TRIM(nama_humas) as humas_name_raw'),
             DB::raw('TRIM(nama) as student_name'),
             'bimba_unit',
@@ -359,9 +358,14 @@ class WheelController extends Controller
 
     $rows = $fromStudents->merge($fromBukuInduk);
 
-    // Filter yang sudah menang
-    $usedHashes = WheelWinner::pluck('row_hash')->filter()->map(fn($v) => (string)$v)->toArray();
-    $usedNamesLower = WheelWinner::pluck('name')->filter()->map(fn($n) => mb_strtolower(trim((string)$n)))->toArray();
+    // Ambil data yang sudah menang
+    $usedRowHashes = WheelWinner::pluck('row_hash')->filter()->map(fn($v) => (string)$v)->toArray();
+    $usedNamesLower = WheelWinner::pluck('name')
+        ->filter()
+        ->map(fn($n) => mb_strtolower(trim((string)$n)))
+        ->toArray();
+
+    $seen = []; // Untuk deduplikasi di memory
 
     $out = [];
 
@@ -369,26 +373,42 @@ class WheelController extends Controller
         $referrerRaw = trim((string) $r->humas_name_raw);
         if ($referrerRaw === '') continue;
 
-        // Row hash berdasarkan humas + murid
-        if ($r->source === 'student') {
+        $broughtRaw = trim((string) $r->student_name);
+
+        // Buat key unik untuk deduplikasi
+        $uniqueKey = mb_strtolower($referrerRaw) . '|' . mb_strtolower($broughtRaw);
+
+        // Skip jika sudah pernah diproses
+        if (isset($seen[$uniqueKey])) continue;
+        $seen[$uniqueKey] = true;
+
+        // Buat row_hash yang konsisten
+        if ($r->source === 'student' && $r->student_id) {
             $rowHash = md5('stu:' . $r->student_id);
         } else {
             $rowHash = md5(json_encode([
                 $r->nim_murid,
                 $r->student_name,
                 $r->humas_name_raw,
-                $r->bimba_unit,
-            ]));
+                $r->bimba_unit ?? '',
+            ], JSON_UNESCAPED_UNICODE));
         }
 
-        if (in_array($rowHash, $usedHashes, true)) continue;
-        if (in_array(mb_strtolower($referrerRaw), $usedNamesLower, true)) continue;
+        // Skip jika sudah menang
+        if (in_array($rowHash, $usedRowHashes, true)) continue;
+
+        $displayName = $referrerRaw;
+        if ($broughtRaw) {
+            $displayName = strtoupper($referrerRaw) . ' (' . $broughtRaw . ')';
+        }
+
+        if (in_array(mb_strtolower($displayName), $usedNamesLower, true)) continue;
 
         $out[] = [
             'student_id'    => $r->student_id,
-            'nim_murid'     => $r->nim_murid,           // ← simpan terpisah
-            'referrer_name' => $referrerRaw,            // Nama Humas
-            'brought_name'  => trim((string) $r->student_name),
+            'nim_murid'     => $r->nim_murid,
+            'referrer_name' => $referrerRaw,
+            'brought_name'  => $broughtRaw,
             'name'          => $referrerRaw,
             'row_hash'      => $rowHash,
             'bimba_unit'    => $r->bimba_unit ?? null,
@@ -397,6 +417,7 @@ class WheelController extends Controller
         ];
     }
 
+    // Sort by referrer name
     usort($out, fn($a, $b) => strcasecmp($a['referrer_name'], $b['referrer_name']));
 
     return $out;

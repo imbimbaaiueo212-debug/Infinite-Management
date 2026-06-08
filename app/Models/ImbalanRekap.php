@@ -54,6 +54,9 @@ class ImbalanRekap extends Model
         'tanggal_dibayar',
         'dibayar_oleh',
         'potongan_tunjangan_nominal', // pastikan ada di migration
+        // TAMBAHKAN DUA BARIS INI
+    'lembur_jam',
+    'lembur_nominal',
     ];
 
     protected static function booted()

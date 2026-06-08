@@ -15,13 +15,13 @@
         <h3 class="mt-4 mb-3">{{ $kategori }}</h3>
         
         @php
-            // Memfilter data berdasarkan kategori saat ini (case-insensitive)
             $dataKategori = $items->filter(function ($item) use ($kategori) {
                 return strtolower(trim($item->kategori)) == strtolower($kategori);
             });
         @endphp
 
         <div class="table-responsive mb-5">
+            
             {{-- ===================== BIAYA PENDAFTARAN ===================== --}}
             @if ($kategori == 'BIAYA PENDAFTARAN')
                 <table class="table table-bordered table-hover align-middle card-body">
@@ -30,12 +30,12 @@
                             <th>Kode</th>
                             <th>Nama</th>
                             <th>Promo Gratis</th>
+                            <th>Promo Umum</th>           {{-- Kolom Baru --}}
                             <th>Promo Khusus</th>
                             <th>Spesial</th>
                             <th>Umum1</th>
                             <th>Duafa</th>                         
                             <th>Daftar Ulang</th>                           
-                            
                             <th style="width: 150px;">Aksi</th>
                         </tr>
                     </thead>
@@ -45,28 +45,29 @@
                             <td>{{ $item->kode }}</td>
                             <td>{{ $item->nama }}</td>
                             <td>Rp {{ number_format($item->umum2 ?? 0, 0, ',', '.') }}</td>
+                            <td>Rp {{ number_format($item->promo_umum ?? 0, 0, ',', '.') }}</td>  {{-- Kolom Baru --}}
                             <td>Rp {{ number_format($item->promo_2019 ?? 0, 0, ',', '.') }}</td>
                             <td>Rp {{ number_format($item->spesial ?? 0, 0, ',', '.') }}</td>
                             <td>Rp {{ number_format($item->umum1 ?? 0, 0, ',', '.') }}</td>
                             <td>Rp {{ number_format($item->daftar_ulang ?? 0, 0, ',', '.') }}</td>
                             <td>Rp {{ number_format($item->duafa ?? 0, 0, ',', '.') }}</td>
                             <td>
-    <a href="{{ route('harga.edit', $item->id) }}" class="btn btn-sm btn-warning">Edit</a>
+                                <a href="{{ route('harga.edit', $item->id) }}" class="btn btn-sm btn-warning">Edit</a>
 
-    @if (auth()->user()?->role === 'admin')
-        <form action="{{ route('harga.destroy', $item->id) }}" method="POST"
-              style="display:inline-block;"
-              onsubmit="return confirm('Yakin ingin hapus data harga {{ $item->nama }}?');">
-            @csrf
-            @method('DELETE')
-            <button type="submit" class="btn btn-sm btn-danger">Hapus</button>
-        </form>
-    @endif
-</td>
+                                @if (auth()->user()?->role === 'admin')
+                                    <form action="{{ route('harga.destroy', $item->id) }}" method="POST"
+                                          style="display:inline-block;"
+                                          onsubmit="return confirm('Yakin ingin hapus data harga {{ $item->nama }}?');">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="btn btn-sm btn-danger">Hapus</button>
+                                    </form>
+                                @endif
+                            </td>
                         </tr>
                         @empty
                             <tr>
-                                <td colspan="9" class="text-center">Tidak ada data untuk kategori {{ $kategori }}.</td>
+                                <td colspan="10" class="text-center">Tidak ada data untuk kategori {{ $kategori }}.</td>
                             </tr>
                         @endforelse
                     </tbody>
@@ -90,18 +91,18 @@
                             <td>{{ $item->nama }}</td>
                             <td>Rp {{ number_format($item->harga ?? 0, 0, ',', '.') }}</td>
                             <td>
-    <a href="{{ route('harga.edit', $item->id) }}" class="btn btn-sm btn-warning">Edit</a>
+                                <a href="{{ route('harga.edit', $item->id) }}" class="btn btn-sm btn-warning">Edit</a>
 
-    @if (auth()->user()?->role === 'admin')
-        <form action="{{ route('harga.destroy', $item->id) }}" method="POST"
-              style="display:inline-block;"
-              onsubmit="return confirm('Yakin ingin hapus data harga {{ $item->nama }}?');">
-            @csrf
-            @method('DELETE')
-            <button type="submit" class="btn btn-sm btn-danger">Delete</button>
-        </form>
-    @endif
-</td>
+                                @if (auth()->user()?->role === 'admin')
+                                    <form action="{{ route('harga.destroy', $item->id) }}" method="POST"
+                                          style="display:inline-block;"
+                                          onsubmit="return confirm('Yakin ingin hapus data harga {{ $item->nama }}?');">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                                    </form>
+                                @endif
+                            </td>
                         </tr>
                         @empty
                             <tr>
@@ -129,7 +130,6 @@
                     </thead>
                     <tbody>
                         @forelse ($dataKategori->groupBy('sub_kategori') as $subKategori => $groupSub)
-                            {{-- Baris Header Sub Kategori --}}
                             <tr class="table card-body">
                                 <td colspan="9"><strong>{{ $subKategori }}</strong></td>
                             </tr>
@@ -145,18 +145,18 @@
                                 <td>Rp {{ number_format($item->e ?? 0, 0, ',', '.') }}</td>
                                 <td>Rp {{ number_format($item->f ?? 0, 0, ',', '.') }}</td>
                                 <td>
-    <a href="{{ route('harga.edit', $item->id) }}" class="btn btn-sm btn-warning">Edit</a>
+                                    <a href="{{ route('harga.edit', $item->id) }}" class="btn btn-sm btn-warning">Edit</a>
 
-    @if (auth()->user()?->role === 'admin')
-        <form action="{{ route('harga.destroy', $item->id) }}" method="POST"
-              style="display:inline-block;"
-              onsubmit="return confirm('Yakin ingin hapus data harga {{ $item->nama }}?');">
-            @csrf
-            @method('DELETE')
-            <button type="submit" class="btn btn-sm btn-danger">Delete</button>
-        </form>
-    @endif
-</td>
+                                    @if (auth()->user()?->role === 'admin')
+                                        <form action="{{ route('harga.destroy', $item->id) }}" method="POST"
+                                              style="display:inline-block;"
+                                              onsubmit="return confirm('Yakin ingin hapus data harga {{ $item->nama }}?');">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                                        </form>
+                                    @endif
+                                </td>
                             </tr>
                             @endforeach
                         @empty
@@ -167,7 +167,7 @@
                     </tbody>
                 </table>
             @endif
-        </div> {{-- .table-responsive --}}
+        </div>
     @endforeach
 </div>
 @endsection

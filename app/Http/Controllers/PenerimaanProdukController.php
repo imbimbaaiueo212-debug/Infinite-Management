@@ -400,9 +400,8 @@ public function createMulti(Request $request)
             }
         }
 
-        /* ================= 4. SERTIFIKAT ================= */
+        /* ================= 4. SERTIFIKAT & STPB (tetap sama) ================= */
         if ($noCabang) {
-
             $sudahTerimaSTA = PenerimaanProduk::where('unit_id', $selectedUnitId)
                 ->whereMonth('tanggal', $bulan)
                 ->whereYear('tanggal', $tahun)
@@ -410,35 +409,28 @@ public function createMulti(Request $request)
                 ->exists();
 
             if (!$sudahTerimaSTA) {
-
                 $sertifikatPending = PemesananSertifikat::where('no_cabang', $noCabang)
                     ->orderBy('nama_murid')
                     ->get();
 
                 if ($sertifikatPending->count() > 0) {
-                    $pendingProduk['090903002'] =
-                        ($pendingProduk['090903002'] ?? 0) + $sertifikatPending->count();
-
+                    $pendingProduk['090903002'] = ($pendingProduk['090903002'] ?? 0) + $sertifikatPending->count();
                     $produkSTA = Produk::where('kode', '090903002')->first();
                 }
             }
         }
 
-        /* ================= 5. STPB ================= */
         $sudahTerimaSTPB = PenerimaanProduk::where('unit_id', $selectedUnitId)
             ->where('label', 'STPB')
             ->exists();
 
         if (!$sudahTerimaSTPB) {
-
             $stpbPending = PemesananSTPB::where('unit_id', $selectedUnitId)
                 ->orderBy('nama_murid')
                 ->get();
 
             if ($stpbPending->count() > 0) {
-                $pendingProduk['070701027'] =
-                    ($pendingProduk['070701027'] ?? 0) + $stpbPending->count();
-
+                $pendingProduk['070701027'] = ($pendingProduk['070701027'] ?? 0) + $stpbPending->count();
                 $produkSTPB = Produk::where('kode', '070701027')->first();
             }
         }
@@ -480,17 +472,46 @@ public function createMulti(Request $request)
                     'kategori'    => $p->kategori,
                     'satuan'      => $p->satuan,
                     'harga'       => $p->harga,
-                    'order_qty'   => $qty, // ✅ JUMLAH ORDER
+                    'order_qty'   => $qty,
                     'status'      => $p->status,
                     'isi'         => $p->isi,
                 ];
             })->filter()->values();
         }
 
+        /* ================= TAMBAHAN BARU: SEMUA PRODUK DARI MASTER ================= */
+        $allProdukMaster = Produk::orderBy('kode')
+            ->get(['kode', 'label', 'nama_produk', 'jenis', 'kategori', 'satuan', 'harga', 'status', 'isi']);
+
+        foreach ($allProdukMaster as $p) {
+            // Jika sudah ada di $produks (dari order), skip
+            if ($produks->contains('kode', $p->kode)) {
+                continue;
+            }
+
+            // Jika belum diterima, tambahkan
+            if (!$receivedKode->contains($p->kode)) {
+                $produks->push([
+                    'kode'        => $p->kode,
+                    'label'       => $p->label,
+                    'nama_produk' => $p->nama_produk,
+                    'jenis'       => $p->jenis,
+                    'kategori'    => $p->kategori,
+                    'satuan'      => $p->satuan,
+                    'harga'       => $p->harga,
+                    'order_qty'   => 0,           // tidak ada order
+                    'status'      => $p->status,
+                    'isi'         => $p->isi,
+                ]);
+            }
+        }
+
+        $produks = $produks->sortBy('kode')->values();
+
         /* ================= INFO ================= */
         $infoProduk = $produks->isEmpty()
             ? "Semua produk umum sudah diterima."
-            : "Menampilkan {$produks->count()} produk dari hasil pemesanan.";
+            : "Menampilkan {$produks->count()} produk (termasuk dari Order Modul & semua produk master).";
 
         $infoSert = $sertifikatPending->isEmpty()
             ? "Tidak ada sertifikat murid."

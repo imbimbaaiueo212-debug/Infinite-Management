@@ -79,21 +79,22 @@ class ImportStudentsFromForms extends Command
             }
 
             // ================== DETEKSI JENIS PENDAFTARAN ==================
-            $sumber = strtolower(trim($payload['sumber_pendaftaran'] ?? ''));
+$sumber = strtolower(trim($payload['sumber_pendaftaran'] ?? ''));
 
-            $isAktifKembali = preg_match('/\b(aktif kembali|aktif ulang|masuk kembali|reaktif|kembali masuk|daftar lagi|balik lagi|ikut lagi|aktif lagi|kembali daftar)\b/i', $sumber);
-            $isMutasi       = preg_match('/\b(mutasi|pindah|pindahan|transfer|pindah cabang)\b/i', $sumber);
+$isAktifKembali = preg_match('/\b(aktif kembali|aktif ulang|masuk kembali|reaktif|kembali masuk|daftar lagi|balik lagi|ikut lagi|aktif lagi|kembali daftar)\b/i', $sumber);
+$isMutasi       = preg_match('/\b(mutasi|pindah|pindahan|transfer|pindah cabang)\b/i', $sumber);
 
-            if ($isAktifKembali) {
-                $payload['source'] = 'direct';
-                $payload['is_aktif_kembali'] = true;
-            } elseif ($isMutasi) {
-                $payload['source'] = 'direct';
-                $payload['is_aktif_kembali'] = false;
-            } else {
-                $payload['source'] = 'trial';
-                $payload['is_aktif_kembali'] = false;
-            }
+if ($isAktifKembali) {
+    $payload['source'] = 'direct';
+    $payload['is_aktif_kembali'] = true;
+} elseif ($isMutasi) {
+    $payload['source'] = 'direct';
+    $payload['is_aktif_kembali'] = false;
+} else {
+    $payload['source'] = 'trial';
+    $payload['trial_status'] = 'baru';           // ← BARU
+    $payload['is_aktif_kembali'] = false;
+}
 
             // ====================== CEK SUDAH ADA (ANTI DUPLIKAT) ======================
             $existing = $this->findExistingStudent($payload);
@@ -178,8 +179,19 @@ class ImportStudentsFromForms extends Command
                     }
                 }
 
+                //if (!$isMutasi && !$isAktifKembali) {
+                    // $this->ensureTrialRelation($student, 'baru');
+                //}
+                // Hanya set flag trial baru, jangan langsung buat MuridTrial
                 if (!$isMutasi && !$isAktifKembali) {
-                    $this->ensureTrialRelation($student, 'baru');
+                    $student->trial_status = 'baru';           // pastikan kolom ini ada di tabel students
+                    $student->save();
+                }
+                // === SET STATUS TRIAL BARU + TIMESTAMP ===
+                if ($student->source === 'trial' && $student->trial_status === 'baru') {
+                    $student->trial_status = 'baru';
+                    $student->trial_started_at = now();        // ← Ini yang kurang
+                    $student->save();
                 }
             });
 

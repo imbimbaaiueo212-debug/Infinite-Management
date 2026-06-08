@@ -56,6 +56,7 @@
                     $isRelawanActive = request()->routeIs('profiles.*') ||
                         request()->routeIs('absensi-relawan.*') ||
                         request()->routeIs('relawan.*') ||
+                        request()->routeIs('lembur.*') ||
                         request()->routeIs('rekap.*') ||
                         request()->routeIs('jadwal.*');
                 @endphp
@@ -79,6 +80,10 @@
                         <a class="nav-link {{ request()->routeIs('absensi-relawan.index') ? 'active' : '' }}"
                             href="{{ route('absensi-relawan.index') }}">
                             <i class="fas fa-calendar-check me-2"></i> Absen
+                        </a>
+                        <a class="nav-link {{ request()->routeIs('lembur.index') ? 'active' : '' }}"
+                            href="{{ route('lembur.index') }}">
+                            <i class="fas fa-clock me-2"></i> Lembur
                         </a>
 
                         <a class="nav-link {{ request()->routeIs('rekap.index') ? 'active' : '' }}"

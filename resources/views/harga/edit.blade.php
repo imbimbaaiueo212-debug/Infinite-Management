@@ -96,11 +96,24 @@
             </div>
             <div class="col-md-3 mb-3">
                 <label>Promo Gratis</label>
-                <input type="number" step="0.01" min="0" name="umum2" class="form-control" value="{{ $harga->umum2 }}">
+                <input type="text" name="umum2"
+                    class="form-control"
+                    value="{{ number_format($harga->umum2, 0, ',', '.') }}">
             </div>
             <div class="col-md-3 mb-3">
                 <label>Harga</label>
-                <input type="text" name="harga" class="form-control" value="{{ number_format($harga->harga, 0, ',', '.') }}">
+                <input type="text" name="harga" class="form-control" 
+                       value="{{ number_format($harga->harga, 0, ',', '.') }}">
+            </div>
+        </div>
+
+        <!-- Baris Baru untuk Promo Umum -->
+        <div class="row">
+            <div class="col-md-4 mb-3">
+                <label>Promo Umum</label>
+                <input type="text" name="promo_umum"
+                    class="form-control"
+                    value="{{ number_format($harga->promo_umum, 0, ',', '.') }}">
             </div>
         </div>
 

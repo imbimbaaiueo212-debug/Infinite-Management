@@ -76,6 +76,17 @@
             </div>
         </div>
 
+        <!-- Baris Baru untuk Promo Umum -->
+        <div class="row">
+            <div class="col-md-4 mb-3">
+                <label>Promo Umum</label>
+                <input type="number" step="0.01" min="0" name="promo_umum" 
+                       class="form-control" 
+                       value="{{ old('promo_umum') }}"
+                       placeholder="Promo Umum">
+            </div>
+        </div>
+
         <div class="mb-3">
             <label>A - F</label>
             <div class="row">

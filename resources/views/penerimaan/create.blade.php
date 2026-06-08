@@ -225,60 +225,59 @@
         <hr class="my-4">
 
             {{-- ================= BIAYA DAFTAR ================= --}}
+            <hr class="my-4">
+
             <h5 class="text-primary">Biaya Daftar</h5>
 
             <div class="row g-3 mb-4">
-                <div class="col-md-4">
-                    <label class="form-label">Biaya Daftar</label>
 
-                    <select name="daftar_kode" id="daftar_select" class="form-select mb-1">
-                        <option value="">-- Pilih Biaya Daftar --</option>
-                        @foreach($daftarList as $item)
-                            <option value="{{ $item['kode'] }}" 
-                                    data-harga-duafa="{{ $item['harga_duafa'] }}"
-                                    data-harga-promo="{{ $item['harga_promo'] }}"
-                                    data-harga-daftar="{{ $item['harga_daftar'] }}"
-                                    data-harga-spesial="{{ $item['harga_spesial'] }}"
-                                    data-harga-umum1="{{ $item['harga_umum1'] }}"
-                                    data-harga-umum2="{{ $item['harga_umum2'] }}">
-                                {{ $item['nama'] }}
-                            </option>
-                        @endforeach
-                    </select>
+    <!-- ==================== PILIH KELAS ==================== -->
+    <div class="col-md-5">
+        <label class="form-label fw-bold">Kelas</label>
+        <select name="daftar_kode" id="daftar_select" class="form-select">
+            <option value="">-- Pilih Kelas --</option>
+            @foreach($daftarList as $item)
+                <option value="{{ $item['kode'] }}" 
+                        data-harga-duafa="{{ $item['harga_duafa'] }}"
+                        data-harga-promo="{{ $item['harga_promo'] }}"
+                        data-harga-daftar="{{ $item['harga_daftar'] }}"
+                        data-harga-spesial="{{ $item['harga_spesial'] }}"
+                        data-harga-umum1="{{ $item['harga_umum1'] }}"
+                        data-harga-promo_umum="{{ $item['harga_promo_umum'] }}">
+                    {{ $item['nama'] }}
+                </option>
+            @endforeach
+        </select>
+    </div>
 
-                    <select name="daftar_tipe_harga" id="daftar_tipe_harga" class="form-select form-select-sm mb-2">
-                        <option value="harga_daftar">Daftar Ulang</option>
-                        <option value="harga_duafa">Dhuafa</option>
-                        <option value="harga_promo">Promo Khusus</option>
-                        <option value="harga_spesial">Spesial</option>
-                        <option value="harga_umum1">Umum 1</option>
-                        <option value="harga_umum2">Promo Gratis</option>
-                    </select>
+    <!-- ==================== PILIH JENIS HARGA ==================== -->
+    <div class="col-md-4">
+        <label class="form-label fw-bold">Jenis Harga</label>
+        <select name="daftar_tipe_harga" id="daftar_tipe_harga" class="form-select">
+            <option value="">-- Pilih Jenis Harga --</option>
+            <option value="harga_daftar">Daftar Ulang</option>
+            <option value="harga_duafa">Dhuafa</option>
+            <option value="harga_promo">Promo Khusus</option>
+            <option value="harga_spesial">Spesial</option>
+            <option value="harga_umum1">Umum 1</option>
+            <option value="harga_umum2">Promo Gratis</option>
+            <option value="harga_promo_umum">Promo Umum</option>
+        </select>
+    </div>
 
-                    <div class="d-flex align-items-center gap-2 d-none">
-                        <input type="number"
-                            id="daftar_qty"
-                            class="form-control text-center"
-                            value="0"
-                            min="0"
-                            style="width:90px;">
+    <!-- ==================== TOTAL BIAYA DAFTAR ==================== -->
+    <div class="col-md-3">
+        <label class="form-label fw-bold text-primary">Total Biaya Daftar</label>
+        <input type="text"
+            id="total_daftar"
+            class="form-control text-end bg-success fw-bold text-white fs-5"
+            readonly
+            value="0">
+    </div>
 
-                        <small class="text-muted">× Harga</small>
-                    </div>
+</div>
 
-                    <input type="hidden" name="daftar" id="daftar_hidden" value="0">
-
-                    
-                    <div class="col-md-6">
-                        <label class="form-label fw-bold text-primary">TOTAL BIAYA PENDAFTARAN</label>
-                        <input type="text"
-                            id="total_daftar"
-                            class="form-control text-end bg-success fw-bold text-white"
-                            readonly
-                            value="0">
-                    </div>
-                </div>
-            </div>
+<input type="hidden" name="daftar" id="daftar_hidden" value="0">
 
             <hr class="my-4">
 
@@ -290,112 +289,209 @@
                 {{-- HAPUS BLOK BIAYA DAFTAR YANG LAMA DARI SINI --}}
 
                 <!-- KAOS PENDEK -->
-            <div class="col-md-4">
-                <label class="form-label">Kaos Pendek</label>
-                <div id="kaos-pendek-container">
-                    <!-- Baris pertama default -->
-                    <div class="kaos-pendek-row d-flex gap-2 mb-2 align-items-end">
-                        <select name="kaos_pendek_kode[]" class="form-select kaos-pendek-select" style="width: 60%;">
-                            <option value="">-- Pilih Ukuran --</option>
-                            @foreach($kaosPendekList as $kaos)
-                                <option value="{{ $kaos['kode'] }}" 
-                                        data-harga="{{ $kaos['harga'] }}">
-                                    {{ $kaos['kode'] }}
-                                </option>
-                            @endforeach
-                        </select>
-                        <input type="number" name="kaos_pendek_qty[]" class="form-control kaos-pendek-qty" value="0" min="0" style="width: 80px;">
-                        <button type="button" class="btn btn-success btn-sm btn-add-kaos-pendek">Tambah</button>
-                    </div>
-                </div>
-                <input type="hidden" name="kaos_pendek" id="kaos_pendek_hidden" value="0">
-                <div id="ukuran-pendek-container" class="mt-2"></div>
-            </div>
+           <!-- KAOS PENDEK -->
+<div class="col-md-4">
+    <label class="form-label">Kaos Pendek</label>
+    <div id="kaos-pendek-container">
+        <!-- Akan diisi oleh JS jika ada data existing -->
+    </div>
+    <input type="hidden" name="kaos_pendek" id="kaos_pendek_hidden" value="{{ $penerimaan->kaos ?? 0 }}">
+    <div id="ukuran-pendek-container" class="mt-2"></div>
+</div>
 
-            <!-- KAOS PANJANG -->
-            <div class="col-md-4">
-                <label class="form-label">Kaos Panjang (Lengan Panjang)</label>
-                <div id="kaos-panjang-container">
-                    <div class="kaos-panjang-row d-flex gap-2 mb-2 align-items-end">
-                        <select name="kaos_panjang_kode[]" class="form-select kaos-panjang-select" style="width: 60%;">
-                            <option value="">-- Pilih Ukuran --</option>
-                            @foreach($kaosPanjangList as $kaos)
-                                <option value="{{ $kaos['kode'] }}" 
-                                        data-harga="{{ $kaos['harga'] }}">
-                                    {{ $kaos['kode'] }}
-                                </option>
-                            @endforeach
-                        </select>
-                        <input type="number" name="kaos_panjang_qty[]" class="form-control kaos-panjang-qty" value="0" min="0" style="width: 80px;">
-                        <button type="button" class="btn btn-success btn-sm btn-add-kaos-panjang">Tambah</button>
-                    </div>
-                </div>
-                <input type="hidden" name="kaos_panjang" id="kaos_panjang_hidden" value="0">
-                <div id="ukuran-panjang-container" class="mt-2"></div>
-            </div>
+<!-- KAOS PANJANG -->
+<div class="col-md-4">
+    <label class="form-label">Kaos Panjang (Lengan Panjang)</label>
+    <div id="kaos-panjang-container">
+        <!-- Akan diisi oleh JS jika ada data existing -->
+    </div>
+    <input type="hidden" name="kaos_panjang" id="kaos_panjang_hidden" value="{{ $penerimaan->kaos_lengan_panjang ?? 0 }}">
+    <div id="ukuran-panjang-container" class="mt-2"></div>
+</div>
             <!--- End --->
 
-           <div class="col-md-3">
+           <!-- ==================== KPK ==================== -->
+            <div class="col-md-4">
                 <label class="form-label">KPK</label>
-                <select name="kpk_kode" id="kpk_select" class="form-select">
-                    <option value="">-- Pilih KPK --</option>
-                    @foreach($kpkList as $kpk)
-                        <option value="{{ $kpk['kode'] }}" 
-                                data-harga="{{ $kpk['harga'] }}">
-                            {{ $kpk['kode'] }} - Rp {{ number_format($kpk['harga'], 0, ',', '.') }}
-                        </option>
-                    @endforeach
-                </select>
+                <div id="kpk-container">
+                    <!-- Baris pertama default -->
+                    <div class="kpk-row d-flex gap-2 mb-2 align-items-end">
+                        <select name="kpk_kode[]" class="form-select kpk-select" style="width: 75%;">
+                            <option value="">-- Pilih Qty/Rp. --</option>
+                            @foreach($kpkList as $kpk)
+                                @for($i = 1; $i <= 5; $i++)
+                                    <option value="{{ $kpk['kode'] }}" 
+                                            data-harga="{{ $kpk['harga'] }}"
+                                            data-qty="{{ $i }}">
+                                        {{ $i }} × {{ $kpk['kode'] }} = Rp {{ number_format($kpk['harga'] * $i, 0, ',', '.') }}
+                                    </option>
+                                @endfor
+                            @endforeach
+                        </select>
+                        <!--<button type="button" class="btn btn-success btn-sm btn-add-kpk">Tambah</button>-->
+                    </div>
+                </div>
+
                 <input type="hidden" name="kpk" id="kpk_hidden" value="0">
-                <div id="kpk-info" class="mt-1 small"></div>
+                <div id="kpk-info" class="mt-2 small text-success"></div>
             </div>
-
-            <div class="col-md-3">
+            <!-- ==================== TAS ==================== -->
+            <div class="col-md-4">
                 <label class="form-label">Tas</label>
-                <select name="tas_kode" id="tas_select" class="form-select">
-                    <option value="">-- Pilih Tas --</option>
-                    @foreach($tasList as $tas)
-                        <option value="{{ $tas['kode'] }}" 
-                                data-harga="{{ $tas['harga'] }}">
-                            {{ $tas['kode'] }} - Rp {{ number_format($tas['harga'], 0, ',', '.') }}
-                        </option>
-                    @endforeach
-                </select>
+                <div id="tas-container">
+                    <!-- Baris pertama default -->
+                    <div class="tas-row d-flex gap-2 mb-2 align-items-end">
+                        <select name="tas_kode[]" class="form-select tas-select" style="width: 75%;">
+                            <option value="">-- Pilih Qty/Rp. --</option>
+                            @foreach($tasList as $tas)
+                                @for($i = 1; $i <= 5; $i++)
+                                    <option value="{{ $tas['kode'] }}" 
+                                            data-harga="{{ $tas['harga'] }}"
+                                            data-qty="{{ $i }}">
+                                        {{ $i }} × {{ $tas['kode'] }} = Rp {{ number_format($tas['harga'] * $i, 0, ',', '.') }}
+                                    </option>
+                                @endfor
+                            @endforeach
+                        </select>
+                        <!--<button type="button" class="btn btn-success btn-sm btn-add-tas">Tambah</button>-->
+                    </div>
+                </div>
+
                 <input type="hidden" name="tas" id="tas_hidden" value="0">
-                <div id="tas-info" class="mt-1 small"></div>
+                <div id="tas-info" class="mt-2 small text-success"></div>
             </div>
 
-            <div class="col-md-3">
+            <!-- ==================== SERTIFIKAT ==================== -->
+            <div class="col-md-4">
                 <label class="form-label">Sertifikat</label>
-                <select name="sertifikat_kode" id="sertifikat_select" class="form-select">
-                    <option value="">-- Pilih --</option>
-                    @foreach($sertifikatList as $sertifikat)
-                        <option value="{{ $sertifikat['kode'] }}" 
-                                data-harga="{{ $sertifikat['harga'] }}">
-                            {{ $sertifikat['kode'] }} - Rp {{ number_format($sertifikat['harga'], 0, ',', '.') }}
-                        </option>
-                    @endforeach
-                </select>
+                <div id="sertifikat-container">
+                    <!-- Baris pertama default -->
+                    <div class="sertifikat-row d-flex gap-2 mb-2 align-items-end">
+                        <select name="sertifikat_kode[]" class="form-select sertifikat-select" style="width: 75%;">
+                            <option value="">-- Pilih Qty/Rp. --</option>
+                            @foreach($sertifikatList as $sertifikat)
+                                @for($i = 1; $i <= 5; $i++)
+                                    <option value="{{ $sertifikat['kode'] }}" 
+                                            data-harga="{{ $sertifikat['harga'] }}"
+                                            data-qty="{{ $i }}">
+                                        {{ $i }} × {{ $sertifikat['kode'] }} = Rp {{ number_format($sertifikat['harga'] * $i, 0, ',', '.') }}
+                                    </option>
+                                @endfor
+                            @endforeach
+                        </select>
+                        <!--<button type="button" class="btn btn-success btn-sm btn-add-sertifikat">Tambah</button>-->
+                    </div>
+                </div>
+
                 <input type="hidden" name="sertifikat" id="sertifikat_hidden" value="0">
-                <div id="sertifikat-info" class="mt-1 small"></div>
+                <div id="sertifikat-info" class="mt-2 small text-success"></div>
             </div>
 
-            <div class="col-md-3">
+            <!-- ==================== STPB ==================== -->
+            <div class="col-md-4">
                 <label class="form-label">STPB</label>
-                <select name="stpb_kode" id="stpb_select" class="form-select">
-                    <option value="">-- Pilih --</option>
-                    @foreach($stpbList as $stpb)
-                        <option value="{{ $stpb['kode'] }}" 
-                                data-harga="{{ $stpb['harga'] }}">
-                            {{ $stpb['kode'] }} - Rp {{ number_format($stpb['harga'], 0, ',', '.') }}
-                        </option>
-                    @endforeach
-                </select>
+                <div id="stpb-container">
+                    <!-- Baris pertama default -->
+                    <div class="stpb-row d-flex gap-2 mb-2 align-items-end">
+                        <select name="stpb_kode[]" class="form-select stpb-select" style="width: 75%;">
+                            <option value="">-- Pilih Qty/Rp. --</option>
+                            @foreach($stpbList as $stpb)
+                                @for($i = 1; $i <= 5; $i++)
+                                    <option value="{{ $stpb['kode'] }}" 
+                                            data-harga="{{ $stpb['harga'] }}"
+                                            data-qty="{{ $i }}">
+                                        {{ $i }} × {{ $stpb['kode'] }} = Rp {{ number_format($stpb['harga'] * $i, 0, ',', '.') }}
+                                    </option>
+                                @endfor
+                            @endforeach
+                        </select>
+                        <!--<button type="button" class="btn btn-success btn-sm btn-add-stpb">Tambah</button>-->
+                    </div>
+                </div>
+
                 <input type="hidden" name="stpb" id="stpb_hidden" value="0">
-                <div id="stpb-info" class="mt-1 small"></div>
+                <div id="stpb-info" class="mt-2 small text-success"></div>
             </div>
 
-            <div class="col-md-3">
+            <!-- ==================== RBAS ==================== -->
+            <div class="col-md-4">
+                <label class="form-label">RBAS</label>
+                <div id="rbas-container">
+                    <!-- Baris pertama default -->
+                    <div class="rbas-row d-flex gap-2 mb-2 align-items-end">
+                        <select name="rbas_kode[]" class="form-select rbas-select" style="width: 75%;">
+                            <option value="">-- Pilih Qty/Rp. --</option>
+                            @foreach($rbasList as $rbas)
+                                @for($i = 1; $i <= 5; $i++)
+                                    <option value="{{ $rbas['kode'] }}" 
+                                            data-harga="{{ $rbas['harga'] }}"
+                                            data-qty="{{ $i }}">
+                                        {{ $i }} × {{ $rbas['kode'] }} = Rp {{ number_format($rbas['harga'] * $i, 0, ',', '.') }}
+                                    </option>
+                                @endfor
+                            @endforeach
+                        </select>
+                        <!--<button type="button" class="btn btn-success btn-sm btn-add-rbas">Tambah</button>-->
+                    </div>
+                </div>
+
+                <input type="hidden" name="RBAS" id="rbas_hidden" value="0">
+                <div id="rbas-info" class="mt-2 small text-success"></div>
+            </div>
+
+            <!-- ==================== BCABS01 ==================== -->
+            <div class="col-md-4">
+                <label class="form-label">BCABS01</label>
+                <div id="bcabs01-container">
+                    <!-- Baris pertama default -->
+                    <div class="bcabs01-row d-flex gap-2 mb-2 align-items-end">
+                        <select name="bcabs01_kode[]" class="form-select bcabs01-select" style="width: 75%;">
+                            <option value="">-- Pilih Qty/Rp. --</option>
+                            @foreach($bcabs01List as $item)
+                                @for($i = 1; $i <= 5; $i++)
+                                    <option value="{{ $item['kode'] }}" 
+                                            data-harga="{{ $item['harga'] }}"
+                                            data-qty="{{ $i }}">
+                                        {{ $i }} × {{ $item['kode'] }} = Rp {{ number_format($item['harga'] * $i, 0, ',', '.') }}
+                                    </option>
+                                @endfor
+                            @endforeach
+                        </select>
+                        <!--<button type="button" class="btn btn-success btn-sm btn-add-bcabs01">Tambah</button>-->
+                    </div>
+                </div>
+
+                <input type="hidden" name="BCABS01" id="bcabs01_hidden" value="0">
+                <div id="bcabs01-info" class="mt-2 small text-success"></div>
+            </div>
+
+            <!-- ==================== BCABS02 ==================== -->
+            <div class="col-md-4">
+                <label class="form-label">BCABS02</label>
+                <div id="bcabs02-container">
+                    <!-- Baris pertama default -->
+                    <div class="bcabs02-row d-flex gap-2 mb-2 align-items-end">
+                        <select name="bcabs02_kode[]" class="form-select bcabs02-select" style="width: 75%;">
+                            <option value="">-- Pilih Qty/Rp. --</option>
+                            @foreach($bcabs02List as $item)
+                                @for($i = 1; $i <= 5; $i++)
+                                    <option value="{{ $item['kode'] }}" 
+                                            data-harga="{{ $item['harga'] }}"
+                                            data-qty="{{ $i }}">
+                                        {{ $i }} × {{ $item['kode'] }} = Rp {{ number_format($item['harga'] * $i, 0, ',', '.') }}
+                                    </option>
+                                @endfor
+                            @endforeach
+                        </select>
+                        <!--<button type="button" class="btn btn-success btn-sm btn-add-bcabs02">Tambah</button>-->
+                    </div>
+                </div>
+
+                <input type="hidden" name="BCABS02" id="bcabs02_hidden" value="0">
+                <div id="bcabs02-info" class="mt-2 small text-success"></div>
+            </div>          
+            
+             <div class="col-md-3">
                 <label class="form-label">Event</label>
                 <input type="text" name="event" class="form-control biaya-lain text-end" value="">
             </div>
@@ -403,51 +499,6 @@
                 <label class="form-label">Lain-lain</label>
                 <input type="text" name="lain_lain" class="form-control biaya-lain text-end" value="0">
             </div>
-
-            <div class="col-md-3">
-                <label class="form-label">RBAS</label>
-                <select name="rbas_kode" id="rbas_select" class="form-select">
-                    <option value="">-- Pilih RBAS --</option>
-                    @foreach($rbasList as $rbas)
-                        <option value="{{ $rbas['kode'] }}" 
-                                data-harga="{{ $rbas['harga'] }}">
-                            {{ $rbas['kode'] }} - Rp {{ number_format($rbas['harga'], 0, ',', '.') }}
-                        </option>
-                    @endforeach
-                </select>
-                <input type="hidden" name="RBAS" id="rbas_hidden" value="0">
-                <div id="rbas-info" class="mt-1 small"></div>
-            </div>
-
-            <div class="col-md-3">
-                <label class="form-label">BCABS01</label>
-                <select name="bcabs01_kode" id="bcabs01_select" class="form-select">
-                    <option value="">-- Pilih BCABS01 --</option>
-                    @foreach($bcabs01List as $item)
-                        <option value="{{ $item['kode'] }}" 
-                                data-harga="{{ $item['harga'] }}">
-                            {{ $item['kode'] }} - Rp {{ number_format($item['harga'], 0, ',', '.') }}
-                        </option>
-                    @endforeach
-                </select>
-                <input type="hidden" name="BCABS01" id="bcabs01_hidden" value="0">
-                <div id="bcabs01-info" class="mt-1 small"></div>
-            </div>
-
-            <div class="col-md-3">
-                <label class="form-label">BCABS02</label>
-                <select name="bcabs02_kode" id="bcabs02_select" class="form-select">
-                    <option value="">-- Pilih BCABS02 --</option>
-                    @foreach($bcabs02List as $item)
-                        <option value="{{ $item['kode'] }}" 
-                                data-harga="{{ $item['harga'] }}">
-                            {{ $item['kode'] }} - Rp {{ number_format($item['harga'], 0, ',', '.') }}
-                        </option>
-                    @endforeach
-                </select>
-                <input type="hidden" name="BCABS02" id="bcabs02_hidden" value="0">
-                <div id="bcabs02-info" class="mt-1 small"></div>
-            </div>            
 
             <div class="col-md-6">
                 <label class="form-label fw-bold text-primary">TOTAL LAIN-LAIN</label>
@@ -816,214 +867,425 @@ function hitungDaftar() {
     $('#daftar_select, #daftar_tipe_harga, #daftar_qty').on('change input', hitungDaftar);
 
     // ================================================
-    // HANDLE KPK (Auto ambil harga + qty = 1)
-    // ================================================
-    function hitungKpk() {
-        const $select = $('#kpk_select');
-        const harga = parseFloat($select.find(':selected').data('harga')) || 0;
-        let qty = 1;   // KPK biasanya qty 1
+// HANDLE KPK (Simple - Tanpa Qty Input)
+// ================================================
+function hitungTotalKpk() {
+    let total = 0;
+    let infoHtml = '';
 
-        const total = harga * qty;
-
-        $('#kpk_hidden').val(total);
+    $('.kpk-row').each(function() {
+        const $select = $(this).find('.kpk-select');
+        const harga = parseFloat($select.find('option:selected').data('harga')) || 0;
 
         if (harga > 0) {
-            const nama = $select.find(':selected').text().split(' - ')[0];
-            $('#kpk-info').html(`
-                <div class="alert alert-info py-1 small">
-                    ${nama} = <strong>Rp ${formatRupiah(total)}</strong>
-                </div>
-            `);
-        } else {
-            $('#kpk-info').html('');
+            total += harga;
+
+            const nama = $select.find('option:selected').text().split(' = ')[0] || 'KPK';
+            infoHtml += `<div>${nama} = <strong>Rp ${formatRupiah(harga)}</strong></div>`;
         }
+    });
 
-        hitungTotal();
-        updateKwitansiPreview();
+    $('#kpk_hidden').val(total);
+
+    $('#kpk-info').html(infoHtml ? `<div class="alert alert-info py-2 small">${infoHtml}</div>` : '');
+
+    hitungTotal();
+    updateKwitansiPreview();
+}
+
+// Tambah Baris KPK
+$(document).on('click', '.btn-add-kpk', function() {
+    const clone = $(this).closest('.kpk-row').clone();
+    clone.find('select').val('');
+    clone.find('.btn-add-kpk')
+         .removeClass('btn-success')
+         .addClass('btn-danger btn-remove-kpk')
+         .text('Hapus');
+    $('#kpk-container').append(clone);
+    hitungTotalKpk();
+});
+
+// Hapus Baris KPK
+$(document).on('click', '.btn-remove-kpk', function() {
+    if ($('.kpk-row').length > 1) {
+        $(this).closest('.kpk-row').remove();
+        hitungTotalKpk();
     }
+});
 
-    // Event Listener KPK
-    $('#kpk_select').on('change', hitungKpk);
+// Event Listener KPK
+$(document).on('change', '.kpk-select', hitungTotalKpk);
 
     // ================================================
-    // HANDLE TAS
-    // ================================================
-    function hitungTas() {
-        const $select = $('#tas_select');
-        const harga = parseFloat($select.find(':selected').data('harga')) || 0;
-        const qty = harga > 0 ? 1 : 0;   // default qty 1
+// HANDLE KPK (Dengan Qty di Dropdown 1x - 5x)
+// ================================================
+function hitungTotalKpk() {
+    let total = 0;
+    let infoHtml = '';
 
-        const total = harga * qty;
+    $('.kpk-row').each(function() {
+        const $select = $(this).find('.kpk-select');
+        const selectedOption = $select.find('option:selected');
+        
+        const harga = parseFloat(selectedOption.data('harga')) || 0;
+        const qty   = parseInt(selectedOption.data('qty')) || 0;
+
+        if (harga > 0 && qty > 0) {
+            total += harga * qty;
+
+            const nama = selectedOption.text().split(' = ')[0] || 'KPK';
+            infoHtml += `<div>${nama} = <strong>Rp ${formatRupiah(harga * qty)}</strong></div>`;
+        }
+    });
+
+    $('#kpk_hidden').val(total);
+
+    $('#kpk-info').html(infoHtml ? `<div class="alert alert-info py-2 small">${infoHtml}</div>` : '');
+
+    hitungTotal();
+    updateKwitansiPreview();
+}
+
+// Tambah Baris KPK
+$(document).on('click', '.btn-add-kpk', function() {
+    const clone = $(this).closest('.kpk-row').clone();
+    clone.find('select').val('');
+    clone.find('.btn-add-kpk')
+         .removeClass('btn-success')
+         .addClass('btn-danger btn-remove-kpk')
+         .text('Hapus');
+    $('#kpk-container').append(clone);
+    hitungTotalKpk();
+});
+
+// Hapus Baris KPK
+$(document).on('click', '.btn-remove-kpk', function() {
+    if ($('.kpk-row').length > 1) {
+        $(this).closest('.kpk-row').remove();
+        hitungTotalKpk();
+    }
+});
+
+// Event Listener KPK
+$(document).on('change', '.kpk-select', hitungTotalKpk);
+
+// ================================================
+// HANDLE TAS (1x - 5x di Dropdown)
+// ================================================
+    function hitungTotalTas() {
+        let total = 0;
+        let infoHtml = '';
+
+        $('.tas-row').each(function() {
+            const $select = $(this).find('.tas-select');
+            const selectedOption = $select.find('option:selected');
+            
+            const harga = parseFloat(selectedOption.data('harga')) || 0;
+            const qty   = parseInt(selectedOption.data('qty')) || 0;
+
+            if (harga > 0 && qty > 0) {
+                total += harga * qty;
+
+                const nama = selectedOption.text().split(' = ')[0] || 'Tas';
+                infoHtml += `<div>${nama} = <strong>Rp ${formatRupiah(harga * qty)}</strong></div>`;
+            }
+        });
 
         $('#tas_hidden').val(total);
 
-        if (harga > 0) {
-            const nama = $select.find(':selected').text().split(' - ')[0];
-            $('#tas-info').html(`
-                <div class="alert alert-info py-1 small">
-                    ${nama} = <strong>Rp ${formatRupiah(total)}</strong>
-                </div>
-            `);
-        } else {
-            $('#tas-info').html('');
-        }
+        $('#tas-info').html(infoHtml ? `<div class="alert alert-info py-2 small">${infoHtml}</div>` : '');
 
         hitungTotal();
         updateKwitansiPreview();
     }
 
-    // Event Listener TAS
-    $('#tas_select').on('change', hitungTas);
+    // Tambah Baris Tas
+    $(document).on('click', '.btn-add-tas', function() {
+        const clone = $(this).closest('.tas-row').clone();
+        clone.find('select').val('');
+        clone.find('.btn-add-tas')
+            .removeClass('btn-success')
+            .addClass('btn-danger btn-remove-tas')
+            .text('Hapus');
+        $('#tas-container').append(clone);
+        hitungTotalTas();
+    });
+
+    // Hapus Baris Tas
+    $(document).on('click', '.btn-remove-tas', function() {
+        if ($('.tas-row').length > 1) {
+            $(this).closest('.tas-row').remove();
+            hitungTotalTas();
+        }
+    });
+
+    // Event Listener Tas
+    $(document).on('change', '.tas-select', hitungTotalTas);
 
     // ================================================
-    // HANDLE SERTIFIKAT
+    // HANDLE SERTIFIKAT (1x - 5x di Dropdown)
     // ================================================
-    function hitungSertifikat() {
-        const $select = $('#sertifikat_select');
-        const harga = parseFloat($select.find(':selected').data('harga')) || 0;
-        const qty = harga > 0 ? 1 : 0;
+    function hitungTotalSertifikat() {
+        let total = 0;
+        let infoHtml = '';
 
-        const total = harga * qty;
+        $('.sertifikat-row').each(function() {
+            const $select = $(this).find('.sertifikat-select');
+            const selectedOption = $select.find('option:selected');
+            
+            const harga = parseFloat(selectedOption.data('harga')) || 0;
+            const qty   = parseInt(selectedOption.data('qty')) || 0;
+
+            if (harga > 0 && qty > 0) {
+                total += harga * qty;
+
+                const nama = selectedOption.text().split(' = ')[0] || 'Sertifikat';
+                infoHtml += `<div>${nama} = <strong>Rp ${formatRupiah(harga * qty)}</strong></div>`;
+            }
+        });
 
         $('#sertifikat_hidden').val(total);
 
-        if (harga > 0) {
-            const nama = $select.find(':selected').text().split(' - ')[0];
-            $('#sertifikat-info').html(`
-                <div class="alert alert-info py-1 small">
-                    ${nama} = <strong>Rp ${formatRupiah(total)}</strong>
-                </div>
-            `);
-        } else {
-            $('#sertifikat-info').html('');
-        }
+        $('#sertifikat-info').html(infoHtml ? `<div class="alert alert-info py-2 small">${infoHtml}</div>` : '');
 
         hitungTotal();
         updateKwitansiPreview();
     }
 
+    // Tambah Baris Sertifikat
+    $(document).on('click', '.btn-add-sertifikat', function() {
+        const clone = $(this).closest('.sertifikat-row').clone();
+        clone.find('select').val('');
+        clone.find('.btn-add-sertifikat')
+            .removeClass('btn-success')
+            .addClass('btn-danger btn-remove-sertifikat')
+            .text('Hapus');
+        $('#sertifikat-container').append(clone);
+        hitungTotalSertifikat();
+    });
+
+    // Hapus Baris Sertifikat
+    $(document).on('click', '.btn-remove-sertifikat', function() {
+        if ($('.sertifikat-row').length > 1) {
+            $(this).closest('.sertifikat-row').remove();
+            hitungTotalSertifikat();
+        }
+    });
+
     // Event Listener Sertifikat
-    $('#sertifikat_select').on('change', hitungSertifikat);
+    $(document).on('change', '.sertifikat-select', hitungTotalSertifikat);
 
     // ================================================
-    // HANDLE STF
+    // HANDLE STPB (1x - 5x di Dropdown)
     // ================================================
-    function hitungStpb() {
-        const $select = $('#stpb_select');
-        const harga = parseFloat($select.find(':selected').data('harga')) || 0;
-        const qty = harga > 0 ? 1 : 0;   // default qty 1
+    function hitungTotalStpb() {
+        let total = 0;
+        let infoHtml = '';
 
-        const total = harga * qty;
+        $('.stpb-row').each(function() {
+            const $select = $(this).find('.stpb-select');
+            const selectedOption = $select.find('option:selected');
+            
+            const harga = parseFloat(selectedOption.data('harga')) || 0;
+            const qty   = parseInt(selectedOption.data('qty')) || 0;
+
+            if (harga > 0 && qty > 0) {
+                total += harga * qty;
+
+                const nama = selectedOption.text().split(' = ')[0] || 'STPB';
+                infoHtml += `<div>${nama} = <strong>Rp ${formatRupiah(harga * qty)}</strong></div>`;
+            }
+        });
 
         $('#stpb_hidden').val(total);
 
-        if (harga > 0) {
-            const nama = $select.find(':selected').text().split(' - ')[0];
-            $('#stpb-info').html(`
-                <div class="alert alert-info py-1 small">
-                    ${nama} = <strong>Rp ${formatRupiah(total)}</strong>
-                </div>
-            `);
-        } else {
-            $('#stpb-info').html('');
-        }
+        $('#stpb-info').html(infoHtml ? `<div class="alert alert-info py-2 small">${infoHtml}</div>` : '');
 
         hitungTotal();
         updateKwitansiPreview();
     }
 
-    // Event Listener TAS
-    $('#stpb_select').on('change', hitungStpb);
+    // Tambah Baris STPB
+    $(document).on('click', '.btn-add-stpb', function() {
+        const clone = $(this).closest('.stpb-row').clone();
+        clone.find('select').val('');
+        clone.find('.btn-add-stpb')
+            .removeClass('btn-success')
+            .addClass('btn-danger btn-remove-stpb')
+            .text('Hapus');
+        $('#stpb-container').append(clone);
+        hitungTotalStpb();
+    });
+
+    // Hapus Baris STPB
+    $(document).on('click', '.btn-remove-stpb', function() {
+        if ($('.stpb-row').length > 1) {
+            $(this).closest('.stpb-row').remove();
+            hitungTotalStpb();
+        }
+    });
+
+    // Event Listener STPB
+    $(document).on('change', '.stpb-select', hitungTotalStpb);
 
     // ================================================
-    // HANDLE RBAS
+    // HANDLE RBAS (1x - 5x di Dropdown)
     // ================================================
-    function hitungRbas() {
-        const $select = $('#rbas_select');
-        const harga = parseFloat($select.find(':selected').data('harga')) || 0;
-        const qty = harga > 0 ? 1 : 0;
+    function hitungTotalRbas() {
+        let total = 0;
+        let infoHtml = '';
 
-        const total = harga * qty;
+        $('.rbas-row').each(function() {
+            const $select = $(this).find('.rbas-select');
+            const selectedOption = $select.find('option:selected');
+            
+            const harga = parseFloat(selectedOption.data('harga')) || 0;
+            const qty   = parseInt(selectedOption.data('qty')) || 0;
+
+            if (harga > 0 && qty > 0) {
+                total += harga * qty;
+
+                const nama = selectedOption.text().split(' = ')[0] || 'RBAS';
+                infoHtml += `<div>${nama} = <strong>Rp ${formatRupiah(harga * qty)}</strong></div>`;
+            }
+        });
 
         $('#rbas_hidden').val(total);
 
-        if (harga > 0) {
-            const nama = $select.find(':selected').text().split(' - ')[0];
-            $('#rbas-info').html(`
-                <div class="alert alert-info py-1 small">
-                    ${nama} = <strong>Rp ${formatRupiah(total)}</strong>
-                </div>
-            `);
-        } else {
-            $('#rbas-info').html('');
-        }
+        $('#rbas-info').html(infoHtml ? `<div class="alert alert-info py-2 small">${infoHtml}</div>` : '');
 
         hitungTotal();
         updateKwitansiPreview();
     }
 
+    // Tambah Baris RBAS
+    $(document).on('click', '.btn-add-rbas', function() {
+        const clone = $(this).closest('.rbas-row').clone();
+        clone.find('select').val('');
+        clone.find('.btn-add-rbas')
+            .removeClass('btn-success')
+            .addClass('btn-danger btn-remove-rbas')
+            .text('Hapus');
+        $('#rbas-container').append(clone);
+        hitungTotalRbas();
+    });
+
+    // Hapus Baris RBAS
+    $(document).on('click', '.btn-remove-rbas', function() {
+        if ($('.rbas-row').length > 1) {
+            $(this).closest('.rbas-row').remove();
+            hitungTotalRbas();
+        }
+    });
+
     // Event Listener RBAS
-    $('#rbas_select').on('change', hitungRbas);
+    $(document).on('change', '.rbas-select', hitungTotalRbas);
 
     // ================================================
-    // HANDLE BCABS01
+    // HANDLE BCABS01 (1x - 5x di Dropdown)
     // ================================================
-    function hitungBcabs01() {
-        const $select = $('#bcabs01_select');
-        const harga = parseFloat($select.find(':selected').data('harga')) || 0;
-        const qty = harga > 0 ? 1 : 0;
+    function hitungTotalBcabs01() {
+        let total = 0;
+        let infoHtml = '';
 
-        const total = harga * qty;
+        $('.bcabs01-row').each(function() {
+            const $select = $(this).find('.bcabs01-select');
+            const selectedOption = $select.find('option:selected');
+            
+            const harga = parseFloat(selectedOption.data('harga')) || 0;
+            const qty   = parseInt(selectedOption.data('qty')) || 0;
+
+            if (harga > 0 && qty > 0) {
+                total += harga * qty;
+
+                const nama = selectedOption.text().split(' = ')[0] || 'BCABS01';
+                infoHtml += `<div>${nama} = <strong>Rp ${formatRupiah(harga * qty)}</strong></div>`;
+            }
+        });
 
         $('#bcabs01_hidden').val(total);
 
-        if (harga > 0) {
-            const nama = $select.find(':selected').text().split(' - ')[0];
-            $('#bcabs01-info').html(`
-                <div class="alert alert-info py-1 small">
-                    ${nama} = <strong>Rp ${formatRupiah(total)}</strong>
-                </div>
-            `);
-        } else {
-            $('#bcabs01-info').html('');
-        }
+        $('#bcabs01-info').html(infoHtml ? `<div class="alert alert-info py-2 small">${infoHtml}</div>` : '');
 
         hitungTotal();
         updateKwitansiPreview();
     }
 
+    // Tambah Baris BCABS01
+    $(document).on('click', '.btn-add-bcabs01', function() {
+        const clone = $(this).closest('.bcabs01-row').clone();
+        clone.find('select').val('');
+        clone.find('.btn-add-bcabs01')
+            .removeClass('btn-success')
+            .addClass('btn-danger btn-remove-bcabs01')
+            .text('Hapus');
+        $('#bcabs01-container').append(clone);
+        hitungTotalBcabs01();
+    });
+
+    // Hapus Baris BCABS01
+    $(document).on('click', '.btn-remove-bcabs01', function() {
+        if ($('.bcabs01-row').length > 1) {
+            $(this).closest('.bcabs01-row').remove();
+            hitungTotalBcabs01();
+        }
+    });
+
     // Event Listener BCABS01
-    $('#bcabs01_select').on('change', hitungBcabs01);
+    $(document).on('change', '.bcabs01-select', hitungTotalBcabs01);
 
     // ================================================
-    // HANDLE BCABS02
+    // HANDLE BCABS02 (1x - 5x di Dropdown)
     // ================================================
-    function hitungBcabs02() {
-        const $select = $('#bcabs02_select');
-        const harga = parseFloat($select.find(':selected').data('harga')) || 0;
-        const qty = harga > 0 ? 1 : 0;
+    function hitungTotalBcabs02() {
+        let total = 0;
+        let infoHtml = '';
 
-        const total = harga * qty;
+        $('.bcabs02-row').each(function() {
+            const $select = $(this).find('.bcabs02-select');
+            const selectedOption = $select.find('option:selected');
+            
+            const harga = parseFloat(selectedOption.data('harga')) || 0;
+            const qty   = parseInt(selectedOption.data('qty')) || 0;
+
+            if (harga > 0 && qty > 0) {
+                total += harga * qty;
+
+                const nama = selectedOption.text().split(' = ')[0] || 'BCABS02';
+                infoHtml += `<div>${nama} = <strong>Rp ${formatRupiah(harga * qty)}</strong></div>`;
+            }
+        });
 
         $('#bcabs02_hidden').val(total);
 
-        if (harga > 0) {
-            const nama = $select.find(':selected').text().split(' - ')[0];
-            $('#bcabs02-info').html(`
-                <div class="alert alert-info py-1 small">
-                    ${nama} = <strong>Rp ${formatRupiah(total)}</strong>
-                </div>
-            `);
-        } else {
-            $('#bcabs02-info').html('');
-        }
+        $('#bcabs02-info').html(infoHtml ? `<div class="alert alert-info py-2 small">${infoHtml}</div>` : '');
 
         hitungTotal();
         updateKwitansiPreview();
     }
 
-    // Event Listener BCABS01
-    $('#bcabs02_select').on('change', hitungBcabs02);
+    // Tambah Baris BCABS02
+    $(document).on('click', '.btn-add-bcabs02', function() {
+        const clone = $(this).closest('.bcabs02-row').clone();
+        clone.find('select').val('');
+        clone.find('.btn-add-bcabs02')
+            .removeClass('btn-success')
+            .addClass('btn-danger btn-remove-bcabs02')
+            .text('Hapus');
+        $('#bcabs02-container').append(clone);
+        hitungTotalBcabs02();
+    });
+
+    // Hapus Baris BCABS02
+    $(document).on('click', '.btn-remove-bcabs02', function() {
+        if ($('.bcabs02-row').length > 1) {
+            $(this).closest('.bcabs02-row').remove();
+            hitungTotalBcabs02();
+        }
+    });
+
+    // Event Listener BCABS02
+    $(document).on('change', '.bcabs02-select', hitungTotalBcabs02);
 
     // ================================================
     // FUNGSI LOAD VOUCHER
